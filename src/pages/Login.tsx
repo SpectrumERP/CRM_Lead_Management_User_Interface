@@ -110,6 +110,48 @@ export default function Login() {
             {pending ? copy.pending : copy.submit}
           </Button>
         </form>
+
+        {import.meta.env.DEV ? (
+          <div className="mt-5 rounded-xl border border-line bg-surface-muted/70 px-3.5 py-3 text-left">
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">Demo accounts</p>
+            <ul className="mt-2 space-y-1.5 text-xs text-ink-soft">
+              <li>
+                <span className="font-semibold text-ink">Admin</span>
+                <span className="text-ink-faint"> — </span>
+                <button
+                  type="button"
+                  className="rounded-sm font-mono text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  onClick={() => {
+                    setEmail('rajiv.anand@forceintellect.com')
+                    setPassword('Admin@123')
+                    clearNotice()
+                  }}
+                >
+                  rajiv.anand@forceintellect.com
+                </button>
+                <span className="text-ink-faint"> / </span>
+                <span className="font-mono">Admin@123</span>
+              </li>
+              <li>
+                <span className="font-semibold text-ink">Sales</span>
+                <span className="text-ink-faint"> — </span>
+                <button
+                  type="button"
+                  className="rounded-sm font-mono text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  onClick={() => {
+                    setEmail('priya.mehta@forceintellect.com')
+                    setPassword('Force@123')
+                    clearNotice()
+                  }}
+                >
+                  priya.mehta@forceintellect.com
+                </button>
+                <span className="text-ink-faint"> / </span>
+                <span className="font-mono">Force@123</span>
+              </li>
+            </ul>
+          </div>
+        ) : null}
       </Card>
     </div>
   )
