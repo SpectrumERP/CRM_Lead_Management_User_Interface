@@ -1,0 +1,184 @@
+import {
+  LEADS,
+  displayLeadName,
+  formatINR,
+  type Lead,
+  type LeadCurrency,
+  type LeadSource,
+} from './leads'
+import { currencySymbol } from './currencies'
+
+export type DealStage =
+  | 'Qualification'
+  | 'Proposal'
+  | 'Negotiation'
+  | 'Commitment'
+  | 'Closed Won'
+  | 'Closed Lost'
+
+export type OpportunityStatus = 'Open' | 'On Hold' | 'Won' | 'Lost'
+
+export const DEAL_STAGES: DealStage[] = [
+  'Qualification',
+  'Proposal',
+  'Negotiation',
+  'Commitment',
+  'Closed Won',
+  'Closed Lost',
+]
+
+export const OPPORTUNITY_STATUSES: OpportunityStatus[] = ['Open', 'On Hold', 'Won', 'Lost']
+
+export const DEAL_STAGE_WEIGHT: Record<DealStage, number> = {
+  Qualification: 20,
+  Proposal: 40,
+  Negotiation: 60,
+  Commitment: 80,
+  'Closed Won': 100,
+  'Closed Lost': 0,
+}
+
+/** CSS badge class for an opportunity deal stage. */
+export function dealStageClass(stage: DealStage) {
+  if (stage === 'Closed Won') return 'status-open'
+  if (stage === 'Closed Lost') return 'status-dropped'
+  if (stage === 'Negotiation' || stage === 'Commitment') return 'stage-qualified'
+  if (stage === 'Proposal') return 'stage-requirement'
+  return 'stage-contacted'
+}
+
+export function opportunityStatusClass(status: OpportunityStatus) {
+  if (status === 'Open') return 'status-open'
+  if (status === 'Won') return 'stage-qualified'
+  if (status === 'On Hold') return 'stage-requirement'
+  return 'status-dropped'
+}
+
+/** Stage label with weightage, e.g. `Negotiation (60%)`. */
+export function formatOpportunityStage(stage: DealStage, weightPercent?: number) {
+  const weight = weightPercent ?? dealWeight(stage)
+  return `${stage} (${weight}%)`
+}
+
+export interface Opportunity {
+  id: string
+  /** Reference Lead No — set when converted from a lead; empty/undefined for direct create. */
+  leadId?: string
+  name: string
+  companyName: string
+  contactPerson: string
+  email: string
+  phone: string
+  productsRequired: string
+  dealValue: number
+  valueCurrency: LeadCurrency
+  dealStage: DealStage
+  status: OpportunityStatus
+  weightPercent: number
+  weightedValue: number
+  closingDate: string
+  owner: string
+  leadSource: LeadSource | string
+  lastActivity: string
+  createdAt: string
+  createdBy: string
+  convertedAt?: string
+  convertedBy?: string
+}
+
+export function dealWeight(stage: DealStage): number {
+  return DEAL_STAGE_WEIGHT[stage]
+}
+
+export function weightedDealValue(dealValue: number, stage: DealStage): number {
+  return Math.round((dealValue * dealWeight(stage)) / 100)
+}
+
+export function formatDealValue(value: number, currency: LeadCurrency = 'INR'): string {
+  if (currency === 'INR') return formatINR(value)
+  const amount = value.toLocaleString('en-US')
+  const symbol = currencySymbol(currency).trim()
+  // Arabic / RTL glyphs reorder next to digits — show ISO code instead.
+  if (/[\u0600-\u06FF]/.test(symbol)) {
+    return `${currency} ${amount}`
+  }
+  return `${symbol}\u00A0${amount}`
+}
+
+export function buildOpportunity(
+  lead: Lead,
+  input: {
+    id: string
+    dealValue: number
+    valueCurrency: LeadCurrency
+    closingDate: string
+    dealStage?: DealStage
+    status?: OpportunityStatus
+    lastActivity?: string
+    createdAt?: string
+    createdBy?: string
+    convertedAt?: string
+    convertedBy?: string
+  },
+): Opportunity {
+  const dealStage = input.dealStage ?? 'Qualification'
+  const createdBy = input.createdBy ?? input.convertedBy ?? lead.assignedSalesperson
+  return {
+    id: input.id,
+    leadId: lead.id,
+    name: displayLeadName(lead),
+    companyName: lead.companyName,
+    contactPerson: lead.contactPerson,
+    email: lead.email,
+    phone: lead.phone,
+    productsRequired: lead.productsRequired,
+    dealValue: input.dealValue,
+    valueCurrency: input.valueCurrency,
+    dealStage,
+    status: input.status ?? 'Open',
+    weightPercent: dealWeight(dealStage),
+    weightedValue: weightedDealValue(input.dealValue, dealStage),
+    closingDate: input.closingDate,
+    owner: lead.assignedSalesperson,
+    leadSource: lead.leadSource,
+    lastActivity: input.lastActivity ?? 'Just now',
+    createdAt: input.createdAt ?? new Date().toISOString().slice(0, 10),
+    createdBy,
+    convertedAt: input.convertedAt,
+    convertedBy: input.convertedBy,
+  }
+}
+
+export function formatConversionStamp(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function seedFrom(id: string, leadId: string, stage: DealStage): Opportunity | null {
+  const lead = LEADS.find((item) => item.id === leadId)
+  if (!lead) return null
+  return buildOpportunity(lead, {
+    id,
+    dealValue: lead.opportunityValue,
+    valueCurrency: lead.valueCurrency ?? 'INR',
+    closingDate: lead.expectedClosureDate ?? '',
+    dealStage: stage,
+    lastActivity: lead.lastActivity,
+    createdAt: lead.createdAt,
+    createdBy: lead.assignedSalesperson,
+  })
+}
+
+export const OPPORTUNITIES: Opportunity[] = [
+  seedFrom('OPP-1001', 'LID-1007', 'Negotiation'),
+  seedFrom('OPP-1002', 'LID-1006', 'Proposal'),
+  seedFrom('OPP-1003', 'LID-1012', 'Qualification'),
+  seedFrom('OPP-1004', 'LID-1005', 'Commitment'),
+].filter((item): item is Opportunity => Boolean(item))

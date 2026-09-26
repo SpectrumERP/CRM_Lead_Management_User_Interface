@@ -1,0 +1,34 @@
+---
+description: 4-stage UI governance — reuse tokens/primitives, no duplicate components, a11y states required.
+globs: src/**/*.{tsx,css}
+alwaysApply: true
+---
+
+# UI & Component Governance
+
+Follow Decision → Design → Development → Delivery for every UI change.
+
+## Decision
+- Search `src/ui` and `src/components` before creating anything. Reuse or extend; do not duplicate.
+- Core primitives live in `src/ui` (Button, Field, Card, Spinner). No business/API logic there.
+- Screens in `src/pages` and chrome in `src/components` compose primitives.
+
+## Design
+- Tokens only: `src/index.css` `@theme` (`canvas`, `ink`, `primary`, `accent`, `line`, `success`, `warning`).
+- No new hex, fonts, radii, or one-off padding. No local CSS hacks that mutate globals.
+- Interactive pieces must cover default, hover, active, disabled, and `:focus-visible`.
+
+## Development
+- Typed props interfaces on every component. Semantic HTML + keyboard access + ARIA.
+- Forms: import from `src/ui` (`TextField`, `SelectField`, `TextAreaField`, `SearchSelectField`, `FileField`, `ChoiceField`, `FormGrid`). Controls live in `src/ui/forms`. Do not duplicate local `Field` wrappers or raw `.form-input` markup.
+
+## Delivery
+- Do not ship if layout regresses, it is not usable on mobile/tablet/desktop, or focus rings are missing.
+
+```tsx
+// BAD — new control + hardcoded color
+<button style={{ background: '#2955a3', padding: 11 }}>Save</button>
+
+// GOOD
+<Button variant="solid">Save</Button>
+```
