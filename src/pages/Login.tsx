@@ -45,7 +45,8 @@ export default function Login() {
       showError(getErrorTitle('VALIDATION'), copy.emailRequired)
       return
     }
-    if (!isEmail(nextEmail)) {
+    // No "@" means a Spectrum login ID (e.g. "edp"); only validate email-shaped input as an email.
+    if (nextEmail.includes('@') && !isEmail(nextEmail)) {
       showError(getErrorTitle('VALIDATION'), copy.emailInvalid)
       return
     }
@@ -82,9 +83,9 @@ export default function Login() {
         <p className="ui-subtitle mb-6 mt-1 text-center text-sm">{copy.subtitle}</p>
         <form onSubmit={onSubmit} className="space-y-4" aria-labelledby="login-heading" noValidate>
           <TextField
-            label="Email"
+            label="Email or Login ID"
             htmlFor="login-email"
-            type="email"
+            type="text"
             value={email}
             onValueChange={(value) => {
               setEmail(value)

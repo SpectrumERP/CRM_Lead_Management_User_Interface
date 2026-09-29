@@ -83,7 +83,7 @@ export const PAGE_COPY = {
     subtitle: 'Sign in with your Force Intellect account',
     submit: 'Sign in',
     pending: 'Signing in…',
-    emailRequired: 'Enter your email.',
+    emailRequired: 'Enter your email or login ID.',
     passwordRequired: 'Enter your password.',
     emailInvalid: 'Enter a valid email address.',
     highlights: [

@@ -1,7 +1,10 @@
 import { verifyLogin } from '../auth/users'
 import type { AuthUser } from '../auth/types'
-import { invalidCredentials, rateLimited } from './errors'
+import { clearAuth, loadAuth } from './authStore'
+import { usesSpectrumApi } from './config'
+import { invalidCredentials, isApiError, rateLimited, type ApiError } from './errors'
 import { createSession, clearSession, readSession } from './session'
+import { spectrumLogin } from './spectrumAuth'
 
 const WINDOW_MS = 5 * 60 * 1000
 const MAX_ATTEMPTS = 5
@@ -19,10 +22,27 @@ function guardLogin(email: string) {
   if (current.count > MAX_ATTEMPTS) rateLimited()
 }
 
+/** Spectrum API first (stores the JWT); falls back to the built-in demo accounts. */
 export async function login(email: string, password: string): Promise<AuthUser> {
   guardLogin(email)
+  let remoteError: ApiError | null = null
+  if (usesSpectrumApi()) {
+    try {
+      const user = await spectrumLogin(email.trim(), password)
+      attempts.delete(email.trim().toLowerCase())
+      await createSession(user, (await loadAuth())?.expiresAt)
+      return user
+    } catch (error) {
+      if (!isApiError(error)) throw error
+      remoteError = error
+    }
+  }
   const user = await verifyLogin(email, password)
-  if (!user) invalidCredentials()
+  if (!user) {
+    // Surface outages (network/server) instead of a misleading "wrong password".
+    if (remoteError && remoteError.status !== 401 && remoteError.status !== 400) throw remoteError
+    invalidCredentials()
+  }
   attempts.delete(email.trim().toLowerCase())
   await createSession(user)
   return user
@@ -30,6 +50,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 
 export function logout() {
   clearSession()
+  clearAuth()
 }
 
 export async function me(): Promise<AuthUser | null> {
@@ -40,4 +61,5 @@ export async function me(): Promise<AuthUser | null> {
 export function __resetAuthForTests() {
   attempts.clear()
   clearSession()
+  clearAuth()
 }

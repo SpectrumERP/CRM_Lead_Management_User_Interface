@@ -7,3 +7,16 @@ export function apiOrigin(): string {
 export function usesRemoteApi() {
   return apiOrigin().length > 0
 }
+
+const DEFAULT_SPECTRUM_URL = 'https://spectrumtasknplanner.steelmont.co.in:8085'
+
+/** Spectrum backend used by `http` (real login + future APIs). Set VITE_SPECTRUM_API_URL to override; "off" disables it. */
+export function spectrumOrigin(): string {
+  const raw = import.meta.env.VITE_SPECTRUM_API_URL
+  const value = typeof raw === 'string' && raw.length > 0 ? raw : DEFAULT_SPECTRUM_URL
+  return value === 'off' ? '' : value.replace(/\/+$/, '')
+}
+
+export function usesSpectrumApi() {
+  return spectrumOrigin().length > 0
+}

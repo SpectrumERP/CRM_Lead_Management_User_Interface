@@ -367,7 +367,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                     />
                   </th>
                   {([
-                    ['id', 'Lead ID', false, true],
+                    ['id', 'Lead Code', false, true],
                     ['leadName', 'Lead Name', false, false],
                     ['companyName', 'Business Entity Name', false, false],
                     ['contactPerson', 'Primary Contact', false, false],

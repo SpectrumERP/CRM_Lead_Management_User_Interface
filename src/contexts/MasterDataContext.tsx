@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
+import { DEAL_STAGES, DEAL_STAGE_WEIGHT, OPPORTUNITY_STATUSES } from '../data/opportunities';
+import { LEAD_PRIORITIES } from '../data/leads';
+import { PRODUCTS } from '../data/products';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type MasterItemStatus = 'Active' | 'Inactive';
@@ -37,12 +40,28 @@ export interface ActivityTypeItem {
   status: MasterItemStatus;
 }
 
+/** Shape shared by the simpler masters (priorities, opportunity stages/statuses, products). */
+export interface SimpleMasterItem {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  displayOrder?: number;
+  /** Win probability in percent (opportunity stages). */
+  weight?: number;
+  status: MasterItemStatus;
+}
+
 export interface MasterData {
   leadSources: LeadSourceItem[];
   leadStages: LeadStageItem[];
   leadStatuses: LeadStatusItem[];
   entityTypes: EntityTypeItem[];
   activityTypes: ActivityTypeItem[];
+  leadPriorities: SimpleMasterItem[];
+  opportunityStages: SimpleMasterItem[];
+  opportunityStatuses: SimpleMasterItem[];
+  products: SimpleMasterItem[];
 }
 
 // ─── Default data ─────────────────────────────────────────────────────────────
@@ -99,6 +118,33 @@ const DEFAULT_ACTIVITY_TYPES: ActivityTypeItem[] = [
   { id: 'AT11', name: 'Other', status: 'Active' },
 ];
 
+const DEFAULT_LEAD_PRIORITIES: SimpleMasterItem[] = LEAD_PRIORITIES.map((name, i) => ({
+  id: `LP${i + 1}`, name, displayOrder: i + 1, status: 'Active',
+}));
+
+const DEFAULT_OPPORTUNITY_STAGES: SimpleMasterItem[] = DEAL_STAGES.map((name, i) => ({
+  id: `OST${i + 1}`, name, displayOrder: i + 1, weight: DEAL_STAGE_WEIGHT[name], status: 'Active',
+}));
+
+const OPPORTUNITY_STATUS_NOTES: Record<string, string> = {
+  Open: 'Opportunity is being actively worked',
+  'On Hold': 'Paused, to be revisited later',
+  Won: 'Closed with a successful sale',
+  Lost: 'Closed without a sale',
+};
+
+const DEFAULT_OPPORTUNITY_STATUSES: SimpleMasterItem[] = OPPORTUNITY_STATUSES.map((name, i) => ({
+  id: `OSTS${i + 1}`, name, description: OPPORTUNITY_STATUS_NOTES[name] ?? '', status: 'Active',
+}));
+
+const DEFAULT_PRODUCTS: SimpleMasterItem[] = PRODUCTS.map((p) => ({
+  id: `PRD${p.id}`,
+  name: p.itemName,
+  code: p.itemCode,
+  description: [p.group?.groupName, p.stockUnit?.alias].filter(Boolean).join(' · '),
+  status: 'Active',
+}));
+
 // ─── Context ──────────────────────────────────────────────────────────────────
 interface MasterDataContextValue {
   data: MasterData;
@@ -107,6 +153,10 @@ interface MasterDataContextValue {
   setLeadStatuses: (v: LeadStatusItem[]) => void;
   setEntityTypes: (v: EntityTypeItem[]) => void;
   setActivityTypes: (v: ActivityTypeItem[]) => void;
+  setLeadPriorities: (v: SimpleMasterItem[]) => void;
+  setOpportunityStages: (v: SimpleMasterItem[]) => void;
+  setOpportunityStatuses: (v: SimpleMasterItem[]) => void;
+  setProducts: (v: SimpleMasterItem[]) => void;
   // Convenience: active items only
   activeLeadSourceNames: string[];
   activeLeadStageNames: string[];
@@ -123,8 +173,15 @@ export function MasterDataProvider({ children }: { children: ReactNode }) {
   const [leadStatuses, setLeadStatuses] = useState<LeadStatusItem[]>(DEFAULT_LEAD_STATUSES);
   const [entityTypes, setEntityTypes] = useState<EntityTypeItem[]>(DEFAULT_ENTITY_TYPES);
   const [activityTypes, setActivityTypes] = useState<ActivityTypeItem[]>(DEFAULT_ACTIVITY_TYPES);
+  const [leadPriorities, setLeadPriorities] = useState<SimpleMasterItem[]>(DEFAULT_LEAD_PRIORITIES);
+  const [opportunityStages, setOpportunityStages] = useState<SimpleMasterItem[]>(DEFAULT_OPPORTUNITY_STAGES);
+  const [opportunityStatuses, setOpportunityStatuses] = useState<SimpleMasterItem[]>(DEFAULT_OPPORTUNITY_STATUSES);
+  const [products, setProducts] = useState<SimpleMasterItem[]>(DEFAULT_PRODUCTS);
 
-  const data: MasterData = { leadSources, leadStages, leadStatuses, entityTypes, activityTypes };
+  const data: MasterData = {
+    leadSources, leadStages, leadStatuses, entityTypes, activityTypes,
+    leadPriorities, opportunityStages, opportunityStatuses, products,
+  };
 
   const activeLeadSourceNames = leadSources.filter((x) => x.status === 'Active').map((x) => x.name);
   const activeLeadStageNames = leadStages.filter((x) => x.status === 'Active').sort((a, b) => a.displayOrder - b.displayOrder).map((x) => x.name);
@@ -136,6 +193,7 @@ export function MasterDataProvider({ children }: { children: ReactNode }) {
     <MasterDataContext.Provider value={{
       data,
       setLeadSources, setLeadStages, setLeadStatuses, setEntityTypes, setActivityTypes,
+      setLeadPriorities, setOpportunityStages, setOpportunityStatuses, setProducts,
       activeLeadSourceNames, activeLeadStageNames, activeLeadStatusNames,
       activeEntityTypeNames, activeActivityTypeNames,
     }}>

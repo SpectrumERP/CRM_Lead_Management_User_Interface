@@ -79,6 +79,11 @@ const SECTION_ICONS = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
     </svg>
   ),
+  classification: (
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+    </svg>
+  ),
   leadDetails: (
     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -176,15 +181,15 @@ function splitDateTime(value: string) {
 
 const NOTE_DISCUSSION_MAX = 1000
 
-function mapOperTypesToActivityType(types: OperTaskType[]): ActivityType {
-  const first = types[0]?.['Task Type']
-  if (first && (ACTIVITY_TYPES as readonly string[]).includes(first)) return first as ActivityType
+function mapOperTypeToActivityType(type: OperTaskType | null): ActivityType {
+  const name = type?.['Task Type']
+  if (name && (ACTIVITY_TYPES as readonly string[]).includes(name)) return name as ActivityType
   return 'Other'
 }
 
 export default function CreateLead({ existing, onBack, onSuccess, embedded, prefillEntityId, prefillContactId, onCreated }: CreateLeadProps) {
   const isEdit = Boolean(existing)
-  const { activeLeadSourceNames } = useMasterData()
+  const { activeLeadSourceNames, activeLeadStageNames, activeLeadStatusNames } = useMasterData()
   const { addLead, patchLead, addContact, addActivity, addNote, addDocument } = useCrmActions()
   const leadRecordId = useRef(existing?.id ?? `LID-${Date.now()}`).current
   const { data: entityPage } = useApiQuery(() => api.entities.list(), [])
@@ -261,7 +266,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   const [selectedProducts, setSelectedProducts] = useState<Product[]>(() =>
     existing ? productsFromLeadNames(leadProductList(existing)) : [],
   )
-  const [selectedActivityTypes, setSelectedActivityTypes] = useState<OperTaskType[]>([])
+  const [selectedActivityType, setSelectedActivityType] = useState<OperTaskType | null>(null)
   const [activity, setActivity] = useState({
     subject: '',
     dueDate: '',
@@ -307,9 +312,11 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     : contactsForEntity
 
   const availableProducts = PRODUCTS.filter((item) => !selectedProducts.some((selected) => selected.id === item.id))
-  const availableActivityTypes = SELECTABLE_OPER_TASK_TYPES.filter(
-    (item) => !selectedActivityTypes.some((selected) => selected.OperTaskTypeNo === item.OperTaskTypeNo),
-  )
+
+  /** Active master values, plus the lead's current value if it has since been deactivated. */
+  function withCurrent(names: string[], current: string) {
+    return current && !names.includes(current) ? [current, ...names] : names
+  }
 
   function updateLead(k: string, v: string) { setLead((p) => ({ ...p, [k]: v })); clearErr(k) }
   function clearErr(k: string) { setErrors((e) => { const n = { ...e }; delete n[k]; return n }) }
@@ -340,16 +347,9 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     setSelectedProducts((prev) => prev.filter((item) => item.id !== id))
   }
 
-  function addActivityType(item: OperTaskType | null) {
-    if (!item || item.OperTaskTypeNo === 0) return
-    setSelectedActivityTypes((prev) =>
-      prev.some((row) => row.OperTaskTypeNo === item.OperTaskTypeNo) ? prev : [...prev, item],
-    )
+  function selectActivityType(item: OperTaskType | null) {
+    setSelectedActivityType(item && item.OperTaskTypeNo !== 0 ? item : null)
     clearErr('activityType')
-  }
-
-  function removeActivityType(id: number) {
-    setSelectedActivityTypes((prev) => prev.filter((item) => item.OperTaskTypeNo !== id))
   }
 
   function updateActivity<K extends keyof typeof activity>(key: K, value: (typeof activity)[K]) {
@@ -383,7 +383,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   }
 
   function activityDirty() {
-    return selectedActivityTypes.length > 0
+    return selectedActivityType !== null
       || Boolean(activity.subject.trim())
       || Boolean(activity.dueDate)
       || Boolean(activity.assignedTo)
@@ -530,11 +530,11 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
       })
     })
     if (activityDirty()) {
-      const typeLine = selectedActivityTypes.map((item) => item['Task Type']).join(', ')
+      const typeLine = selectedActivityType?.['Task Type'] ?? ''
       const notes = [typeLine ? `Type: ${typeLine}` : '', activity.notesOutcome.trim()].filter(Boolean).join('\n')
       addActivity({
         id: `ACT-${Date.now()}`,
-        type: mapOperTypesToActivityType(selectedActivityTypes),
+        type: mapOperTypeToActivityType(selectedActivityType),
         subject: activity.subject.trim(),
         leadId: leadRecordId,
         leadName: payload.leadName,
@@ -690,6 +690,32 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
             </FormGrid>
           </Section>
 
+          <Section title="Lead Classification" icon={SECTION_ICONS.classification}>
+            <FormGrid cols={3}>
+              <SelectField
+                label="Lead Source"
+                placeholder="Select source"
+                options={withCurrent(activeLeadSourceNames, lead.source)}
+                value={lead.source}
+                onValueChange={(v) => updateLead('source', v)}
+              />
+              <SelectField
+                label="Lead Stage"
+                preserveOrder
+                options={withCurrent(activeLeadStageNames, lead.stage)}
+                value={lead.stage}
+                onValueChange={(v) => updateLead('stage', v)}
+              />
+              <SelectField
+                label="Lead Status"
+                preserveOrder
+                options={withCurrent(activeLeadStatusNames, lead.status)}
+                value={lead.status}
+                onValueChange={(v) => updateLead('status', v)}
+              />
+            </FormGrid>
+          </Section>
+
           <Section title="Lead Details" icon={SECTION_ICONS.leadDetails}>
             <FormGrid>
               <div className="lg:col-span-2">
@@ -768,30 +794,16 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 <SearchSelectField
                   label="Type"
                   error={errors.activityType}
-                  options={availableActivityTypes}
-                  value={null}
-                  onChange={addActivityType}
+                  options={SELECTABLE_OPER_TASK_TYPES}
+                  value={selectedActivityType}
+                  onChange={selectActivityType}
                   getKey={(item) => String(item.OperTaskTypeNo)}
                   getLabel={(item) => item['Task Type']}
                   filterItem={matchesOperTaskType}
                   placeholder="Search and select type…"
                   searchPlaceholder="Search task type or code…"
                   emptyText="No matching types"
-                  clearable={false}
                 />
-                {selectedActivityTypes.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {selectedActivityTypes.map((item) => (
-                      <Tag
-                        key={item.OperTaskTypeNo}
-                        label={item['Task Type']}
-                        title={item.Code ? `${item['Task Type']} · ${item.Code}` : item['Task Type']}
-                        onRemove={() => removeActivityType(item.OperTaskTypeNo)}
-                        removeLabel={`Remove ${item['Task Type']}`}
-                      />
-                    ))}
-              </div>
-                ) : null}
               </div>
               <TextField
                 fieldClassName="lg:col-span-2"

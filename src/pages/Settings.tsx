@@ -5,243 +5,22 @@ import {
   MasterItemStatus,
 } from '../contexts/MasterDataContext';
 import ConfirmDialog from '../components/ConfirmDialog';
-import FormDrawer from '../components/FormDrawer';
-import { FilterSearch, FilterSelect } from '../components/InlineFilterRow';
 import { ToastType } from '../components/Toast';
-import { Button, Field, IconTooltip, SelectField, CountBadge } from '../ui';
+import { SelectField, CountBadge } from '../ui';
+import {
+  C, StatusBadge, SectionHeader, FilterBar, Th, Td, Modal, FormField, RowActions, EmptyRows, MasterTable,
+  type ToggleConfirm,
+} from './settings/atoms';
+import ApiMasterSection from './settings/ApiMasterSection';
+import LocalMasterSection from './settings/LocalMasterSection';
+import { useApiMaster } from './settings/useApiMaster';
+import { masterApis } from '../api/masters';
+import { useSpectrumCompany } from '../auth/useSpectrumCompany';
 
 interface Props {
   onToast?: (type: ToastType, title: string, message?: string) => void;
 }
 
-// ─── Brand tokens (match existing design system) ──────────────────────────────
-const C = {
-  blue: '#2955a3', deepBlue: '#0c1a3a', red: '#c41e1e',
-  blueBg: '#eef3fc', blueBorder: '#c2d3f5',
-  border: '#dce4f2', surface: '#fff', bg: '#f2f5fb', muted: '#7a8494',
-  text: '#0c1a3a', sub: '#4a5d82',
-};
-
-// ─── Shared atoms ─────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: MasterItemStatus }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full"
-      style={status === 'Active'
-        ? { background: '#edfbf1', color: '#1a8040', border: '1px solid #bbf0cf' }
-        : { background: '#f0f4fb', color: '#94a3b8', border: '1px solid #dce4f2' }}>
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: status === 'Active' ? '#1a8040' : '#94a3b8' }} />
-      {status}
-    </span>
-  );
-}
-
-function SectionHeader({ title, subtitle, count, onAdd }: {
-  title: string; subtitle: string; count: number; onAdd: () => void;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4 mb-5">
-      <div>
-        <h2 className="text-base font-bold" style={{ fontFamily: 'DM Sans, sans-serif', color: C.text }}>{title}</h2>
-        <p className="text-xs mt-0.5" style={{ color: C.muted }}>{subtitle} · <span style={{ color: C.blue, fontWeight: 600 }}>{count} configured</span></p>
-      </div>
-      <button onClick={onAdd}
-        className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-white flex-shrink-0 transition-all"
-        style={{ background: C.blue, boxShadow: '0 2px 8px rgba(41,85,163,0.25)' }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = '#1e3f87')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = C.blue)}>
-        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-        Add New
-      </button>
-    </div>
-  );
-}
-
-function FilterBar({ search, onSearch, statusFilter, onStatus, onClear }: {
-  search: string; onSearch: (v: string) => void;
-  statusFilter: string; onStatus: (v: string) => void;
-  onClear: () => void;
-}) {
-  const dirty = search || statusFilter !== 'All';
-  return (
-    <div className="mb-4 w-full min-w-0 overflow-hidden">
-      <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_9rem] items-center gap-2">
-        <FilterSearch value={search} onChange={onSearch} placeholder="Search…" />
-        <FilterSelect
-          aria-label="Status"
-          widthClass="w-full"
-          value={statusFilter}
-          onValueChange={onStatus}
-          options={[
-            { value: 'All', label: 'All Status' },
-            { value: 'Active', label: 'Active' },
-            { value: 'Inactive', label: 'Inactive' },
-          ]}
-        />
-      </div>
-      {dirty ? (
-        <button
-          type="button"
-          onClick={onClear}
-          className="mt-2 h-8 rounded-lg px-3 text-xs font-semibold transition-colors"
-          style={{ background: '#f0f4fb', color: C.sub, border: `1px solid ${C.border}` }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#e4eaf5')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = '#f0f4fb')}
-        >
-          Clear
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function Th({ children, right, narrow }: { children: React.ReactNode; right?: boolean; narrow?: boolean }) {
-  return (
-    <th
-      className="px-4 py-2.5 text-left font-bold uppercase tracking-wider"
-      style={{
-        fontSize: 10.5,
-        color: '#94a3b8',
-        letterSpacing: '0.08em',
-        textAlign: right ? 'right' : 'left',
-        width: narrow ? '1%' : undefined,
-        whiteSpace: narrow ? 'nowrap' : undefined,
-      }}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, right, narrow }: { children: React.ReactNode; right?: boolean; narrow?: boolean }) {
-  return (
-    <td
-      className="px-4 py-3"
-      style={{
-        textAlign: right ? 'right' : 'left',
-        width: narrow ? '1%' : undefined,
-        whiteSpace: narrow ? 'nowrap' : undefined,
-      }}
-    >
-      {children}
-    </td>
-  );
-}
-
-// ─── Right sheet (matches Note / Lead drawers) ────────────────────────────────
-function Modal({ title, onClose, onSave, children, saving }: {
-  title: string; onClose: () => void; onSave: () => void; children: React.ReactNode; saving?: boolean;
-}) {
-  const isEdit = title.toLowerCase().startsWith('edit')
-
-  return (
-    <FormDrawer
-      title={title}
-      subtitle={isEdit ? 'Update this master data item' : 'Add a new master data item'}
-      onClose={onClose}
-      widthClass="w-[26rem]"
-      icon={
-        isEdit ? (
-          <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-            />
-          </svg>
-        ) : (
-          <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-        )
-      }
-      footer={(requestClose) => (
-        <>
-          <Button type="button" variant="secondary" onClick={requestClose}>
-            Cancel
-          </Button>
-          <Button type="button" variant="solid" onClick={onSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-        </>
-      )}
-    >
-      <div className="space-y-4">{children}</div>
-    </FormDrawer>
-  );
-}
-
-function FormField({ label, required, error, children }: {
-  label: string; required?: boolean; error?: string; children: React.ReactNode;
-}) {
-  return (
-    <Field label={label} required={required} error={error}>
-      {children}
-    </Field>
-  );
-}
-
-// ─── Row action buttons ───────────────────────────────────────────────────────
-function RowActions({ onEdit, onToggle, status }: { onEdit: () => void; onToggle: () => void; status: MasterItemStatus }) {
-  return (
-    <div className="flex items-center gap-1 justify-end">
-      <IconTooltip label="Edit">
-        <button type="button" onClick={onEdit} aria-label="Edit"
-          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors" style={{ color: '#94a3b8' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.blue; (e.currentTarget as HTMLButtonElement).style.background = C.blueBg; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}>
-          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-        </button>
-      </IconTooltip>
-      <IconTooltip label={status === 'Active' ? 'Deactivate' : 'Activate'}>
-        <button type="button" onClick={onToggle} aria-label={status === 'Active' ? 'Deactivate' : 'Activate'}
-          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors" style={{ color: '#94a3b8' }}
-          onMouseEnter={(e) => {
-            const clr = status === 'Active' ? '#b45309' : '#1a8040';
-            const bg = status === 'Active' ? '#fffbeb' : '#edfbf1';
-            (e.currentTarget as HTMLButtonElement).style.color = clr; (e.currentTarget as HTMLButtonElement).style.background = bg;
-          }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}>
-          {status === 'Active'
-            ? <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-            : <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          }
-        </button>
-      </IconTooltip>
-    </div>
-  );
-}
-
-// ─── Empty state ──────────────────────────────────────────────────────────────
-function EmptyRows({ onAdd }: { onAdd: () => void }) {
-  return (
-    <tr>
-      <td colSpan={99} className="py-16 text-center">
-        <div className="w-10 h-10 rounded-2xl mx-auto mb-3 flex items-center justify-center" style={{ background: '#eef3fc' }}>
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#2955a3" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-        </div>
-        <p className="text-sm font-bold mb-1" style={{ color: C.text }}>No items found</p>
-        <p className="text-xs mb-3" style={{ color: '#94a3b8' }}>Add your first item to get started.</p>
-        <button onClick={onAdd} className="px-4 py-2 rounded-lg text-xs font-bold text-white" style={{ background: C.blue }}>Add New</button>
-      </td>
-    </tr>
-  );
-}
-
-// ─── Table wrapper ────────────────────────────────────────────────────────────
-function MasterTable({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="overflow-hidden rounded-xl" style={{ background: '#fff', border: `1px solid ${C.border}`, boxShadow: '0 1px 4px rgba(12,26,58,0.05)' }}>
-      <div className="w-full min-w-0">
-        <table className="crm-table crm-table-fit w-full" style={{ tableLayout: 'auto' }}>
-          {children}
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ─── Confirm toggle helper ────────────────────────────────────────────────────
-interface ToggleConfirm { id: string; name: string; currentStatus: MasterItemStatus }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 1: Lead Sources
@@ -896,26 +675,53 @@ function ActivityTypesSection({ onToast }: { onToast?: Props['onToast'] }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN Settings Page
 // ══════════════════════════════════════════════════════════════════════════════
+
+type TabGroup = 'lead' | 'opportunity' | 'general';
+
 const SETTING_TABS = [
-  { id: 'sources', label: 'Lead Sources', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /> },
-  { id: 'stages', label: 'Lead Stages', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /> },
-  { id: 'statuses', label: 'Lead Statuses', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /> },
-  { id: 'entityTypes', label: 'Entity Types', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M9 21V7l6-4v18M9 11H3v10M15 21V11h6v10" /> },
-  { id: 'activityTypes', label: 'Activity Types', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /> },
+  { id: 'sources', group: 'lead', label: 'Lead Sources', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /> },
+  { id: 'stages', group: 'lead', label: 'Lead Stages', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /> },
+  { id: 'statuses', group: 'lead', label: 'Lead Statuses', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /> },
+  { id: 'priorities', group: 'lead', label: 'Lead Priorities', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2z" /> },
+  { id: 'oppStages', group: 'opportunity', label: 'Opportunity Stages', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> },
+  { id: 'oppStatuses', group: 'opportunity', label: 'Opportunity Statuses', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /> },
+  { id: 'products', group: 'opportunity', label: 'Products', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
+  { id: 'activityTypes', group: 'general', label: 'Activity Types', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /> },
+  { id: 'entityTypes', group: 'general', label: 'Entity Types', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M9 21V7l6-4v18M9 11H3v10M15 21V11h6v10" /> },
 ] as const;
+
+const TAB_GROUPS: { id: TabGroup; label: string }[] = [
+  { id: 'lead', label: 'Lead Management' },
+  { id: 'opportunity', label: 'Opportunity' },
+  { id: 'general', label: 'General' },
+];
 
 type SettingTab = typeof SETTING_TABS[number]['id'];
 
+const LOCAL_ONLY_NOTE = 'Stored in this app for now; it will move to the server once its API is available.';
+
 export default function Settings({ onToast }: Props) {
   const [activeTab, setActiveTab] = useState<SettingTab>('sources');
-  const { data } = useMasterData();
+  const { data, setLeadPriorities, setOpportunityStages, setOpportunityStatuses, setProducts } = useMasterData();
+  const company = useSpectrumCompany();
+  // Spectrum login → the documented masters come from the API; demo login → unchanged local data.
+  const apiCompany = company.enabled ? company.companyNo : null;
+  const sourcesApi = useApiMaster(masterApis.leadSources, apiCompany);
+  const stagesApi = useApiMaster(masterApis.leadStages, apiCompany);
+  const prioritiesApi = useApiMaster(masterApis.leadPriorities, apiCompany);
+  const activityTypesApi = useApiMaster(masterApis.leadActivityTypes, apiCompany);
+  const useApi = apiCompany !== null;
 
   const counts: Record<SettingTab, number> = {
-    sources: data.leadSources.length,
-    stages: data.leadStages.length,
+    sources: useApi ? sourcesApi.rows.length : data.leadSources.length,
+    stages: useApi ? stagesApi.rows.length : data.leadStages.length,
     statuses: data.leadStatuses.length,
+    priorities: useApi ? prioritiesApi.rows.length : data.leadPriorities.length,
+    oppStages: data.opportunityStages.length,
+    oppStatuses: data.opportunityStatuses.length,
+    products: data.products.length,
+    activityTypes: useApi ? activityTypesApi.rows.length : data.activityTypes.length,
     entityTypes: data.entityTypes.length,
-    activityTypes: data.activityTypes.length,
   };
 
   return (
@@ -938,39 +744,27 @@ export default function Settings({ onToast }: Props) {
           </div>
         </div>
         <nav className="flex lg:flex-col flex-1 px-2 py-2 lg:py-3 gap-1 lg:space-y-0.5 overflow-x-auto">
-          <p className="hidden lg:block text-xs font-bold px-3 mb-2.5 uppercase tracking-widest" style={{ color: '#94a3b8', fontSize: 9.5 }}>Lead Management</p>
-          {SETTING_TABS.slice(0, 3).map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-left transition-all whitespace-nowrap flex-shrink-0 lg:w-full"
-              style={{
-                background: activeTab === tab.id ? C.blueBg : 'transparent',
-                color: activeTab === tab.id ? C.blue : C.sub,
-                border: activeTab === tab.id ? `1px solid ${C.blueBorder}` : '1px solid transparent',
-              }}>
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{tab.icon}</svg>
-              <span className="flex-1">{tab.label}</span>
-              <CountBadge
-                value={counts[tab.id]}
-                tone={activeTab === tab.id ? 'primary' : 'muted'}
-              />
-            </button>
-          ))}
-          <p className="hidden lg:block text-xs font-bold px-3 mt-4 mb-2.5 uppercase tracking-widest" style={{ color: '#94a3b8', fontSize: 9.5 }}>General</p>
-          {SETTING_TABS.slice(3).map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-left transition-all whitespace-nowrap flex-shrink-0 lg:w-full"
-              style={{
-                background: activeTab === tab.id ? C.blueBg : 'transparent',
-                color: activeTab === tab.id ? C.blue : C.sub,
-                border: activeTab === tab.id ? `1px solid ${C.blueBorder}` : '1px solid transparent',
-              }}>
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{tab.icon}</svg>
-              <span className="flex-1">{tab.label}</span>
-              <CountBadge
-                value={counts[tab.id]}
-                tone={activeTab === tab.id ? 'primary' : 'muted'}
-              />
-            </button>
+          {TAB_GROUPS.map((group, groupIndex) => (
+            <div key={group.id} className="contents">
+              <p className={`hidden lg:block text-xs font-bold px-3 mb-2.5 uppercase tracking-widest ${groupIndex > 0 ? 'mt-4' : ''}`}
+                style={{ color: '#94a3b8', fontSize: 9.5 }}>{group.label}</p>
+              {SETTING_TABS.filter((tab) => tab.group === group.id).map((tab) => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-left transition-all whitespace-nowrap flex-shrink-0 lg:w-full"
+                  style={{
+                    background: activeTab === tab.id ? C.blueBg : 'transparent',
+                    color: activeTab === tab.id ? C.blue : C.sub,
+                    border: activeTab === tab.id ? `1px solid ${C.blueBorder}` : '1px solid transparent',
+                  }}>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{tab.icon}</svg>
+                  <span className="flex-1">{tab.label}</span>
+                  <CountBadge
+                    value={counts[tab.id]}
+                    tone={activeTab === tab.id ? 'primary' : 'muted'}
+                  />
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="hidden lg:block px-4 py-3" style={{ borderTop: `1px solid ${C.border}` }}>
@@ -981,21 +775,63 @@ export default function Settings({ onToast }: Props) {
       {/* Main content */}
       <div className="page-gutter min-h-0 min-w-0 flex-1 overflow-y-auto py-4">
         {/* Page title */}
-        <div className="mb-6">
-          <h1 className="text-xl font-bold" style={{ fontFamily: 'DM Sans, sans-serif', color: C.text }}>
-            Master Data Configuration
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: C.muted }}>
-            Manage the lookup values used across all lead management screens.
-          </p>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold" style={{ fontFamily: 'DM Sans, sans-serif', color: C.text }}>
+              Master Data Configuration
+            </h1>
+            <p className="text-sm mt-0.5" style={{ color: C.muted }}>
+              Manage the lookup values used across all lead management screens.
+            </p>
+          </div>
+          {useApi && company.companies.length > 1 ? (
+            <div className="w-64 max-w-full">
+              <SelectField
+                label="Company"
+                preserveOrder
+                options={company.companies.map((c) => ({ value: String(c.CompanyNo), label: c.CompanyName }))}
+                value={String(company.companyNo)}
+                onValueChange={(v) => company.setCompanyNo(Number(v))}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* Tab content */}
-        {activeTab === 'sources' && <LeadSourcesSection onToast={onToast} />}
-        {activeTab === 'stages' && <LeadStagesSection onToast={onToast} />}
+        {activeTab === 'sources' && (useApi
+          ? <ApiMasterSection api={masterApis.leadSources} state={sourcesApi} title="Lead Sources" subtitle="Where your leads originate"
+              noun="Lead Source" namePlaceholder="e.g. LinkedIn" onToast={onToast} />
+          : <LeadSourcesSection onToast={onToast} />)}
+        {activeTab === 'stages' && (useApi
+          ? <ApiMasterSection api={masterApis.leadStages} state={stagesApi} title="Lead Stages" subtitle="Sales pipeline progression steps"
+              noun="Lead Stage" namePlaceholder="e.g. Proposal Sent" onToast={onToast} />
+          : <LeadStagesSection onToast={onToast} />)}
         {activeTab === 'statuses' && <LeadStatusesSection onToast={onToast} />}
+        {activeTab === 'priorities' && (useApi
+          ? <ApiMasterSection api={masterApis.leadPriorities} state={prioritiesApi} title="Lead Priorities" subtitle="Urgency levels for leads"
+              noun="Lead Priority" namePlaceholder="e.g. High" onToast={onToast} />
+          : <LocalMasterSection items={data.leadPriorities} onChange={setLeadPriorities} title="Lead Priorities" subtitle="Urgency levels for leads"
+              noun="Lead Priority" idPrefix="LP" namePlaceholder="e.g. High" fields={{ order: true }} onToast={onToast} />)}
+        {activeTab === 'oppStages' && (
+          <LocalMasterSection items={data.opportunityStages} onChange={setOpportunityStages} title="Opportunity Stages"
+            subtitle="Deal progression and win probability" noun="Opportunity Stage" idPrefix="OST" namePlaceholder="e.g. Proposal"
+            fields={{ order: true, weight: true }} note={LOCAL_ONLY_NOTE} onToast={onToast} />
+        )}
+        {activeTab === 'oppStatuses' && (
+          <LocalMasterSection items={data.opportunityStatuses} onChange={setOpportunityStatuses} title="Opportunity Statuses"
+            subtitle="Overall disposition of an opportunity" noun="Opportunity Status" idPrefix="OSTS" namePlaceholder="e.g. On Hold"
+            fields={{ description: true }} note={LOCAL_ONLY_NOTE} onToast={onToast} />
+        )}
+        {activeTab === 'products' && (
+          <LocalMasterSection items={data.products} onChange={setProducts} title="Products"
+            subtitle="Items that can be quoted on leads and opportunities" noun="Product" idPrefix="PRD" namePlaceholder="e.g. Steel Channel 100mm"
+            fields={{ code: true, description: true }} note={LOCAL_ONLY_NOTE} onToast={onToast} />
+        )}
+        {activeTab === 'activityTypes' && (useApi
+          ? <ApiMasterSection api={masterApis.leadActivityTypes} state={activityTypesApi} title="Activity Types"
+              subtitle="Types of sales activities that can be logged" noun="Activity Type" namePlaceholder="e.g. Demo Call" onToast={onToast} />
+          : <ActivityTypesSection onToast={onToast} />)}
         {activeTab === 'entityTypes' && <EntityTypesSection onToast={onToast} />}
-        {activeTab === 'activityTypes' && <ActivityTypesSection onToast={onToast} />}
       </div>
     </div>
   );

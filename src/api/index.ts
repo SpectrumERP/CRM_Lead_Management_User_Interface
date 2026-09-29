@@ -7,6 +7,12 @@ import './routes/auth'
 
 export { endpoints } from './endpoints'
 export { client, dispatch } from './client'
+export { http } from './http'
+export type { HttpRequestConfig, HttpResponse } from './http'
+export { loadAuth, getAuthToken } from './authStore'
+export { masterApis, createMasterApi } from './masters'
+export type { MasterApi, MasterKey, MasterRow, MasterDetail, MasterSaveInput } from './masters'
+export type { AuthData, SpectrumCompany, SpectrumUser } from './authStore'
 export { api } from './access'
 export { useApiQuery } from './useApiQuery'
 export type {

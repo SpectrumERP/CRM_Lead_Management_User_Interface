@@ -1,6 +1,15 @@
 /** Single catalog of API paths. UI never inlines these strings. */
 export const API_BASE = '/api/v1'
 
+/** Spectrum backend paths, called through `http` (relative to spectrumOrigin()). */
+export const spectrumEndpoints = {
+  auth: {
+    login: '/api/Auth/login',
+  },
+  /** Base for Save / Load Data / Search / Delete master routes (see masters.ts). */
+  masters: '/api/master',
+}
+
 export const endpoints = {
   auth: {
     login: `${API_BASE}/auth/login`,
