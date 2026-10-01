@@ -32,3 +32,8 @@ export function useToast() {
   if (!ctx) throw new Error('useToast must be used within ToastProvider')
   return ctx
 }
+
+/** Same as useToast, but a no-op outside the provider (components that may render in isolation). */
+export function useOptionalToast(): ToastApi {
+  return useContext(ToastContext) ?? { addToast: () => {} }
+}

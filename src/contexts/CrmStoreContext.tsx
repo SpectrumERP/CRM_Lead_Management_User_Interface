@@ -8,6 +8,24 @@ import type { Meeting } from '../data/meetings'
 import type { CRMDocument } from '../data/documents'
 import type { AuditEntry } from '../data/auditLog'
 import { api } from '../api/crm'
+import { patchNote as patchLocalNote, removeActivity as removeLocalActivity, removeNote as removeLocalNote } from '../api/db'
+import {
+  deleteServerLead,
+  deleteServerLeadActivity,
+  deleteServerLeadNote,
+  isServerLeadId,
+  saveServerLeadActivity,
+  saveServerLeadNote,
+  updateServerLead,
+} from '../api/leadSync'
+import {
+  convertServerLead,
+  deleteServerOpportunity,
+  deleteServerOpportunityActivity,
+  opportunityNoFromId,
+  saveServerOpportunityActivity,
+  updateServerOpportunity,
+} from '../api/opportunitySync'
 import type { CrmDb } from '../api/crm'
 import type { CrmEmail, CrmNote } from './crmTypes'
 import { useErrorHandler } from '../app/ErrorHandler'
@@ -35,6 +53,11 @@ export interface CrmStore {
   addEmail: (email: CrmEmail) => void
   addDocument: (doc: CRMDocument) => void
   patchActivity: (id: string, patch: Partial<Activity>) => void
+  /** Resolves true once deleted (server records: after the API call and reload). */
+  removeActivity: (id: string) => Promise<boolean>
+  removeNote: (id: string) => Promise<boolean>
+  /** Edit a note (server leads → save-notes-detail with its detail number). */
+  patchNote: (id: string, patch: Partial<CrmNote>) => void
   patchMeeting: (id: string, patch: Partial<Meeting>) => void
   convertLead: (
     leadId: string,
@@ -133,9 +156,20 @@ export function useCrmActions() {
         run(() => RAW_ACTIONS.addLead(lead))
       },
       patchLead: (id: string, patch: Partial<Lead>) => {
+        // Server leads are saved through /api/crm/leads/save, then reloaded into the store.
+        const current = api.crm.getState().leads.find((lead) => lead.id === id)
+        if (current?.spectrum) {
+          void runAsync(() => updateServerLead(current, patch))
+          return
+        }
         run(() => RAW_ACTIONS.patchLead(id, patch))
       },
       removeLead: (id: string) => {
+        const current = api.crm.getState().leads.find((lead) => lead.id === id)
+        if (current?.spectrum) {
+          void runAsync(() => deleteServerLead(current))
+          return
+        }
         run(() => RAW_ACTIONS.removeLead(id))
       },
       addEntity: (entity: BusinessEntity) => {
@@ -145,12 +179,26 @@ export function useCrmActions() {
         run(() => RAW_ACTIONS.addContact(contact))
       },
       addActivity: (activity: Activity) => {
+        // Server opportunity → /api/crm/opportunities/save-activity-detail.
+        if (activity.opportunityId && opportunityNoFromId(activity.opportunityId)) {
+          void runAsync(() => saveServerOpportunityActivity(activity))
+          return
+        }
+        // Server lead → /api/crm/leads/save-activity-detail.
+        if (isServerLeadId(activity.leadId)) {
+          void runAsync(() => saveServerLeadActivity(activity))
+          return
+        }
         run(() => RAW_ACTIONS.addActivity(activity))
       },
       addMeeting: (meeting: Meeting) => {
         run(() => RAW_ACTIONS.addMeeting(meeting))
       },
       addNote: (note: CrmNote) => {
+        if (isServerLeadId(note.relatedLeadId)) {
+          void runAsync(() => saveServerLeadNote(note))
+          return
+        }
         run(() => RAW_ACTIONS.addNote(note))
       },
       addEmail: (email: CrmEmail) => {
@@ -160,24 +208,79 @@ export function useCrmActions() {
         run(() => RAW_ACTIONS.addDocument(doc))
       },
       patchActivity: (id: string, patch: Partial<Activity>) => {
+        const current = api.crm.getState().activities.find((item) => item.id === id)
+        if (current?.opportunityId && opportunityNoFromId(current.opportunityId)) {
+          void runAsync(() => saveServerOpportunityActivity({ ...current, ...patch, id: current.id }))
+          return
+        }
+        if (current && isServerLeadId(current.leadId)) {
+          void runAsync(() => saveServerLeadActivity({ ...current, ...patch, id: current.id }))
+          return
+        }
         run(() => RAW_ACTIONS.patchActivity(id, patch))
+      },
+      removeActivity: async (id: string) => {
+        const current = api.crm.getState().activities.find((item) => item.id === id)
+        if (!current) return false
+        // Server opportunity → /api/crm/opportunities/delete-activity-detail.
+        if (current.id.startsWith('SOA-')) {
+          return (await runAsync(async () => { await deleteServerOpportunityActivity(current); return true })) ?? false
+        }
+        // Server lead → /api/crm/leads/delete-activity-detail.
+        if (current.id.startsWith('SA-') && isServerLeadId(current.leadId)) {
+          return (await runAsync(async () => { await deleteServerLeadActivity(current); return true })) ?? false
+        }
+        run(() => removeLocalActivity(id))
+        return true
+      },
+      patchNote: (id: string, patch: Partial<CrmNote>) => {
+        const current = api.crm.getState().notes.find((item) => item.id === id)
+        if (!current) return
+        // Server note (SN-…) → save-notes-detail with its number (an update), then the lead reloads.
+        if (current.id.startsWith('SN-') && isServerLeadId(current.relatedLeadId)) {
+          void runAsync(() => saveServerLeadNote({ ...current, ...patch, id: current.id }))
+          return
+        }
+        run(() => patchLocalNote(id, patch))
+      },
+      removeNote: async (id: string) => {
+        const current = api.crm.getState().notes.find((item) => item.id === id)
+        if (!current) return false
+        // Server lead → /api/crm/leads/delete-notes-detail.
+        if (current.id.startsWith('SN-') && isServerLeadId(current.relatedLeadId)) {
+          return (await runAsync(async () => { await deleteServerLeadNote(current); return true })) ?? false
+        }
+        run(() => removeLocalNote(id))
+        return true
       },
       patchMeeting: (id: string, patch: Partial<Meeting>) => {
         run(() => RAW_ACTIONS.patchMeeting(id, patch))
       },
       convertLead: async (
         leadId: string,
-        input: { dealValue: number; valueCurrency: LeadCurrency; closingDate: string },
+        input: { dealValue: number; valueCurrency: LeadCurrency; closingDate: string; currencyNo?: number },
       ) => {
+        // Server lead → the opportunity is created on the server from the lead's details.
+        if (isServerLeadId(leadId)) return runAsync(() => convertServerLead(leadId, input))
         return runAsync(() => RAW_ACTIONS.convertLead(leadId, input))
       },
       addOpportunity: (opportunity: Opportunity) => {
         run(() => RAW_ACTIONS.addOpportunity(opportunity))
       },
       patchOpportunity: (id: string, patch: Partial<Opportunity>) => {
+        const current = api.crm.getState().opportunities.find((item) => item.id === id)
+        if (current?.spectrum) {
+          void runAsync(() => updateServerOpportunity(current, patch))
+          return
+        }
         run(() => RAW_ACTIONS.patchOpportunity(id, patch))
       },
       removeOpportunity: (id: string) => {
+        const current = api.crm.getState().opportunities.find((item) => item.id === id)
+        if (current?.spectrum) {
+          void runAsync(() => deleteServerOpportunity(current))
+          return
+        }
         run(() => RAW_ACTIONS.removeOpportunity(id))
       },
     }),

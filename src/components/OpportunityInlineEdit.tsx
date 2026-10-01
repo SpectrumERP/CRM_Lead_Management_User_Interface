@@ -1,27 +1,26 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button, Select, TextInput } from '../ui'
 import { PersonContactCard } from './PersonContactCard'
+import { SecondaryContactsMore } from './SecondaryContactsMore'
 import { useCrmActions } from '../contexts/CrmStoreContext'
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 import type { ToastType } from './Toast'
-import { SALESPERSONS } from '../data/activities'
-import {
-  LEAD_CURRENCIES,
-  type LeadCurrency,
-} from '../data/leads'
-import { currencyAmountPrefix } from '../data/currencies'
 import { formatLeadDate } from '../data/leads'
 import {
-  DEAL_STAGES,
-  OPPORTUNITY_STATUSES,
   dealStageClass,
-  dealWeight,
   formatDealValue,
   formatOpportunityStage,
   opportunityStatusClass,
   type DealStage,
   type Opportunity,
-  type OpportunityStatus,
 } from '../data/opportunities'
+import { UserSelect } from './UserSelect'
+import { useOpportunityFillValues } from './useOpportunityFillValues'
+import { stageBadgeStyle, useOpportunityStageColors } from './useOpportunityStageColors'
+import { bySequence, guessIsoCurrency } from '../api/fillValues'
+import { opportunityStageLabel } from '../api/opportunityFormFillValues'
+import { FIELD_LIMITS } from '../constants/fieldLimits'
+import { formatDate } from '../utils/dateFormat'
 
 export type OppFieldKey =
   | 'name'
@@ -61,9 +60,10 @@ function SaveCancel({
   onCancel: () => void
   disabled?: boolean
 }) {
+  const confirm = useConfirm()
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
-      <Button variant="solid" className="!min-h-6 !px-2 !py-0.5 text-[11px]" onClick={onSave} disabled={disabled}>
+      <Button variant="solid" className="!min-h-6 !px-2 !py-0.5 text-[11px]" onClick={async () => { if (await confirm(saveConfirm('Opportunity', true))) onSave() }} disabled={disabled}>
         Save
       </Button>
       <Button variant="secondary" className="!min-h-6 !px-2 !py-0.5 text-[11px]" onClick={onCancel}>
@@ -126,7 +126,7 @@ function Cell({
       }}
     >
       <div className="mb-1 flex items-center justify-between gap-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-faint">{label}</p>
+        <p className="text-[10px] font-semibold tracking-[0.06em] text-ink-faint">{label}</p>
         {editable ? <EditCue /> : null}
       </div>
       {active ? editor : <div className="min-h-5 text-sm font-semibold leading-snug text-ink">{children}</div>}
@@ -138,7 +138,7 @@ function DetailBand({ title, children }: { title: string; children: ReactNode })
   return (
     <section className="overflow-hidden border-b border-line last:border-b-0">
       <div className="border-b border-line bg-surface-muted px-3 py-1.5">
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-muted">{title}</h3>
+        <h3 className="text-[10px] font-bold tracking-[0.1em] text-ink-muted">{title}</h3>
       </div>
       <div className="grid grid-cols-1 bg-surface sm:grid-cols-2 xl:grid-cols-4 sm:[&>*:nth-child(2n)]:border-r-0 xl:[&>*:nth-child(2n)]:border-r xl:[&>*:nth-child(4n)]:border-r-0">
         {children}
@@ -176,6 +176,7 @@ export function OpportunityIdentityEdit({
       <div className="min-w-0">
         <TextInput
           aria-label="Opportunity name"
+          maxLength={FIELD_LIMITS.opportunityName}
           value={nameDraft}
           onValueChange={setNameDraft}
           autoFocus
@@ -214,26 +215,39 @@ export function OpportunitySummaryEdit({
   onToast?: (type: ToastType, title: string, message?: string) => void
 }) {
   const { patchOpportunity } = useCrmActions()
-  const [contactDraft, setContactDraft] = useState(opportunity.contactPerson)
+  // Server opportunity → stage / status choices from the server lists.
+  const { values: oppFill } = useOpportunityFillValues()
+  // Server lists only (stages, statuses, currencies).
+  const stageOptions = bySequence(oppFill?.opportunityStages ?? []).map((stage) => ({ value: stage.opportunityStageName, label: opportunityStageLabel(stage) }))
+  const serverCurrencies = oppFill?.currencies ?? []
+  // Server stage colour (fill values `colorCoding`) for the stage badge.
+  const stageColor = useOpportunityStageColors()
+  const stageHex = opportunity.spectrum ? stageColor(opportunity.dealStage) : undefined
+  // Primary + secondary contacts (primary first); older records only carry the single contact fields.
+  const contactList = opportunity.contacts?.length
+    ? opportunity.contacts
+    : opportunity.contactPerson
+      ? [{ name: opportunity.contactPerson, email: opportunity.email, phones: opportunity.phone ? [opportunity.phone] : [], primary: true }]
+      : []
+  const primaryContact = contactList.find((c) => c.primary) ?? contactList[0]
+  const secondaryContacts = contactList.filter((c) => c !== primaryContact)
   const [emailDraft, setEmailDraft] = useState(opportunity.email)
   const [phoneDraft, setPhoneDraft] = useState(opportunity.phone)
   const [productsDraft, setProductsDraft] = useState(opportunity.productsRequired)
   const [stageDraft, setStageDraft] = useState<DealStage>(opportunity.dealStage)
-  const [statusDraft, setStatusDraft] = useState<OpportunityStatus>(opportunity.status)
-  const [currencyDraft, setCurrencyDraft] = useState<LeadCurrency>(opportunity.valueCurrency ?? 'INR')
+  const [currencyNoDraft, setCurrencyNoDraft] = useState<number | undefined>(opportunity.spectrum?.currencyNo)
+  const currencyDraft = serverCurrencies.find((c) => c.currencyNo === currencyNoDraft)
   const [valueDraft, setValueDraft] = useState(String(opportunity.dealValue || ''))
   const [ownerDraft, setOwnerDraft] = useState(opportunity.owner)
   const [closureDraft, setClosureDraft] = useState(opportunity.closingDate)
 
   useEffect(() => {
     if (editing === 'stage') setStageDraft(opportunity.dealStage)
-    if (editing === 'status') setStatusDraft(opportunity.status)
     if (editing === 'owner') setOwnerDraft(opportunity.owner)
     if (editing === 'value') {
-      setCurrencyDraft(opportunity.valueCurrency ?? 'INR')
+      setCurrencyNoDraft(opportunity.spectrum?.currencyNo)
       setValueDraft(String(opportunity.dealValue || ''))
     }
-    if (editing === 'contact') setContactDraft(opportunity.contactPerson)
     if (editing === 'email') setEmailDraft(opportunity.email)
     if (editing === 'phone') setPhoneDraft(opportunity.phone)
     if (editing === 'products') setProductsDraft(opportunity.productsRequired)
@@ -251,7 +265,7 @@ export function OpportunitySummaryEdit({
         <Cell label="Opportunity No" locked editing={editing}>
           <span className="font-mono text-ink-soft">{opportunity.id}</span>
         </Cell>
-        <Cell label="Reference Lead No" locked editing={editing}>
+        {/* <Cell label="Reference Lead No" locked editing={editing}>
           {opportunity.leadId ? (
             onViewLead ? (
               <button
@@ -267,91 +281,41 @@ export function OpportunitySummaryEdit({
           ) : (
             <span className="text-ink-faint">—</span>
           )}
-        </Cell>
+        </Cell> */}
         <Cell label="Business Entity" locked editing={editing}>
           {opportunity.companyName}
         </Cell>
-        <Cell
-          label="Primary Contact"
-          field="contact"
-          editing={editing}
-          onEdit={(field) => {
-            setContactDraft(opportunity.contactPerson)
-            onEdit(field)
-          }}
-          editor={
-            <div>
-              <TextInput value={contactDraft} onValueChange={setContactDraft} autoFocus />
-              <SaveCancel
-                onSave={() => {
-                  const next = contactDraft.trim()
-                  if (!next) return
-                  patchOpportunity(opportunity.id, { contactPerson: next })
-                  toastSaved('Primary contact saved.')
-                }}
-                onCancel={onCancel}
-                disabled={!contactDraft.trim()}
-              />
-            </div>
-          }
-        >
-          <PersonContactCard
-            name={opportunity.contactPerson}
-            email={opportunity.email}
-            phone={opportunity.phone}
-            company={opportunity.companyName}
-            primary
-          />
+        {/* Contacts are read-only here — they are picked per business entity in Edit Opportunity. */}
+        <Cell label="Primary Contact" locked editing={editing}>
+          {primaryContact?.name ? (
+            <PersonContactCard
+              name={primaryContact.name}
+              email={primaryContact.email}
+              phone={primaryContact.phones[0] ?? ''}
+              company={opportunity.companyName}
+              designation={primaryContact.designation}
+              primary
+            />
+          ) : (
+            <span className="text-ink-faint">—</span>
+          )}
         </Cell>
-        <Cell
-          label="Email"
-          field="email"
-          editing={editing}
-          onEdit={(field) => {
-            setEmailDraft(opportunity.email)
-            onEdit(field)
-          }}
-          editor={
-            <div>
-              <TextInput type="email" value={emailDraft} onValueChange={setEmailDraft} autoFocus />
-              <SaveCancel
-                onSave={() => {
-                  const next = emailDraft.trim()
-                  if (!next) return
-                  patchOpportunity(opportunity.id, { email: next })
-                  toastSaved('Email saved.')
-                }}
-                onCancel={onCancel}
-                disabled={!emailDraft.trim()}
-              />
-            </div>
-          }
-        >
-          {opportunity.email || '—'}
+        <Cell label="Secondary Contacts" locked editing={editing}>
+          {secondaryContacts.length ? (
+            <SecondaryContactsMore
+              items={secondaryContacts.map((item) => ({
+                name: item.name,
+                email: item.email,
+                phone: item.phones[0],
+                company: opportunity.companyName,
+                designation: item.designation,
+              }))}
+            />
+          ) : (
+            <span className="text-ink-faint">—</span>
+          )}
         </Cell>
-        <Cell
-          label="Phone"
-          field="phone"
-          editing={editing}
-          onEdit={(field) => {
-            setPhoneDraft(opportunity.phone)
-            onEdit(field)
-          }}
-          editor={
-            <div>
-              <TextInput value={phoneDraft} onValueChange={setPhoneDraft} autoFocus />
-              <SaveCancel
-                onSave={() => {
-                  patchOpportunity(opportunity.id, { phone: phoneDraft.trim() })
-                  toastSaved('Phone saved.')
-                }}
-                onCancel={onCancel}
-              />
-            </div>
-          }
-        >
-          {opportunity.phone || '—'}
-        </Cell>
+
       </DetailBand>
 
       <DetailBand title="Commercial">
@@ -390,10 +354,7 @@ export function OpportunitySummaryEdit({
           editor={
             <div>
               <Select
-                options={DEAL_STAGES.map((stage) => ({
-                  value: stage,
-                  label: formatOpportunityStage(stage, dealWeight(stage)),
-                }))}
+                options={stageOptions}
                 value={stageDraft}
                 onValueChange={(value) => setStageDraft(value as DealStage)}
                 preserveOrder
@@ -408,36 +369,14 @@ export function OpportunitySummaryEdit({
             </div>
           }
         >
-          <span className={`badge ${dealStageClass(opportunity.dealStage)}`}>
+          <span
+            className={`badge ${stageHex ? 'border' : dealStageClass(opportunity.dealStage)}`}
+            style={stageBadgeStyle(stageHex)}
+          >
             {formatOpportunityStage(opportunity.dealStage, opportunity.weightPercent)}
           </span>
         </Cell>
-        <Cell
-          label="Opportunity Status"
-          field="status"
-          editing={editing}
-          onEdit={(field) => {
-            setStatusDraft(opportunity.status)
-            onEdit(field)
-          }}
-          editor={
-            <div>
-              <Select
-                options={OPPORTUNITY_STATUSES}
-                value={statusDraft}
-                onValueChange={(value) => setStatusDraft(value as OpportunityStatus)}
-                preserveOrder
-              />
-              <SaveCancel
-                onSave={() => {
-                  patchOpportunity(opportunity.id, { status: statusDraft })
-                  toastSaved('Status saved.')
-                }}
-                onCancel={onCancel}
-              />
-            </div>
-          }
-        >
+        <Cell label="Opportunity Status" locked editing={editing}>
           <span className={`badge ${opportunityStatusClass(opportunity.status)}`}>{opportunity.status}</span>
         </Cell>
         <Cell
@@ -446,7 +385,7 @@ export function OpportunitySummaryEdit({
           full
           editing={editing}
           onEdit={(field) => {
-            setCurrencyDraft(opportunity.valueCurrency ?? 'INR')
+            setCurrencyNoDraft(opportunity.spectrum?.currencyNo)
             setValueDraft(String(opportunity.dealValue || ''))
             onEdit(field)
           }}
@@ -456,12 +395,12 @@ export function OpportunitySummaryEdit({
                 <select
                   className="form-input-combo-currency"
                   aria-label="Currency"
-                  value={currencyDraft}
-                  onChange={(event) => setCurrencyDraft(event.target.value as LeadCurrency)}
+                  value={String(currencyNoDraft ?? '')}
+                  onChange={(event) => setCurrencyNoDraft(Number(event.target.value) || undefined)}
                 >
-                  {LEAD_CURRENCIES.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
+                  {serverCurrencies.map((c) => (
+                    <option key={c.currencyNo} value={c.currencyNo}>
+                      {c.currencyName}
                     </option>
                   ))}
                 </select>
@@ -471,7 +410,7 @@ export function OpportunitySummaryEdit({
                     aria-label="Opportunity value amount"
                     type="number"
                     min={0}
-                    leading={currencyAmountPrefix(currencyDraft)}
+                    leading={currencyDraft?.symbol || ''}
                     value={valueDraft}
                     onValueChange={setValueDraft}
                     autoFocus
@@ -484,7 +423,11 @@ export function OpportunitySummaryEdit({
                   if (!Number.isFinite(amount) || amount < 0) return
                   patchOpportunity(opportunity.id, {
                     dealValue: amount,
-                    valueCurrency: currencyDraft,
+                    ...(currencyDraft
+                      ? { valueCurrency: guessIsoCurrency({ currencyName: currencyDraft.currencyName, symbol: currencyDraft.symbol ?? '' }) }
+                      : {}),
+                    // The picked server currency is sent as its number.
+                    ...(opportunity.spectrum ? { spectrum: { ...opportunity.spectrum, currencyNo: currencyNoDraft } } : {}),
                   })
                   toastSaved('Opportunity value saved.')
                 }}
@@ -511,11 +454,11 @@ export function OpportunitySummaryEdit({
           }}
           editor={
             <div>
-              <Select
-                options={SALESPERSONS}
+              <UserSelect
                 value={ownerDraft}
                 onValueChange={setOwnerDraft}
                 placeholder="Select owner"
+                aria-label="Opportunity owner"
               />
               <SaveCancel
                 onSave={() => {
@@ -576,7 +519,7 @@ export function OpportunitySummaryEdit({
           <span className="ml-1 text-xs font-medium text-ink-faint">({opportunity.weightPercent}%)</span>
         </Cell>
         <Cell label="Last Activity" locked editing={editing}>
-          {opportunity.lastActivity}
+          {formatDate(opportunity.lastActivityAt || opportunity.lastActivity)}
         </Cell>
         {opportunity.convertedAt || opportunity.convertedBy ? (
           <>

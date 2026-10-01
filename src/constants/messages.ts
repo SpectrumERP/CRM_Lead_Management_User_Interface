@@ -76,11 +76,11 @@ export const PAGE_COPY = {
     action: 'Back to Dashboard',
   },
   login: {
-    product: 'Force Intellect CRM',
+    product: 'Spectrum ERP CRM',
     phase: 'Lead management · Phase 1',
     brandLead: 'Every lead, contact, and follow-up in one place — from first conversation to close.',
     headline: 'Welcome back',
-    subtitle: 'Sign in with your Force Intellect account',
+    subtitle: 'Sign in with your Spectrum ERP account',
     submit: 'Sign in',
     pending: 'Signing in…',
     emailRequired: 'Enter your email or login ID.',

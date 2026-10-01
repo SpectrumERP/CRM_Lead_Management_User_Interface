@@ -1,21 +1,25 @@
 import { useState } from 'react'
 import { api } from '../api/crm'
 import { useApiQuery } from '../api/useApiQuery'
+import { bySequence } from '../api/fillValues'
+import { useServerOpportunitySync } from '../components/useServerLeadSync'
+import { useOpportunityFillValues } from '../components/useOpportunityFillValues'
+import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
+import { stageBadgeStyle, useOpportunityStageColors } from '../components/useOpportunityStageColors'
 import Pagination from '../components/Pagination'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ActivityDrawer from '../components/ActivityDrawer'
-import NoteDrawer from '../components/NoteDrawer'
-import EmailDrawer from '../components/EmailDrawer'
 import { RowQuickMenu } from '../components/RowQuickMenu'
 import { RecordRowActions } from '../components/RecordRowActions'
 import { EmptyIcons, EmptyState, NoResults, SkeletonTableRows } from '../components/CRMStates'
 import { useCrmActions } from '../contexts/CrmStoreContext'
-import { formatLeadDate } from '../data/leads'
+import { formatAuditStamp, formatLeadDate, formatMoneyTotals } from '../data/leads'
 import { formatDealValue, dealStageClass, type Opportunity } from '../data/opportunities'
 import { Button, IconTooltip, MultiSelect, PageHeader, PageLoader } from '../ui'
 import { PersonContactCard } from '../components/PersonContactCard'
 import type { ToastType } from '../components/Toast'
 import { PAGE_COPY } from '../constants/messages'
+import { ColumnVisibilityMenu, useColumnVisibility, type GridColumn } from '../components/ColumnVisibility'
 
 const PAGE_SIZE = 10
 
@@ -27,32 +31,45 @@ interface OpportunitiesListProps {
 }
 
 export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }: OpportunitiesListProps) {
-  const { addActivity, addNote, addEmail, removeOpportunity } = useCrmActions()
+  const { addActivity, removeOpportunity } = useCrmActions()
   const [search, setSearch] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<Opportunity | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [activityOpp, setActivityOpp] = useState<Opportunity | null>(null)
-  const [noteOpp, setNoteOpp] = useState<Opportunity | null>(null)
-  const [emailOpp, setEmailOpp] = useState<Opportunity | null>(null)
   const [stageFilter, setStageFilter] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const { data: meta } = useApiQuery(() => api.opportunities.meta(), [])
-  const { data, loading } = useApiQuery(
+  // Show / hide grid columns (Actions header menu); remembered in this browser.
+  const columns = useColumnVisibility('crm.opportunities.hiddenColumns', OPPORTUNITY_COLUMNS)
+  // Checkbox column + visible columns.
+  const gridColSpan = columns.visibleColumns.length + 1
+  // Server opportunities only (synced into the store from search-data) — sample ones are never shown.
+  const serverSync = useServerOpportunitySync()
+  const { values: oppFill } = useOpportunityFillValues()
+  const stageColor = useOpportunityStageColors()
+  const { data, loading: localLoading } = useApiQuery(
     () =>
       api.opportunities.list({
         q: search,
         stages: stageFilter,
+        source: 'server',
         page,
         pageSize: PAGE_SIZE,
       }),
     [search, stageFilter, page],
   )
+  const loading = localLoading || serverSync.loading
   const paged = data?.items ?? []
   const total = data?.total ?? 0
-  const dealSum = data?.totals.dealValue ?? 0
-  const weightedSum = data?.totals.weightedValue ?? 0
-  const stageOptions = meta?.stages.map((item) => item.value) ?? []
+  // Per currency: "₹75.63 L + $500,000.75" (amounts in different currencies are not added up).
+  const byCurrency = data?.totals.byCurrency
+  const dealSumText = byCurrency
+    ? formatMoneyTotals(byCurrency.map((t) => ({ value: t.dealValue, currency: t.currency })))
+    : formatDealValue(data?.totals.dealValue ?? 0)
+  const weightedSumText = byCurrency
+    ? formatMoneyTotals(byCurrency.map((t) => ({ value: t.weightedValue, currency: t.currency })))
+    : formatDealValue(data?.totals.weightedValue ?? 0)
+  const stageOptions = oppFill ? bySequence(oppFill.opportunityStages).map((item) => item.opportunityStageName) : []
   const hasFilters = Boolean(search || stageFilter.length)
   const allOnPageSelected = paged.length > 0 && paged.every((item) => selected.has(item.id))
 
@@ -90,16 +107,7 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         bordered
-        title="Opportunities"
-        subtitle={
-          <>
-            {total} deal{total !== 1 ? 's' : ''}
-            <span className="mx-1.5">·</span>
-            Opportunity Value: <strong className="text-accent">{formatDealValue(dealSum)}</strong>
-            <span className="mx-1.5">·</span>
-            Weighted Value: <strong className="text-primary">{formatDealValue(weightedSum)}</strong>
-          </>
-        }
+        title={`Opportunitie${total === 1 ? '' : 's'} - ${total}`}
         actions={
           onCreate ? (
             <Button variant="solid" onClick={onCreate}>
@@ -158,6 +166,17 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
           ) : null}
         </div>
       </PageHeader>
+      <div className="page-gutter pt-3 empty:hidden">
+        <SpectrumRequiredNotice what="Opportunities" />
+      </div>
+      {serverSync.error ? (
+        <div className="page-gutter pt-3">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-xs text-accent" role="alert">
+            <span>Could not load opportunities from the server: {serverSync.error}</span>
+            <button type="button" className="font-bold underline" onClick={() => void serverSync.retry()}>Retry</button>
+          </div>
+        </div>
+      ) : null}
 
       {selected.size > 0 ? (
         <div className="page-gutter flex items-center gap-3 border-b border-line-strong bg-primary-soft py-2 text-xs">
@@ -199,26 +218,31 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
                       aria-label="Select all opportunities on this page"
                     />
                   </th>
-                  <th className="sticky-col-id">Opportunity ID</th>
-                  <th>Opportunity Name</th>
-                  <th>Business Entity Name</th>
-                  <th>Primary Contact</th>
-                  <th>Products Required</th>
-                  <th>Opportunity Value</th>
-                  <th>Opportunity Stage</th>
-                  <th>Weight %</th>
-                  <th>Weighted Value</th>
-                  <th>Closing Date</th>
-                  <th>Owner</th>
-                  <th>Last Activity</th>
-                  <th className="sticky-col-end">Actions</th>
+                  {columns.visibleColumns.map((column) =>
+                    column.key === 'actions' ? (
+                      <th key={column.key} className="sticky-col-end">
+                        <span className="inline-flex items-center gap-1.5">
+                          {column.label}
+                          <ColumnVisibilityMenu
+                            columns={OPPORTUNITY_COLUMNS}
+                            isVisible={columns.isVisible}
+                            onToggle={columns.toggle}
+                            onShowAll={columns.showAll}
+                            hiddenCount={columns.hiddenCount}
+                          />
+                        </span>
+                      </th>
+                    ) : (
+                      <th key={column.key} className={column.key === 'code' ? 'sticky-col-id' : undefined}>{column.label}</th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {loading && <SkeletonTableRows cols={14} rows={6} />}
+                {loading && <SkeletonTableRows cols={gridColSpan} rows={6} />}
                 {!loading && total === 0 && !hasFilters && (
                   <tr>
-                    <td colSpan={14}>
+                    <td colSpan={gridColSpan} className="table-empty-td">
                       <EmptyState
                         icon={EmptyIcons.leads}
                         title="No opportunities yet"
@@ -229,7 +253,7 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
                 )}
                 {!loading && total === 0 && hasFilters && (
                   <tr>
-                    <td colSpan={14}>
+                    <td colSpan={gridColSpan} className="table-empty-td">
                       <NoResults onClear={clearFilters} />
                     </td>
                   </tr>
@@ -245,28 +269,11 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
                       onEdit={() => onEdit(item.id)}
                       onDelete={() => setConfirmDelete(item)}
                       onAddActivity={() => setActivityOpp(item)}
-                      onAddNote={() => setNoteOpp(item)}
-                      onSendEmail={() => setEmailOpp(item)}
+                      stageColor={item.spectrum ? stageColor(item.dealStage) : undefined}
+                      show={columns.isVisible}
                     />
                   ))}
               </tbody>
-              {!loading && total > 0 ? (
-                <tfoot>
-                  <tr>
-                    <td className="sticky-col-check" />
-                    <td className="sticky-col-id" />
-                    <td colSpan={4} className="text-xs font-bold text-ink-soft">
-                      Totals ({total})
-                    </td>
-                    <td className="text-xs font-bold text-accent">{formatDealValue(dealSum)}</td>
-                    <td />
-                    <td />
-                    <td className="text-xs font-bold text-primary">{formatDealValue(weightedSum)}</td>
-                    <td colSpan={3} />
-                    <td className="sticky-col-end" />
-                  </tr>
-                </tfoot>
-              ) : null}
             </table>
           </div>
         </div>
@@ -281,13 +288,6 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
             setPage(next)
             clearSelection()
           }}
-          end={
-            <span>
-              Opportunity Value:&nbsp;<strong className="text-accent">{formatDealValue(dealSum)}</strong>
-              <span className="mx-1.5">·</span>
-              Weighted Value:&nbsp;<strong className="text-primary">{formatDealValue(weightedSum)}</strong>
-            </span>
-          }
         />
       </div>
 
@@ -340,34 +340,34 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
           }}
         />
       ) : null}
-      {noteOpp ? (
-        <NoteDrawer
-          preselectedLead={{ id: noteOpp.leadId || noteOpp.id, name: noteOpp.companyName }}
-          onClose={() => setNoteOpp(null)}
-          onSave={(note) => {
-            addNote(note)
-            onToast?.('success', 'Note Added', 'The note has been saved on this opportunity.')
-          }}
-        />
-      ) : null}
-      {emailOpp ? (
-        <EmailDrawer
-          preselectedLead={{
-            id: emailOpp.leadId || emailOpp.id,
-            name: emailOpp.companyName,
-            contact: emailOpp.contactPerson,
-            email: emailOpp.email,
-          }}
-          onClose={() => setEmailOpp(null)}
-          onSave={(mail) => {
-            addEmail(mail)
-            onToast?.('success', 'Email Sent', `"${mail.subject}" opened in your mail app.`)
-          }}
-        />
-      ) : null}
     </div>
   )
 }
+
+type OpportunityColumnKey =
+  | 'code' | 'name' | 'entity' | 'primaryContact' | 'products' | 'value' | 'stage' | 'weight' | 'weighted'
+  | 'closing' | 'owner' | 'lastActivityOn' | 'createdBy' | 'createdOn' | 'modifiedBy' | 'modifiedOn' | 'actions'
+
+/** Grid columns in order. ID and Actions cannot be hidden. */
+const OPPORTUNITY_COLUMNS: GridColumn<OpportunityColumnKey>[] = [
+  { key: 'code', label: 'Opportunity Code', locked: true },
+  { key: 'name', label: 'Opportunity Name' },
+  { key: 'entity', label: 'Business Entity Name' },
+  { key: 'primaryContact', label: 'Primary Contact' },
+  { key: 'products', label: 'Products Required' },
+  { key: 'value', label: 'Opportunity Value' },
+  { key: 'stage', label: 'Opportunity Stage' },
+  { key: 'weight', label: 'Weight %' },
+  { key: 'weighted', label: 'Weighted Value' },
+  { key: 'closing', label: 'Closing Date' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'lastActivityOn', label: 'Last Activity On' },
+  { key: 'createdBy', label: 'Created By' },
+  { key: 'createdOn', label: 'Created On' },
+  { key: 'modifiedBy', label: 'Modified By' },
+  { key: 'modifiedOn', label: 'Modified On' },
+  { key: 'actions', label: 'Actions', locked: true },
+]
 
 function OpportunityRow({
   item,
@@ -377,18 +377,20 @@ function OpportunityRow({
   onEdit,
   onDelete,
   onAddActivity,
-  onAddNote,
-  onSendEmail,
+  stageColor,
+  show,
 }: {
   item: Opportunity
+  /** Column visibility (Actions header menu). */
+  show: (key: OpportunityColumnKey) => boolean
+  /** Server `colorCoding` for this row's stage. */
+  stageColor?: string
   selected: boolean
   onToggleSelect: () => void
   onView: () => void
   onEdit: () => void
   onDelete: () => void
   onAddActivity: () => void
-  onAddNote: () => void
-  onSendEmail: () => void
 }) {
   return (
     <tr
@@ -415,52 +417,107 @@ function OpportunityRow({
           {item.id}
         </button>
       </td>
-      <td>
-        <IconTooltip label={item.name} overflowOnly className="max-w-52">
-          <span className="block truncate text-xs font-bold text-ink">
-            {item.name}
+      {show('name') && (
+        <td>
+          <IconTooltip label={item.name} overflowOnly className="max-w-52">
+            <span className="block truncate text-xs font-bold text-ink">
+              {item.name}
+            </span>
+          </IconTooltip>
+        </td>
+      )}
+      {show('entity') && (
+        <td>
+          <IconTooltip label={item.companyName} overflowOnly className="max-w-44">
+            <span className="block truncate text-xs font-semibold text-ink-soft">{item.companyName}</span>
+          </IconTooltip>
+        </td>
+      )}
+      {show('primaryContact') && (
+        <td className="whitespace-normal" onClick={(e) => e.stopPropagation()}>
+          <PersonContactCard
+            name={item.contactPerson}
+            email={item.email}
+            phone={item.phone}
+            company={item.companyName}
+          />
+        </td>
+      )}
+      {show('products') && (
+        <td>
+          <IconTooltip label={item.productsRequired} overflowOnly className="max-w-32">
+            <span className="block truncate text-xs text-ink-soft">{item.productsRequired}</span>
+          </IconTooltip>
+        </td>
+      )}
+      {show('value') && (
+        <td>
+          <span className="text-xs font-bold text-accent">{formatDealValue(item.dealValue, item.valueCurrency)}</span>
+        </td>
+      )}
+      {show('stage') && (
+        <td>
+          <span
+            className={`badge ${stageColor ? 'border' : dealStageClass(item.dealStage)}`}
+            style={stageBadgeStyle(stageColor)}
+          >
+            {item.dealStage}
           </span>
-        </IconTooltip>
-      </td>
-      <td>
-        <IconTooltip label={item.companyName} overflowOnly className="max-w-44">
-          <span className="block truncate text-xs font-semibold text-ink-soft">{item.companyName}</span>
-        </IconTooltip>
-      </td>
-      <td className="whitespace-normal" onClick={(e) => e.stopPropagation()}>
-        <PersonContactCard
-          name={item.contactPerson}
-          email={item.email}
-          phone={item.phone}
-          company={item.companyName}
-        />
-      </td>
-      <td>
-        <IconTooltip label={item.productsRequired} overflowOnly className="max-w-32">
-          <span className="block truncate text-xs text-ink-soft">{item.productsRequired}</span>
-        </IconTooltip>
-      </td>
-      <td>
-        <span className="text-xs font-bold text-accent">{formatDealValue(item.dealValue, item.valueCurrency)}</span>
-      </td>
-      <td>
-        <span className={`badge ${dealStageClass(item.dealStage)}`}>{item.dealStage}</span>
-      </td>
-      <td>
-        <span className="text-xs font-semibold text-ink">{item.weightPercent}%</span>
-      </td>
-      <td>
-        <span className="text-xs font-bold text-primary">{formatDealValue(item.weightedValue, item.valueCurrency)}</span>
-      </td>
-      <td>
-        <span className="text-xs text-ink-soft">{formatLeadDate(item.closingDate)}</span>
-      </td>
-      <td>
-        <span className="text-xs text-ink-soft">{item.owner}</span>
-      </td>
-      <td>
-        <span className="text-xs text-ink-faint">{item.lastActivity}</span>
-      </td>
+        </td>
+      )}
+      {show('weight') && (
+        <td>
+          <span className="text-xs font-semibold text-ink">{item.weightPercent}%</span>
+        </td>
+      )}
+      {show('weighted') && (
+        <td>
+          <span className="text-xs font-bold text-primary">{formatDealValue(item.weightedValue, item.valueCurrency)}</span>
+        </td>
+      )}
+      {show('closing') && (
+        <td>
+          <span className="text-xs text-ink-soft">{formatLeadDate(item.closingDate)}</span>
+        </td>
+      )}
+      {show('owner') && (
+        <td>
+          <span className="text-xs text-ink-soft">{item.owner}</span>
+        </td>
+      )}
+      {/* search-data `lastActivityDate` */}
+      {show('lastActivityOn') && (
+        <td>
+          <span className="whitespace-nowrap text-xs text-ink-soft">
+            {item.lastActivityAt ? formatAuditStamp(item.lastActivityAt) : '—'}
+          </span>
+        </td>
+      )}
+      {/* Server opportunities: who / when from search-data. In-app ones only know their dates. */}
+      {show('createdBy') && (
+        <td>
+          <span className="whitespace-nowrap text-xs text-ink-soft">{item.audit?.createdBy || item.createdBy || '—'}</span>
+        </td>
+      )}
+      {show('createdOn') && (
+        <td>
+          <span className="whitespace-nowrap text-xs text-ink-faint">
+            {item.audit ? formatAuditStamp(item.audit.createdAt) : formatLeadDate(item.createdAt)}
+          </span>
+        </td>
+      )}
+      {show('modifiedBy') && (
+        <td>
+          <span className="whitespace-nowrap text-xs text-ink-soft">{item.audit?.modifiedBy || '—'}</span>
+        </td>
+      )}
+      {show('modifiedOn') && (
+        <td>
+          <span className="whitespace-nowrap text-xs text-ink-faint">
+            {item.audit ? formatAuditStamp(item.audit.modifiedAt) : item.lastActivity}
+          </span>
+        </td>
+      )}
       <td className="sticky-col-end" onClick={(e) => e.stopPropagation()}>
         <RecordRowActions
           viewLabel="View Opportunity"
@@ -470,11 +527,8 @@ function OpportunityRow({
           onEdit={onEdit}
           onDelete={onDelete}
         >
-          <RowQuickMenu
-            onAddActivity={onAddActivity}
-            onAddNote={onAddNote}
-            onSendEmail={onSendEmail}
-          />
+          {/* Opportunity rows: activities only (no notes / email actions). */}
+          <RowQuickMenu onAddActivity={onAddActivity} />
         </RecordRowActions>
       </td>
     </tr>

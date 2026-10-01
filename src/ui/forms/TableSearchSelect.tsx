@@ -1,8 +1,9 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { IconTooltip } from '../IconTooltip'
 import { controlClass } from './controlClass'
 import { useFixedMenu } from './useFixedMenu'
+import { initialFocusIndex, scrollSelectedIntoView } from './selectedOption'
 
 export interface TableSearchColumn<T> {
   header: string
@@ -27,6 +28,18 @@ export interface TableSearchSelectProps<T> {
   invalid?: boolean
   disabled?: boolean
   clearable?: boolean
+  /** Server-side search: called with the typed text; `options` are then shown as given (no local filtering). */
+  onQueryChange?: (query: string) => void
+  /** Show a searching state instead of the empty text. */
+  loading?: boolean
+  /** Small note above the search box, e.g. a load error. */
+  footer?: ReactNode
+  /** Fires when the list opens / closes — lets callers load options only once the user opens the field. */
+  onOpenChange?: (open: boolean) => void
+  /** `wide` (default) for multi-column lookups; `field` matches the trigger width (min 18rem). */
+  panelWidth?: 'wide' | 'field'
+  /** Accessible name when there is no visible label (e.g. a currency picker inside a combo). */
+  'aria-label'?: string
 }
 
 function SearchGlyph() {
@@ -37,7 +50,7 @@ function SearchGlyph() {
   )
 }
 
-/** Searchable table picker (Code / Name / Unit). Search sits at the bottom, matching ERP lookup. */
+/** Searchable table picker (Code / Name / Unit): search box on top, then the column headers and rows. */
 export function TableSearchSelect<T>({
   id,
   options,
@@ -53,6 +66,12 @@ export function TableSearchSelect<T>({
   invalid,
   disabled,
   clearable = true,
+  onQueryChange,
+  loading = false,
+  footer,
+  onOpenChange,
+  panelWidth = 'wide',
+  'aria-label': ariaLabel,
 }: TableSearchSelectProps<T>) {
   const autoId = useId()
   const buttonId = id ?? autoId
@@ -62,16 +81,20 @@ export function TableSearchSelect<T>({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [focusIdx, setFocusIdx] = useState(0)
-  const menuStyle = useFixedMenu(open, rootRef)
+  // Wide: up to 52rem; field: the field's width, at least 18rem. The hook keeps it on screen.
+  const menuStyle = useFixedMenu(open, rootRef, {
+    width: (fieldWidth) => (panelWidth === 'wide' ? 832 : Math.max(fieldWidth, 288)),
+    maxHeight: 360,
+  })
   const template = columns.map((column) => column.width ?? 'minmax(0,1fr)').join(' ')
 
   const filtered = useMemo(() => {
     const q = query.trim()
-    if (!q) return [...options]
+    if (!q || onQueryChange) return [...options]
     return options.filter((item) =>
       filterItem ? filterItem(item, query) : getLabel(item).toLowerCase().includes(q.toLowerCase()),
     )
-  }, [options, query, filterItem, getLabel])
+  }, [options, query, filterItem, getLabel, onQueryChange])
 
   useEffect(() => {
     function onDoc(event: MouseEvent) {
@@ -83,13 +106,34 @@ export function TableSearchSelect<T>({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
+  const selectedKey = value ? getKey(value) : null
+  const listRef = useRef<HTMLDivElement>(null)
+  // Open on the selected option (not the first row); a search starts from the first match.
   useEffect(() => {
-    if (open) setFocusIdx(0)
+    if (open) setFocusIdx(initialFocusIndex(filtered, selectedKey, getKey, Boolean(query.trim())))
+    // Only when the list opens or the search changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, query])
+  useEffect(() => {
+    if (!open) return
+    const frame = requestAnimationFrame(() => scrollSelectedIntoView(listRef.current))
+    return () => cancelAnimationFrame(frame)
+  }, [open])
+
+  const onOpenChangeRef = useRef(onOpenChange)
+  onOpenChangeRef.current = onOpenChange
+  useEffect(() => {
+    onOpenChangeRef.current?.(open)
+  }, [open])
+
+  function updateQuery(next: string) {
+    setQuery(next)
+    onQueryChange?.(next)
+  }
 
   function select(item: T | null) {
     onChange(item)
-    setQuery('')
+    updateQuery('')
     setOpen(false)
   }
 
@@ -130,6 +174,7 @@ export function TableSearchSelect<T>({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-invalid={invalid || undefined}
+        aria-label={ariaLabel}
         className={controlClass({ invalid, className: 'text-left flex items-center justify-between gap-2' })}
         onClick={() => !disabled && setOpen((prev) => !prev)}
         onKeyDown={onButtonKey}
@@ -167,12 +212,29 @@ export function TableSearchSelect<T>({
               className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface"
               style={{
                 ...menuStyle,
-                width: 'min(52rem, calc(100vw - 16px))',
-                maxHeight: 360,
                 boxShadow: 'var(--shadow-overlay)',
               }}
               onKeyDown={onListKey}
             >
+              {/* Search first, above the column headers. */}
+              <div className="shrink-0 border-b border-line-subtle p-2">
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex w-9 items-center justify-center">
+                    <SearchGlyph />
+                  </span>
+                  {/* Inline padding: `.form-input` (unlayered CSS) would otherwise override a `pl-*` class. */}
+                  <input
+                    autoFocus
+                    type="search"
+                    value={query}
+                    onChange={(event) => updateQuery(event.target.value)}
+                    placeholder={searchPlaceholder}
+                    className={controlClass({ className: 'text-xs' })}
+                    style={{ paddingLeft: '2.25rem' }}
+                    aria-label={searchPlaceholder}
+                  />
+                </div>
+              </div>
               <div
                 className="grid shrink-0 border-b border-line-subtle px-3 py-2"
                 style={{ gridTemplateColumns: template }}
@@ -186,18 +248,27 @@ export function TableSearchSelect<T>({
                   </span>
                 ))}
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {filtered.length === 0 ? (
+              <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
+                {loading && filtered.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-ink-faint" role="status">Searching…</p>
+                ) : filtered.length === 0 ? (
                   <p className="py-4 text-center text-xs text-ink-faint">{emptyText}</p>
                 ) : (
-                  filtered.map((item, idx) => (
+                  filtered.map((item, idx) => {
+                    const selected = selectedKey !== null && getKey(item) === selectedKey
+                    return (
                     <button
                       key={getKey(item)}
                       type="button"
                       role="option"
-                      aria-selected={value ? getKey(value) === getKey(item) : false}
-                      className={`grid w-full items-center px-3 py-2 text-left transition-colors hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${
-                        idx === focusIdx ? 'bg-primary-soft' : 'bg-surface'
+                      aria-selected={selected}
+                      // Selected: tinted, bold, with a primary bar; the row under the pointer / arrow keys: hover tint.
+                      className={`grid w-full items-center px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${
+                        selected
+                          ? 'bg-primary-soft shadow-[inset_3px_0_0_var(--color-primary)]'
+                          : idx === focusIdx
+                            ? 'bg-surface-hover'
+                            : 'bg-surface'
                       }`}
                       style={{ gridTemplateColumns: template }}
                       onMouseEnter={() => setFocusIdx(idx)}
@@ -207,7 +278,7 @@ export function TableSearchSelect<T>({
                         const text = column.getValue(item)
                         const cell = (
                           <span
-                            className={`min-w-0 text-xs text-ink ${column.truncate ? 'truncate whitespace-nowrap' : 'whitespace-nowrap'} ${
+                            className={`min-w-0 text-xs ${selected ? 'font-semibold text-primary' : 'text-ink'} ${column.truncate ? 'truncate whitespace-nowrap' : 'whitespace-nowrap'} ${
                               column.align === 'right' ? 'text-right' : 'text-left'
                             }`}
                           >
@@ -227,21 +298,13 @@ export function TableSearchSelect<T>({
                         )
                       })}
                     </button>
-                  ))
+                    )
+                  })
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-2 border-t border-line-subtle px-3 py-2">
-                <SearchGlyph />
-                <input
-                  autoFocus
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={searchPlaceholder}
-                  className="min-w-0 flex-1 bg-transparent text-xs text-ink placeholder:text-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  aria-label={searchPlaceholder}
-                />
-              </div>
+              {footer ? (
+                <div className="shrink-0 border-t border-line-subtle px-3 py-1.5 text-[11px] text-ink-faint">{footer}</div>
+              ) : null}
             </div>,
             document.body,
           )

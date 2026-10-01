@@ -179,6 +179,35 @@ export function fromHttpStatus(status: number, message?: string): ApiError {
   return new ApiError(code, message ?? getErrorMessage(code), status)
 }
 
+/**
+ * The server's own message from an error / failed-envelope body, most specific first:
+ * `errors[].errorMessage` (Spectrum validation), an ASP.NET `errors` map `{ Field: [messages] }`,
+ * then `errorMessage`, `error`, `message`, `detail`, `title` (in Spectrum envelopes `message` is the
+ * generic "Request failed." and `error` the specific reason). Several messages are joined.
+ */
+export function serverErrorMessage(body: unknown): string | undefined {
+  if (typeof body === 'string') {
+    const text = body.trim()
+    // An HTML error page is not a message.
+    return text && !/^</.test(text) ? text : undefined
+  }
+  if (!body || typeof body !== 'object') return undefined
+  const data = body as Record<string, unknown>
+  const pick = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
+  const unique = (items: (string | undefined)[]) => [...new Set(items.filter((m): m is string => Boolean(m)))]
+
+  let detailed: string[] = []
+  if (Array.isArray(data.errors)) {
+    detailed = unique(data.errors.map((item) =>
+      typeof item === 'string' ? pick(item) : pick((item as Record<string, unknown>)?.errorMessage) ?? pick((item as Record<string, unknown>)?.message),
+    ))
+  } else if (data.errors && typeof data.errors === 'object') {
+    detailed = unique(Object.values(data.errors as Record<string, unknown>).flatMap((value) => (Array.isArray(value) ? value.map(pick) : [pick(value)])))
+  }
+  if (detailed.length) return detailed.join(' ')
+  return pick(data.errorMessage) ?? pick(data.error) ?? pick(data.message) ?? pick(data.detail) ?? pick(data.title)
+}
+
 /** Parse `{ code, message }` from a JSON error body, else fall back to status. */
 export function errorFromResponse(status: number, body?: { code?: string; message?: string }): never {
   if (body?.code && isApiErrorCode(body.code)) {

@@ -65,54 +65,60 @@ export default function Pagination({ page, pageSize, total, onPageChange, disabl
   const atEnd = disabled || current === totalPages
 
   return (
-    <div className="grid w-full grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-x-3">
-      <p className="justify-self-center text-xs leading-7 text-ink-muted sm:justify-self-start">
+    // "Showing …" on the left; the pager at the right end of the grid (any `end` summary just before it).
+    <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2">
+      <p className="text-xs leading-7 text-ink-muted">
         {interpolate(copy.showing, {
           start: String(start),
           end: String(stop),
           total: String(total),
         })}
       </p>
-      <nav className="justify-self-center inline-flex items-center gap-1" aria-label="Pagination">
-        <NavButton label={copy.first} disabled={atStart} onClick={() => onPageChange(1)}>
-          <span className="inline-flex -space-x-1.5">
-            <Chevron d="M15 19l-7-7 7-7" />
-            <Chevron d="M15 19l-7-7 7-7" />
-          </span>
-        </NavButton>
-        <NavButton label={copy.previous} disabled={atStart} onClick={() => onPageChange(current - 1)}>
-          <Chevron d="M15 19l-7-7 7-7" />
-        </NavButton>
-        {pageItems(current, totalPages).map((item, i) =>
-          item === '…' ? (
-            <span key={`ellipsis-${i}`} className="flex h-7 w-5 items-center justify-center text-xs text-ink-faint" aria-hidden>
-              …
+      {/* { pageSize > 10 ? ( */}
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+        {end ? <div className="text-xs leading-7 text-ink-muted">{end}</div> : null}
+
+        <nav className="inline-flex items-center gap-1" aria-label="Pagination">
+          <NavButton label={copy.first} disabled={atStart} onClick={() => onPageChange(1)}>
+            <span className="inline-flex -space-x-1.5">
+              <Chevron d="M15 19l-7-7 7-7" />
+              <Chevron d="M15 19l-7-7 7-7" />
             </span>
-          ) : (
-            <Button
-              key={item}
-              variant={item === current ? 'solid' : 'secondary'}
-              className="pager-hit tabular-nums"
-              aria-label={interpolate(copy.page, { page: String(item) })}
-              disabled={disabled}
-              aria-current={item === current ? 'page' : undefined}
-              onClick={() => onPageChange(item)}
-            >
-              {item}
-            </Button>
-          ),
-        )}
-        <NavButton label={copy.next} disabled={atEnd} onClick={() => onPageChange(current + 1)}>
-          <Chevron d="M9 5l7 7-7 7" />
-        </NavButton>
-        <NavButton label={copy.last} disabled={atEnd} onClick={() => onPageChange(totalPages)}>
-          <span className="inline-flex -space-x-1.5">
+          </NavButton>
+          <NavButton label={copy.previous} disabled={atStart} onClick={() => onPageChange(current - 1)}>
+            <Chevron d="M15 19l-7-7 7-7" />
+          </NavButton>
+          {pageItems(current, totalPages).map((item, i) =>
+            item === '…' ? (
+              <span key={`ellipsis-${i}`} className="flex h-7 w-5 items-center justify-center text-xs text-ink-faint" aria-hidden>
+                …
+              </span>
+            ) : (
+              <Button
+                key={item}
+                variant={item === current ? 'solid' : 'secondary'}
+                className="pager-hit tabular-nums"
+                aria-label={interpolate(copy.page, { page: String(item) })}
+                disabled={disabled}
+                aria-current={item === current ? 'page' : undefined}
+                onClick={() => onPageChange(item)}
+              >
+                {item}
+              </Button>
+            ),
+          )}
+          <NavButton label={copy.next} disabled={atEnd} onClick={() => onPageChange(current + 1)}>
             <Chevron d="M9 5l7 7-7 7" />
-            <Chevron d="M9 5l7 7-7 7" />
-          </span>
-        </NavButton>
-      </nav>
-      <div className="justify-self-center text-xs leading-7 text-ink-muted sm:justify-self-end">{end}</div>
-    </div>
+          </NavButton>
+          <NavButton label={copy.last} disabled={atEnd} onClick={() => onPageChange(totalPages)}>
+            <span className="inline-flex -space-x-1.5">
+              <Chevron d="M9 5l7 7-7 7" />
+              <Chevron d="M9 5l7 7-7 7" />
+            </span>
+          </NavButton>
+        </nav>
+      </div>
+      {/* ) : null } */}
+    </div> 
   )
 }

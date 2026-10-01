@@ -539,7 +539,7 @@ export default function SearchResults({
                     >
                       {TYPE_ICON[group.type]}
                     </div>
-                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: tc.color, letterSpacing: '0.07em' }}>
+                    <span className="text-xs font-bold tracking-wider" style={{ color: tc.color, letterSpacing: '0.07em' }}>
                       {group.label}
                     </span>
                     <CountBadge

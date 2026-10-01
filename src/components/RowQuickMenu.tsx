@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { IconTooltip } from '../ui'
 
@@ -8,8 +8,9 @@ export function RowQuickMenu({
   onSendEmail,
 }: {
   onAddActivity: () => void
-  onAddNote: () => void
-  onSendEmail: () => void
+  /** Omit to hide the action (e.g. opportunity rows). */
+  onAddNote?: () => void
+  onSendEmail?: () => void
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -57,7 +58,7 @@ export function RowQuickMenu({
     }
   }, [open])
 
-  const items = [
+  const allItems: { label: string; onSelect?: () => void; icon: ReactNode }[] = [
     {
       label: 'Add Activity',
       onSelect: onAddActivity,
@@ -72,14 +73,15 @@ export function RowQuickMenu({
         <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
       ),
     },
-    {
-      label: 'Send Email',
-      onSelect: onSendEmail,
-      icon: (
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-      ),
-    },
+    // {
+    //   label: 'Send Email',
+    //   onSelect: onSendEmail,
+    //   icon: (
+    //     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    //   ),
+    // },
   ]
+  const items = allItems.filter((item): item is typeof item & { onSelect: () => void } => Boolean(item.onSelect))
 
   return (
     <>

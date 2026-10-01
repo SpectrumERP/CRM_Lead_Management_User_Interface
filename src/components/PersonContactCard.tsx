@@ -1,5 +1,4 @@
 import { ContactHoverCard, type ContactHoverCardProps } from '../ui'
-import { SALESPERSONS } from '../data/businessEntities'
 import type { Contact } from '../data/contacts'
 import { normalizeOrgName, type Lead } from '../data/leads'
 
@@ -13,18 +12,6 @@ export type PersonContactCardProps = PersonContactFields & {
   contacts?: Contact[]
   placement?: ContactHoverCardProps['placement']
   layer?: ContactHoverCardProps['layer']
-}
-
-/** Builds a Force Intellect mailbox from a salesperson display name. */
-export function salespersonEmail(name: string) {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z\s]/g, '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .join('.')
-  return slug ? `${slug}@forceintellect.com` : ''
 }
 
 /** Match a person against the contacts catalog by email, then name + org. */
@@ -50,7 +37,7 @@ export function findContactForLead(
   )
 }
 
-/** Resolve a person by name against sales roster and/or contacts catalog. */
+/** Resolve a person by name against a contacts catalog (only details actually on record — none invented). */
 export function resolvePersonContact(
   name: string,
   options: {
@@ -68,17 +55,6 @@ export function resolvePersonContact(
     email: options.email,
     companyName: options.company,
   })
-
-  if (SALESPERSONS.includes(name)) {
-    return {
-      name,
-      email: options.email || catalog?.email || salespersonEmail(name),
-      phone: options.phone || catalog?.mobile || '',
-      company: options.company || catalog?.businessEntityName || 'Force Intellect',
-      designation: options.designation || catalog?.designation || 'Sales',
-      primary: options.primary ?? false,
-    }
-  }
 
   if (catalog) {
     return {

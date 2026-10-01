@@ -8,6 +8,10 @@ export interface RecordRowActionsProps {
   onView?: () => void
   onEdit?: () => void
   onDelete?: () => void
+  /** Set to show Edit greyed out with this reason as its tooltip (e.g. a converted lead). */
+  editDisabledReason?: string
+  /** Set to show Delete greyed out with this reason as its tooltip (e.g. a converted lead). */
+  deleteDisabledReason?: string
   /** Extra controls (e.g. RowQuickMenu) rendered between edit and delete. */
   children?: ReactNode
   className?: string
@@ -24,6 +28,8 @@ export function RecordRowActions({
   onView,
   onEdit,
   onDelete,
+  editDisabledReason,
+  deleteDisabledReason,
   children,
   className = '',
 }: RecordRowActionsProps) {
@@ -35,13 +41,23 @@ export function RecordRowActions({
         </RowIconButton>
       ) : null}
       {onEdit ? (
-        <RowIconButton label={editLabel} tone="warning" onClick={onEdit}>
+        <RowIconButton
+          label={editDisabledReason ?? editLabel}
+          tone="warning"
+          onClick={onEdit}
+          disabled={Boolean(editDisabledReason)}
+        >
           {RowIcons.edit}
         </RowIconButton>
       ) : null}
       {children}
       {onDelete ? (
-        <RowIconButton label={deleteLabel} tone="danger" onClick={onDelete}>
+        <RowIconButton
+          label={deleteDisabledReason ?? deleteLabel}
+          tone="danger"
+          onClick={onDelete}
+          disabled={Boolean(deleteDisabledReason)}
+        >
           {RowIcons.delete}
         </RowIconButton>
       ) : null}

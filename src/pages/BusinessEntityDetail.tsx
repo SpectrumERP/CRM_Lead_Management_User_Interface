@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { entityTypeMeta, entityStatusMeta } from '../data/businessEntities';
 import { activityTypeMeta, activityStatusMeta, formatDateTime } from '../data/activities';
 import { meetingModeMeta, meetingStatusMeta, formatMeetingDateTime } from '../data/meetings';
-import { formatINR, normalizeOrgName } from '../data/leads';
+import { formatLeadValue, normalizeOrgName } from '../data/leads';
 import { docTypeMeta } from '../data/documents';
 import ActivityDrawer from '../components/ActivityDrawer';
 import MeetingDrawer from '../components/MeetingDrawer';
 import { ToastType } from '../components/Toast';
 import { useCrmActions, useCrmSelector } from '../contexts/CrmStoreContext';
 import { CountBadge } from '../ui';
+import { formatDate, formatDateSmart } from '../utils/dateFormat';
 
 interface Props {
   entityId: string;
@@ -26,7 +27,7 @@ type Tab = typeof TABS[number];
 function SummaryPill({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="uppercase tracking-wider font-bold" style={{ fontSize: 9.5, color: '#7a8494', letterSpacing: '0.07em' }}>{label}</p>
+      <p className="tracking-wider font-bold" style={{ fontSize: 9.5, color: '#7a8494', letterSpacing: '0.07em' }}>{label}</p>
       <p className="font-bold mt-0.5 truncate" style={{ fontSize: 13, color: accent ? '#c41e1e' : '#0c1a3a', fontFamily: 'DM Sans, sans-serif' }}>{value}</p>
     </div>
   );
@@ -199,7 +200,7 @@ export default function BusinessEntityDetail({ entityId, onBack, onEdit, onViewL
           <SummaryPill label="Territory" value={primaryLocation?.territory?.split(' – ')[1] ?? primaryLocation?.territory ?? '—'} />
           <SummaryPill label="GSTIN" value={entity.gstin || '—'} />
           <SummaryPill label="Active Leads" value={String(entity.activeLeads)} accent={entity.activeLeads > 0} />
-          <SummaryPill label="Last Activity" value={entity.lastActivity} />
+          <SummaryPill label="Last Activity" value={formatDate(entity.lastActivity)} />
         </div>
       </div>
 
@@ -470,8 +471,8 @@ export default function BusinessEntityDetail({ entityId, onBack, onEdit, onViewL
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: '#7a8494' }}>
                     <span>Contact: {lead.contactPerson}</span>
-                    <span>Value: <strong style={{ color: '#c41e1e' }}>{formatINR(lead.opportunityValue)}</strong></span>
-                    <span>Closure: {lead.expectedClosureDate}</span>
+                    <span>Value: <strong style={{ color: '#c41e1e' }}>{formatLeadValue(lead)}</strong></span>
+                    <span>Closure: {formatDate(lead.expectedClosureDate)}</span>
                     <span>By: {lead.assignedSalesperson}</span>
                   </div>
                 </div>
@@ -632,7 +633,7 @@ export default function BusinessEntityDetail({ entityId, onBack, onEdit, onViewL
               <div key={n.id} className="rounded-xl p-4"
                 style={{ background: '#fff', border: '1px solid #dce4f2', borderLeft: '3px solid #b45309' }}>
                 <p className="text-sm leading-relaxed mb-2" style={{ color: '#0c1a3a' }}>{n.text}</p>
-                <p className="text-xs" style={{ color: '#94a3b8' }}>By {n.by} · {n.date}</p>
+                <p className="text-xs" style={{ color: '#94a3b8' }}>By {n.by} · {formatDateSmart(n.date)}</p>
               </div>
             ))}
           </div>
@@ -669,7 +670,7 @@ export default function BusinessEntityDetail({ entityId, onBack, onEdit, onViewL
                     style={{ background: ic.bg, color: ic.color }}>{ic.label}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: '#0c1a3a' }}>{d.name}</p>
-                    <p className="text-xs" style={{ color: '#94a3b8' }}>{d.size} · Uploaded {d.uploadedDate} by {d.uploadedBy}</p>
+                    <p className="text-xs" style={{ color: '#94a3b8' }}>{d.size} · Uploaded {formatDate(d.uploadedDate)} by {d.uploadedBy}</p>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {[

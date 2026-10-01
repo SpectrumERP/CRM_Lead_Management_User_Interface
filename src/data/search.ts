@@ -212,8 +212,8 @@ export function searchAll(query: string, catalog: SearchCatalog, maxPerGroup = 5
         badgeBg: '#f5f3ff',
         badgeColor: '#7c3aed',
         badge2: a.status,
-        badge2Bg: a.status === 'Completed' ? '#edfbf1' : a.status === 'Cancelled' ? '#fce4ec' : '#fff8e1',
-        badge2Color: a.status === 'Completed' ? '#1a8040' : a.status === 'Cancelled' ? '#c62828' : '#f57f17',
+        badge2Bg: a.status === 'Completed' ? '#edfbf1' : a.status === 'Cancelled' ? '#fce4ec' : a.status === 'Closed' ? '#f1f4f9' : '#fff8e1',
+        badge2Color: a.status === 'Completed' ? '#1a8040' : a.status === 'Cancelled' ? '#c62828' : a.status === 'Closed' ? '#4a5d82' : '#f57f17',
         sortDate: a.scheduleDate,
       })),
     });

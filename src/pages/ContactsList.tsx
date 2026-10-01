@@ -7,6 +7,7 @@ import { Button, compareAlpha, IconTooltip, PageHeader, sortAlpha, StatPill, Sta
 import { FilterSearch, FilterSelect, InlineFilterRow } from '../components/InlineFilterRow';
 import { matchesAny } from '../utils/text';
 import { stopPropagation } from '../utils/events';
+import { formatDate } from '../utils/dateFormat';
 
 type SortField = 'name' | 'businessEntityName' | 'createdDate';
 interface Props {
@@ -188,7 +189,7 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
               {loading && <SkeletonTableRows cols={11} rows={7} />}
               {!loading && contacts.length === 0 && (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={11} className="table-empty-td">
                     <EmptyState
                       icon={EmptyIcons.contacts}
                       title="No contacts found"
@@ -200,7 +201,7 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
               )}
               {!loading && contacts.length > 0 && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={11} className="table-empty-td">
                     <NoResults onClear={() => { setSearch(''); setFilterEntity(''); setFilterDept(''); setFilterDesig(''); setFilterStatus(''); }} />
                   </td>
                 </tr>
@@ -297,7 +298,7 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
                     </td>
                     {/* Last Activity */}
                     <td>
-                      <span className="text-xs text-ink-muted">{c.lastActivity}</span>
+                      <span className="text-xs text-ink-muted">{formatDate(c.lastActivity)}</span>
                     </td>
                     {/* Actions */}
                     <td onClick={stopPropagation}>

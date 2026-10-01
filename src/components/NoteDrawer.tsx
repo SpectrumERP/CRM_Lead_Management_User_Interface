@@ -1,7 +1,11 @@
 import { useState } from 'react'
-import { useCrmSelector } from '../contexts/CrmStoreContext'
+import { sameList, useCrmSelector } from '../contexts/CrmStoreContext'
+import { useAuth } from '../auth/AuthContext'
 import { Button, FileField, SearchSelectField, TextAreaField, TextField } from '../ui'
 import { useSheetClose } from './useSheetClose'
+import { FIELD_LIMITS } from '../constants/fieldLimits'
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
+import { isLeadLocked } from '../data/leads'
 
 interface NoteDrawerProps {
   preselectedLead?: { id: string; name: string } | null
@@ -19,7 +23,11 @@ interface NoteDrawerProps {
 }
 
 export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDrawerProps) {
-  const leads = useCrmSelector((state) => state.leads)
+  const confirm = useConfirm()
+  // Server leads only; the note is written by the signed-in user.
+  // Server leads only, and not locked ones (converted / completed stage take no new notes).
+  const leads = useCrmSelector((state) => state.leads.filter((lead) => lead.spectrum && !isLeadLocked(lead)), sameList)
+  const { user } = useAuth()
   const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [leadId, setLeadId] = useState(preselectedLead?.id ?? '')
@@ -39,13 +47,14 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
     return errs
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (saving) return
     const errs = validate()
     if (Object.keys(errs).length) {
       setErrors(errs)
       return
     }
+    if (!(await confirm(saveConfirm('Note')))) return
     setSaving(true)
     setTimeout(() => {
       onSave({
@@ -55,8 +64,9 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
         relatedLeadId: leadId,
         relatedLeadName: leadName,
         attachmentName: attachmentName || undefined,
-        date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-        by: 'Priya Mehta',
+        // Stored as an ISO stamp; screens format it (utils/dateFormat).
+        date: new Date().toISOString(),
+        by: user?.name ?? '',
       })
       requestClose()
     }, 450)
@@ -73,12 +83,8 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
 
   return (
     <div className={`fixed inset-0 z-[60] flex justify-end${closing ? ' is-sheet-closing' : ''}`} role="presentation">
-      <button
-        type="button"
-        aria-label="Close dialog"
-        className="ui-scrim crm-sheet-scrim absolute inset-0 border-0 p-0"
-        onClick={requestClose}
-      />
+      {/* Forms do not close on a backdrop click (that would discard the input); use Cancel, × or Esc. */}
+      <div aria-hidden="true" className="ui-scrim crm-sheet-scrim absolute inset-0" />
       <div
         role="dialog"
         aria-modal="true"
@@ -123,6 +129,7 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
           <TextField
             htmlFor="qc-note-title"
             label="Note Title"
+            maxLength={FIELD_LIMITS.noteTitle}
             required
             error={errors.title}
             value={title}
@@ -136,6 +143,7 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
           <TextAreaField
             htmlFor="qc-note-text"
             label="Note Description"
+            maxLength={FIELD_LIMITS.noteDiscussion}
             required
             error={errors.text}
             rows={4}

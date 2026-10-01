@@ -9,6 +9,7 @@ import MeetingDrawer from '../components/MeetingDrawer';
 import { ToastType } from '../components/Toast';
 import { useCrmActions, useCrmSelector } from '../contexts/CrmStoreContext';
 import { CountBadge } from '../ui';
+import { formatDate } from '../utils/dateFormat';
 
 type Tab = 'overview' | 'leads' | 'activities' | 'meetings' | 'documents';
 
@@ -259,8 +260,8 @@ function OverviewTab({ contact }: { contact: Contact }) {
               { label: 'Location / Plant', value: contact.locationLabel || '—' },
               { label: 'Primary Contact', value: contact.isPrimary ? 'Yes' : 'No' },
               { label: 'Status', value: contact.status },
-              { label: 'Created Date', value: new Date(contact.createdDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) },
-              { label: 'Last Activity', value: contact.lastActivity },
+              { label: 'Created Date', value: formatDate(contact.createdDate) },
+              { label: 'Last Activity', value: formatDate(contact.lastActivity) },
             ].map(({ label, value }) => (
               <div key={label}>
                 <p className="text-xs font-semibold mb-0.5" style={{ color: '#9aaccc' }}>{label}</p>
@@ -345,7 +346,7 @@ function LeadsTab({ leads, onViewLead }: { leads: Lead[]; onViewLead?: (id: stri
                 </span>
               </td>
               <td><span className="text-sm font-semibold" style={{ color: '#0c1a3a' }}>₹{(l.opportunityValue / 10000000).toFixed(2)} Cr</span></td>
-              <td><span className="text-sm" style={{ color: '#7a8494' }}>{l.expectedClosureDate}</span></td>
+              <td><span className="text-sm" style={{ color: '#7a8494' }}>{formatDate(l.expectedClosureDate)}</span></td>
               <td>
                 <button
                   onClick={() => onViewLead?.(l.id)}
@@ -507,7 +508,7 @@ function DocumentsTab({ docs }: { docs: CRMDocument[] }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate" style={{ color: '#0c1a3a' }}>{doc.name}</p>
-                  <p className="text-xs" style={{ color: '#9aaccc' }}>{doc.size} · {doc.uploadedDate} · {doc.uploadedBy}</p>
+                  <p className="text-xs" style={{ color: '#9aaccc' }}>{doc.size} · {formatDate(doc.uploadedDate)} · {doc.uploadedBy}</p>
                 </div>
                 <button
                   className="text-xs px-3 py-1 rounded-lg"

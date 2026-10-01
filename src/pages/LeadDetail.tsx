@@ -1,9 +1,8 @@
 import { useState, useRef, useMemo, useEffect, type ReactNode } from "react"
-import { Button, Card, ChoiceGroup, CountBadge, FormGrid, IconTooltip, sortAlpha, TextAreaField, TextField } from "../ui"
+import { Button, Card, ChoiceGroup, CountBadge, FormGrid, IconTooltip, TextAreaField, TextField } from "../ui"
 import { PersonContactCard, findContactForLead } from "../components/PersonContactCard"
 import OutcomeDialog from "../components/OutcomeDialog"
 import FormDrawer from "../components/FormDrawer"
-import { stopBubbleProps } from "../utils/events"
 import { useAuth } from "../auth/AuthContext"
 import {
   Lead,
@@ -14,6 +13,7 @@ import {
   leadStageClass,
   leadStatusClass,
   normalizeOrgName,
+  isLeadConverted,
   CRM_AS_OF,
 } from "../data/leads"
 import {
@@ -25,11 +25,13 @@ import {
   avatarGradient,
 } from "../data/contacts"
 import { LeadIdentityEdit, LeadSummaryEdit, type FieldKey } from "../components/LeadInlineEdit"
-import { useMasterData } from "../contexts/MasterDataContext"
 import { sameList, useCrmActions, useCrmSelector } from "../contexts/CrmStoreContext"
 import type { CrmEmail } from "../contexts/crmTypes"
 import { api } from "../api/crm"
 import { useApiQuery } from "../api/useApiQuery"
+import { bySequence } from "../api/fillValues"
+import { leadNoFromId, refreshServerLead } from "../api/leadSync"
+import { useLeadFormFillValues } from "../components/useLeadFormFillValues"
 import {
   Activity,
   formatDateTime,
@@ -47,9 +49,13 @@ import {
 } from "../data/documents"
 import { formatConversionStamp, type Opportunity } from "../data/opportunities"
 import ActivityDrawer from "../components/ActivityDrawer"
+import { ActivitiesTab, activityStatusTone, activityTypeTone } from "../components/LeadActivities"
+import { InternalNotesTab, noteDateToInput, type LeadNote } from "../components/LeadNotes"
+import { PagedTimeline, TimelineTab, timelineIconMeta, type TimelineOrder } from "../components/RecordTimeline"
 import ConvertOpportunityDialog from "../components/ConvertOpportunityDialog"
 import MeetingDrawer from "../components/MeetingDrawer"
 import ConfirmDialog from "../components/ConfirmDialog"
+import { saveConfirm, useConfirm } from "../contexts/ConfirmContext"
 import { ToastType } from "../components/Toast"
 import {
   EmptyState,
@@ -58,6 +64,8 @@ import {
   SkeletonOverviewCards,
 } from "../components/CRMStates"
 import { interpolate, PAGE_COPY } from "../constants/messages"
+import { FIELD_LIMITS } from "../constants/fieldLimits"
+import { formatDate, formatDateParts, formatTime, joinDateTime, parseDate, toIsoDate, toStoredStamp, toTimeHHMM } from "../utils/dateFormat"
 
 type LocalDoc = {
   id: string
@@ -209,7 +217,7 @@ function DocPreviewModal({
               />
             </div>
             <p className="px-5 pb-3 text-center text-xs text-ink-faint">
-              {doc.size} · Uploaded {doc.date} by {doc.uploader}
+              {doc.size} · Uploaded {formatDate(doc.date)} by {doc.uploader}
             </p>
           </div>
         ) : (
@@ -223,7 +231,7 @@ function DocPreviewModal({
               {doc.name}
             </p>
             <p className="text-center text-xs text-ink-faint">
-              {doc.size} · Uploaded {doc.date} by {doc.uploader}
+              {doc.size} · Uploaded {formatDate(doc.date)} by {doc.uploader}
             </p>
         </div>
         )}
@@ -269,7 +277,6 @@ interface LeadDetailProps {
   onViewOpportunity?: (id: string) => void
 }
 
-type LeadNote = { id: string; text: string; date: string; time: string; by: string }
 
 type LeadEmail = {
   id: string
@@ -298,11 +305,7 @@ function toLeadEmail(mail: CrmEmail): LeadEmail {
 }
 
 function nowStamp() {
-  const d = new Date()
-  return {
-    date: d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-"),
-    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }),
-  }
+  return toStoredStamp()
 }
 
 function splitDateTime(value: string) {
@@ -318,7 +321,8 @@ function splitDateTime(value: string) {
   return { date: trimmed.slice(0, idx), time: trimmed.slice(idx + 1).trim() }
 }
 
-const NOTE_DISCUSSION_MAX = 1000
+/** LeadNotesDetail.Discussion varchar(1000) */
+const NOTE_DISCUSSION_MAX = FIELD_LIMITS.noteDiscussion
 const EMPTY_NOTE_DRAFT = { dateTime: "", createdBy: "", text: "" }
 
 type LeadEvent = {
@@ -368,60 +372,19 @@ function resolveLeadContact(
   })
 }
 
-function seedNotes(lead: Lead): LeadNote[] {
-  return [
-    {
-      id: `N-${lead.id}-1`,
-      text: `${lead.contactPerson} is the primary stakeholder for ${lead.productsRequired}. Next step is to keep qualification moving and confirm the buying centre.`,
-      date: formatLeadDate(lead.createdAt),
-      time: "14:45",
-      by: lead.assignedSalesperson,
-    },
-    {
-      id: `N-${lead.id}-2`,
-      text: `Internal: treat Stage (${lead.leadStage}) and Status (${lead.leadStatus}) independently. Do not collapse pipeline progress into disposition.`,
-      date: formatLeadDate(lead.createdAt),
-      time: "16:10",
-      by: "System",
-    },
-  ]
-}
-
-function seedEmails(lead: Lead): LeadEmail[] {
-  return [
-    {
-      id: `EM-${lead.id}-1`,
-      subject: `Introduction — ${lead.productsRequired}`,
-      body: `Shared an overview of ${lead.productsRequired} with ${lead.contactPerson} and requested a discovery slot.`,
-      to: lead.email,
-      from: "priya.mehta@forceintellect.com",
-      date: formatLeadDate(lead.createdAt),
-      time: "11:20",
-      by: lead.assignedSalesperson,
-      direction: "out",
-    },
-    {
-      id: `EM-${lead.id}-2`,
-      subject: `Re: ${lead.productsRequired} — next steps`,
-      body: `${lead.contactPerson} acknowledged the note and asked for a capability deck before the next call.`,
-      to: "priya.mehta@forceintellect.com",
-      from: lead.email,
-      date: formatLeadDate(lead.createdAt),
-      time: "15:40",
-      by: lead.contactPerson,
-      direction: "in",
-    },
-  ]
-}
-
+/** Sort key for a timeline entry (its formatted date + optional `HH:MM`). */
 function parseEventStamp(date: string, time?: string): number {
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(date)
-    ? `${date}T${time && time.includes(":") ? time : "00:00"}`
-    : date
-  const d = new Date(iso)
-  if (!Number.isNaN(d.getTime())) return d.getTime()
-  const parsed = Date.parse(date)
-  return Number.isNaN(parsed) ? 0 : parsed
+  const d = parseDate(date)
+  if (!d) return 0
+  const m = time ? /^(\d{1,2}):(\d{2})/.exec(time) : null
+  if (m) d.setHours(Number(m[1]), Number(m[2]))
+  return d.getTime()
+}
+
+/** `HH:MM` of a stored note / email date like `DD-MM-YYYY HH:MM` (else its own time field). */
+function storedTime(date: string, time?: string): string {
+  if (time) return formatTime(time)
+  return /\d{1,2}:\d{2}/.test(date) ? formatTime(date) : ""
 }
 
 function isOverdue(date: string, asOf = CRM_AS_OF): boolean {
@@ -457,7 +420,7 @@ function buildProgressTimeline(
   }[] = [
     {
       date: formatLeadDate(lead.createdAt),
-      time: "09:00",
+      time: formatTime("09:00"),
       event: "Lead created",
       detail: `Lead created from ${lead.leadSource}. Assigned to ${lead.assignedSalesperson}.`,
       by: lead.assignedSalesperson,
@@ -468,7 +431,7 @@ function buildProgressTimeline(
   for (const a of activities) {
     entries.push({
       date: formatLeadDate(a.completeDate || a.scheduleDate),
-      time: a.completeTime || a.scheduleTime || "",
+      time: formatTime(a.completeTime || a.scheduleTime || ""),
       event: a.type,
       detail: a.outcome ? `${a.subject} — ${a.outcome}` : a.subject,
       by: a.assignedTo,
@@ -477,8 +440,8 @@ function buildProgressTimeline(
   }
   for (const n of notes) {
     entries.push({
-      date: n.date,
-      time: n.time,
+      date: formatDate(n.date),
+      time: storedTime(n.date, n.time),
       event: "Internal discussion",
       detail: n.text,
       by: n.by,
@@ -487,8 +450,8 @@ function buildProgressTimeline(
   }
   for (const e of emails) {
     entries.push({
-      date: e.date,
-      time: e.time,
+      date: formatDate(e.date),
+      time: storedTime(e.date, e.time),
       event: e.direction === "in" ? "Email received" : "Email sent",
       detail: e.subject,
       by: e.by,
@@ -498,7 +461,7 @@ function buildProgressTimeline(
   for (const m of meetings) {
     entries.push({
       date: formatLeadDate(m.date),
-      time: m.time,
+      time: formatTime(m.time),
       event: "Meeting",
       detail: m.subject,
       by: m.contactPerson,
@@ -508,12 +471,9 @@ function buildProgressTimeline(
 
   if (lead.leadStage === "Converted to Opportunity" || opportunity) {
     const stamp = opportunity?.convertedAt ?? opportunity?.createdAt ?? lead.createdAt
-    const when = new Date(stamp)
     entries.push({
       date: formatLeadDate(stamp),
-      time: Number.isNaN(when.getTime())
-        ? ""
-        : when.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+      time: storedTime(stamp),
       event: "Converted to Opportunity",
       detail: opportunity
         ? `${opportunity.id} · ${opportunity.convertedBy ? `by ${opportunity.convertedBy}` : "Converted"}${
@@ -533,77 +493,6 @@ function buildProgressTimeline(
 // ─── Enums (resolved at runtime from context) ─────────────────────────────────
 
 // ─── Style helpers ────────────────────────────────────────────────────────────
-function timelineIconMeta(type: string) {
-  const d: Record<string, { tone: string; d: ReactNode }> = {
-    stage: {
-      tone: "bg-primary-soft text-primary",
-      d: (
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M13 10V3L4 14h7v7l9-11h-7z"
-        />
-      ),
-    },
-    call: {
-      tone: "bg-success-soft text-success-strong",
-      d: (
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-        />
-      ),
-    },
-    email: {
-      tone: "bg-surface-hover text-ink-soft",
-      d: (
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-        />
-      ),
-    },
-    meeting: {
-      tone: "bg-purple-soft text-purple",
-      d: (
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
-      ),
-    },
-    link: {
-      tone: "bg-warning-soft text-warning",
-      d: (
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-        />
-      ),
-    },
-    create: {
-      tone: "bg-success-soft text-success",
-      d: (
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-      ),
-    },
-    note: {
-      tone: "bg-warning-soft text-warning",
-      d: (
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-        />
-      ),
-    },
-  }
-  return d[type] ?? d.create
-}
 function docMetaTone(type: string): string {
   const tones: Record<string, string> = {
     PDF: "bg-accent-soft text-accent",
@@ -637,29 +526,6 @@ function entityTypeTone(type: string): string {
     Other: "bg-surface-hover text-ink-muted border-line",
   }
   return tones[type] ?? tones.Other
-}
-
-function activityTypeTone(type: string): string {
-  const tones: Record<string, string> = {
-    Task: "bg-warning-soft text-warning",
-    "Follow-up": "bg-success-soft text-success",
-    "Phone Call": "bg-primary-soft text-primary",
-    Meeting: "bg-purple-soft text-purple",
-    "Customer Visit": "bg-warning-soft text-warning",
-    "Online Meeting": "bg-primary-soft text-primary",
-    "Requirement Discussion": "bg-success-soft text-success",
-    "Commercial Discussion": "bg-accent-soft text-accent",
-    Negotiation: "bg-purple-soft text-purple",
-    "Document Submission": "bg-surface-hover text-ink-soft",
-    Other: "bg-surface-hover text-ink-muted",
-  }
-  return tones[type] ?? tones.Other
-}
-
-function activityStatusTone(status: string): string {
-  if (status === "Completed") return "bg-success-soft text-success"
-  if (status === "Cancelled") return "bg-accent-soft text-accent"
-  return "bg-warning-soft text-warning"
 }
 
 // ─── Reusable atoms ───────────────────────────────────────────────────────────
@@ -894,7 +760,7 @@ function InfoField({
   )
   return (
     <div className="min-w-0">
-      <p className="mb-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-faint">
+      <p className="mb-0.5 text-[9.5px] font-bold tracking-wide text-ink-faint">
         {label}
       </p>
       {href ? (
@@ -1026,101 +892,6 @@ function CompactEmpty({
 }
 
 // ─── Change Stage / Status drawer ─────────────────────────────────────────────
-function ChangeModal({
-  title,
-  options,
-  current,
-  onSelect,
-  onClose,
-  colorFn,
-  preserveOrder = false,
-  colorfulStages = false,
-}: {
-  title: string
-  options: string[]
-  current: string
-  onSelect: (v: string) => void
-  onClose: () => void
-  colorFn: (v: string) => string
-  preserveOrder?: boolean
-  /** Use per-stage palette (dots, row tint, solid Current badge). */
-  colorfulStages?: boolean
-}) {
-  const list = preserveOrder ? options : sortAlpha(options)
-
-  return (
-    <FormDrawer
-      title={title}
-      subtitle={`Current: ${current}`}
-      onClose={onClose}
-      widthClass="w-[24rem]"
-      icon={
-        <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      }
-    >
-      {(requestClose) => (
-        <div className="space-y-1">
-          {list.map((o, index) => {
-            const selected = o === current
-            const tone = colorfulStages ? stageTrackTone(o) : null
-            return (
-              <button
-                key={o}
-                type="button"
-                onClick={() => {
-                  onSelect(o)
-                  requestClose()
-                }}
-                className={`ui-dialog-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${
-                  selected
-                    ? colorfulStages
-                      ? `${tone?.row ?? "bg-primary-soft"} ring-1 ring-inset ring-line`
-                      : "bg-primary-soft ring-1 ring-inset ring-primary/20"
-                    : "hover:bg-surface-muted bg-surface"
-                }`}
-                style={{ animationDelay: `${60 + index * 35}ms` }}
-              >
-                {colorfulStages ? (
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone?.dot ?? "bg-primary"}`} aria-hidden="true" />
-                ) : null}
-                <span
-                  className={`min-w-0 flex-1 text-sm font-semibold ${
-                    selected
-                      ? colorfulStages
-                        ? tone?.label ?? "text-primary"
-                        : "text-primary"
-                      : "text-ink"
-                  }`}
-                >
-                  {o}
-                </span>
-                <span
-                  className={`badge shrink-0 text-[10px] ${
-                    selected && colorfulStages
-                      ? tone?.solid ?? "bg-primary text-surface"
-                      : selected && !colorfulStages
-                        ? "border-primary bg-primary text-surface"
-                        : colorFn(o)
-                  }`}
-                >
-                  {selected ? "Current" : o}
-                </span>
-            </button>
-            )
-          })}
-        </div>
-      )}
-    </FormDrawer>
-  )
-}
-
-// ─── Tab: Overview ────────────────────────────────────────────────────────────
 function OverviewTab({
   lead,
   stage,
@@ -1448,7 +1219,7 @@ function OverviewTab({
             ))}
             </div>
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-faint">
+            <p className="mb-2 text-xs font-bold tracking-wider text-ink-faint">
               Recent activities
             </p>
             {recentActivities.length === 0 ? (
@@ -1545,8 +1316,7 @@ function OverviewTab({
                         <span
                           className="text-xs flex-shrink-0 text-ink-faint"
                         >
-                          {ev.date}
-                          {ev.time ? ` · ${ev.time}` : ""}
+                          {joinDateTime(ev.date, ev.time)}
                         </span>
                       </div>
                       <p
@@ -1614,7 +1384,7 @@ function OverviewTab({
                       {d.name}
                     </p>
                     <p className="text-xs text-ink-faint">
-                      {d.type} · {d.date}
+                      {d.type} · {formatDate(d.date)}
                     </p>
                 </div>
                   <IconTooltip label="Preview">
@@ -1675,293 +1445,6 @@ function OverviewTab({
         )}
       </CardSection>
     </div>
-  )
-}
-
-// ─── Tab: Activities ──────────────────────────────────────────────────────────
-function ActivityTypeGlyph({ type }: { type: string }) {
-  const common = {
-    width: 12,
-    height: 12,
-    fill: "none" as const,
-    viewBox: "0 0 24 24",
-    stroke: "currentColor",
-    strokeWidth: 2,
-    "aria-hidden": true as const,
-  }
-  if (type === "Phone Call") {
-    return (
-      <svg {...common}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.95.68l1.5 4.49a1 1 0 01-.5 1.21l-2.26 1.13a11.04 11.04 0 005.52 5.52l1.13-2.26a1 1 0 011.21-.5l4.49 1.5a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C9.72 21 3 14.28 3 6V5z" />
-      </svg>
-    )
-  }
-  if (type.includes("Meeting") || type === "Customer Visit") {
-    return (
-      <svg {...common}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    )
-  }
-  if (type === "Document Submission") {
-    return (
-      <svg {...common}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    )
-  }
-  if (type === "Commercial Discussion" || type === "Negotiation") {
-    return (
-      <svg {...common}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    )
-  }
-  if (type === "Follow-up") {
-    return (
-      <svg {...common}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-    )
-  }
-  return (
-    <svg {...common}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-    </svg>
-  )
-}
-
-function ActivityCard({
-  activity,
-  contacts = [],
-  expanded,
-  onToggle,
-  onFollowUp,
-  onMarkComplete,
-}: {
-  activity: Activity
-  contacts?: Contact[]
-  expanded: boolean
-  onToggle: () => void
-  onFollowUp: (a: Activity) => void
-  onMarkComplete: (a: Activity) => void
-}) {
-  const typeTone = activityTypeTone(activity.type)
-  const statusTone = activityStatusTone(activity.status)
-  const pending = activity.status === "Pending"
-  const when = formatDateTime(activity.scheduleDate, activity.scheduleTime)
-
-  return (
-    <li
-      className={`group/activity border-b border-line-subtle last:border-b-0 transition-colors duration-200 ${
-        expanded ? "bg-primary-soft/25" : "bg-surface hover:bg-surface-muted/70"
-      }`}
-    >
-      <div
-        role="button"
-        tabIndex={0}
-        className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
-        aria-expanded={expanded}
-        onClick={onToggle}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault()
-            onToggle()
-          }
-        }}
-      >
-        <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${typeTone}`}
-          aria-hidden="true"
-        >
-          <ActivityTypeGlyph type={activity.type} />
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wide ${typeTone.replace(/\bbg-\S+\s*/g, "").trim()}`}>
-              {activity.type}
-            </span>
-            <h3 className="min-w-0 truncate text-[12px] font-semibold text-ink">{activity.subject}</h3>
-      </div>
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[10px] leading-snug text-ink-muted">
-            <span className="truncate">{when}</span>
-            <span className="text-ink-faint" aria-hidden="true">·</span>
-            <span className="inline-flex min-w-0 items-center gap-1" {...stopBubbleProps}>
-              <PersonContactCard name={activity.assignedTo} />
-            </span>
-            {activity.reminder !== "None" ? (
-              <>
-                <span className="text-ink-faint" aria-hidden="true">·</span>
-                <span className="truncate">{activity.reminder}</span>
-              </>
-            ) : null}
-          </div>
-        </div>
-
-        <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusTone}`}>
-          {activity.status}
-        </span>
-        <svg
-          width="12"
-          height="12"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2.2}
-          className={`shrink-0 text-ink-faint transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-            expanded ? "rotate-180 text-primary" : ""
-          }`}
-          aria-hidden="true"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </div>
-
-      <div
-        className="accordion-panel"
-        data-open={expanded ? "true" : "false"}
-        aria-hidden={!expanded}
-        {...(!expanded ? { inert: true } : {})}
-      >
-        <div className="accordion-panel-inner">
-          <div className="accordion-panel-body border-t border-line-subtle bg-surface-muted/50 px-3 pb-3 pl-[3.25rem] pt-2.5">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border border-line bg-surface px-2.5 py-2">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-ink-faint">Contact</p>
-                <div className="mt-0.5 min-w-0">
-                  {activity.contactPerson ? (
-                    <PersonContactCard name={activity.contactPerson} contacts={contacts} />
-                  ) : (
-                    <span className="text-[11px] font-semibold text-ink">—</span>
-                  )}
-                </div>
-                  </div>
-              <div className="rounded-lg border border-line bg-surface px-2.5 py-2">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-ink-faint">Reminder</p>
-                <p className="mt-0.5 truncate text-[11px] font-semibold text-ink">
-                  {activity.reminder === "None" ? "No reminder" : activity.reminder}
-                </p>
-                  </div>
-                    </div>
-
-            <div className="mt-2.5">
-              <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.08em] text-ink-faint">Notes</p>
-              <div className="rounded-lg border border-line bg-surface px-2.5 py-2">
-                {activity.notes ? (
-                  <p className="text-[12px] leading-relaxed text-ink-soft">{activity.notes}</p>
-                ) : (
-                  <p className="text-[11px] text-ink-faint">No notes for this activity.</p>
-                )}
-              </div>
-            </div>
-
-            {activity.hasAttachment ? (
-              <div className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-lg border border-primary/20 bg-primary-soft px-2.5 py-1.5 text-[11px] font-semibold text-primary">
-                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                <span className="truncate">{activity.attachmentName}</span>
-              </div>
-            ) : null}
-
-            {activity.status === "Completed" && activity.outcome ? (
-              <div className="mt-2.5 rounded-lg border border-success-line bg-success-soft px-2.5 py-2">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-success">Outcome</p>
-                <p className="mt-0.5 text-[12px] leading-relaxed text-success">
-                  {activity.outcome}
-                  {activity.completeDate ? (
-                    <span className="ml-1 font-medium text-success/75">
-                      · {formatDateTime(activity.completeDate, activity.completeTime)}
-                    </span>
-                  ) : null}
-                </p>
-              </div>
-            ) : null}
-
-            {pending || activity.status === "Completed" ? (
-              <div className="mt-3 flex items-center justify-end gap-2 border-t border-line-subtle pt-2.5">
-                {pending ? (
-                  <Button
-                    variant="solid"
-                    className="!min-h-7 !bg-success !px-3 !py-1 text-[11px] hover:!bg-success-strong"
-                    onClick={() => onMarkComplete(activity)}
-                  >
-                        Mark Complete
-                  </Button>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    className="!min-h-7 !px-3 !py-1 text-[11px]"
-                    onClick={() => onFollowUp(activity)}
-                  >
-                    Create Follow-up
-                  </Button>
-                    )}
-                  </div>
-            ) : null}
-                </div>
-              </div>
-            </div>
-    </li>
-  )
-}
-
-function ActivitiesTab({
-  activities,
-  contacts = [],
-  scope,
-  onAdd,
-  onFollowUp,
-  onMarkComplete,
-}: {
-  activities: Activity[]
-  contacts?: Contact[]
-  scope: "open" | "all"
-  onAdd: () => void
-  onFollowUp: (a: Activity) => void
-  onMarkComplete: (a: Activity) => void
-}) {
-  const [openId, setOpenId] = useState<string | null>(null)
-  const emptyTitle = scope === "open" ? "No open activities" : "No activities yet"
-  const emptySubtitle =
-    scope === "open"
-      ? "Open tasks and follow-ups for this lead will show here."
-      : "Log calls, emails and follow-ups to track engagement on this lead."
-
-  useEffect(() => {
-    setOpenId(null)
-  }, [scope])
-
-  useEffect(() => {
-    setOpenId((prev) => (prev && activities.some((item) => item.id === prev) ? prev : null))
-  }, [activities])
-
-  if (activities.length === 0) {
-    return (
-      <EmptyState
-        icon={EmptyIcons.notes}
-        title={emptyTitle}
-        subtitle={emptySubtitle}
-        action={{ label: "Add Activity", onClick: onAdd }}
-      />
-    )
-  }
-
-  return (
-    <ul className="overflow-hidden rounded-xl border border-line bg-surface" aria-label="Activities">
-      {activities.map((activity) => (
-        <ActivityCard
-          key={activity.id}
-          activity={activity}
-          contacts={contacts}
-          expanded={openId === activity.id}
-          onToggle={() => setOpenId((prev) => (prev === activity.id ? null : activity.id))}
-          onFollowUp={onFollowUp}
-          onMarkComplete={onMarkComplete}
-        />
-      ))}
-    </ul>
   )
 }
 
@@ -2064,7 +1547,7 @@ function MeetingsTab({
               </div>
               {m.participants.length > 0 && (
                 <div className="mb-3">
-                  <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-faint">
+                  <p className="mb-1.5 text-[9.5px] font-bold tracking-wide text-ink-faint">
                     Participants
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -2097,72 +1580,6 @@ function MeetingsTab({
 }
 
 // ─── Tab: Timeline ────────────────────────────────────────────────────────────
-function TimelineTab({
-  timeline,
-  contacts,
-}: {
-  timeline: ReturnType<typeof buildProgressTimeline>
-  contacts: Contact[]
-}) {
-  if (timeline.length === 0) {
-    return (
-      <EmptyState
-        icon={EmptyIcons.timeline}
-        title="No timeline activity yet"
-        subtitle="Timeline entries will appear as this lead progresses through stages."
-      />
-    )
-  }
-
-  return (
-    <ol className="m-0 list-none overflow-hidden rounded-xl border border-line bg-surface p-0">
-        {timeline.map((t, i) => {
-        const ic = timelineIconMeta(t.icon)
-        const last = i === timeline.length - 1
-        const when = `${t.date}${t.time ? ` · ${t.time}` : ""}`
-          return (
-          <li
-            key={`${t.event}-${t.date}-${i}`}
-            className={`flex gap-2.5 px-3 py-2 ${last ? "" : "border-b border-line-subtle"}`}
-          >
-            <div className="flex w-6 shrink-0 flex-col items-center self-stretch pt-0.5">
-              <span
-                className={`relative z-[1] flex h-6 w-6 items-center justify-center rounded-full ${ic.tone}`}
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                >
-                  {ic.d}
-                </svg>
-              </span>
-              {last ? null : (
-                <span className="mt-1 w-px flex-1 bg-line" aria-hidden="true" />
-              )}
-              </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="min-w-0 truncate text-[12px] font-semibold text-ink">{t.event}</p>
-                <span className="ml-auto shrink-0 text-[10px] text-ink-faint">{when}</span>
-                </div>
-              <p className="mt-0.5 truncate text-[11px] leading-snug text-ink-soft">{t.detail}</p>
-              <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-ink-faint">
-                <span className="shrink-0">By</span>
-                <PersonContactCard name={t.by} contacts={contacts} />
-              </div>
-            </div>
-          </li>
-        )
-        })}
-    </ol>
-  )
-}
-
 // ─── Tab: Documents ───────────────────────────────────────────────────────────
 function DocumentsTab({
   docs,
@@ -2260,7 +1677,7 @@ function DocumentsTab({
                 >
                   <p className="truncate text-sm font-semibold text-ink">{d.name}</p>
                   <p className="text-xs text-ink-faint">
-                    {d.size} · Uploaded {d.date} by {d.uploader}
+                    {d.size} · Uploaded {formatDate(d.date)} by {d.uploader}
                   </p>
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -2417,10 +1834,10 @@ function EmailCard({
         <div className="min-w-0 flex-1">
           <p className="min-w-0 truncate text-[11px] font-bold leading-snug text-ink">{mail.subject}</p>
           <p className="mt-px truncate text-[10px] leading-snug text-ink-muted">
-            {party} · {mail.date} {mail.time}
+            {party} · {formatDateParts(mail.date, mail.time)}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-primary-soft px-1.5 py-px text-[9px] font-bold uppercase leading-none tracking-wide text-primary">
+        <span className="shrink-0 rounded-full bg-primary-soft px-1.5 py-px text-[9px] font-bold leading-none tracking-wide text-primary">
           {mail.direction === "in" ? "Inbound" : "Outbound"}
         </span>
         <svg
@@ -2533,179 +1950,21 @@ function EmailsTab({
 }
 
 // ─── Tab: Internal Notes ──────────────────────────────────────────────────────
-function NoteCard({
-  note,
-  expanded,
-  onToggle,
-}: {
-  note: LeadNote
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const preview =
-    note.text.length > 72 ? `${note.text.slice(0, 72).trim()}…` : note.text
-  const when = [note.date, note.time].filter(Boolean).join(" ")
-
-  return (
-    <li
-      className={`border-b border-line last:border-b-0 transition-colors duration-200 ${
-        expanded ? "bg-warning-soft/50" : "bg-surface"
-      }`}
-    >
-      <button
-        type="button"
-        className="flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
-        aria-expanded={expanded}
-        onClick={onToggle}
-      >
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-warning-soft text-[9px] font-bold text-warning">
-          {initialsAvatar(note.by)}
-    </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <p className="min-w-0 truncate text-[11px] font-bold leading-snug text-ink">{note.by}</p>
-            <span className="shrink-0 text-[10px] leading-snug text-ink-faint">{when}</span>
-          </div>
-          {!expanded && preview ? (
-            <p className="mt-px truncate text-[10px] leading-snug text-ink-faint">{preview}</p>
-          ) : null}
-        </div>
-        <svg
-          width="12"
-          height="12"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2.2}
-          className={`shrink-0 text-ink-faint transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-            expanded ? "rotate-180" : ""
-          }`}
-          aria-hidden="true"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      <div
-        className="accordion-panel"
-        data-open={expanded ? "true" : "false"}
-        aria-hidden={!expanded}
-        {...(!expanded ? { inert: true } : {})}
-      >
-        <div className="accordion-panel-inner">
-          <div className="accordion-panel-body border-t border-line-subtle px-2.5 pb-2 pl-10 pt-1.5">
-            <p className="text-[9px] font-bold uppercase tracking-wide text-ink-muted">Note / Discussion</p>
-            <p className="mt-1 rounded-md border border-line bg-surface-muted px-2 py-1.5 text-[11px] leading-relaxed text-ink">
-              {note.text || "No discussion text."}
-            </p>
-          </div>
-        </div>
-      </div>
-    </li>
-  )
-}
-
-function InternalNotesTab({
-  notes,
-  adding,
-  draft,
-  errors,
-  onDraft,
-  onStartAdd,
-  onCancel,
-  onSave,
-}: {
-  notes: LeadNote[]
-  adding: boolean
-  draft: { dateTime: string; createdBy: string; text: string }
-  errors: Record<string, string>
-  onDraft: (patch: Partial<{ dateTime: string; createdBy: string; text: string }>) => void
-  onStartAdd: () => void
-  onCancel: () => void
-  onSave: () => void
-}) {
-  const [openId, setOpenId] = useState<string | null>(null)
-
-  useEffect(() => {
-    setOpenId((prev) => (prev && notes.some((item) => item.id === prev) ? prev : null))
-  }, [notes])
-
-  return (
-    <div>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs font-semibold text-ink-muted">
-          {notes.length} internal note{notes.length !== 1 ? "s" : ""}
-        </p>
-        <Button variant="solid" className="!px-3 !py-1.5 text-xs" onClick={onStartAdd}>
-          Add Internal Note
-        </Button>
-      </div>
-      {adding && (
-        <div className="mb-3 space-y-3 rounded-xl border border-warning-line bg-warning-soft p-4">
-          <FormGrid cols={2}>
-            <TextField
-              label="Date/Time"
-              required
-              type="datetime-local"
-              error={errors.dateTime}
-              value={draft.dateTime}
-              onValueChange={(v) => onDraft({ dateTime: v })}
-            />
-            <TextField
-              label="Created By"
-              required
-              error={errors.createdBy}
-              value={draft.createdBy}
-              placeholder="Created by"
-              onValueChange={(v) => onDraft({ createdBy: v })}
-            />
-          </FormGrid>
-          <TextAreaField
-            label="Note / Discussion"
-            required
-            error={errors.text}
-            hint={`${draft.text.length} / ${NOTE_DISCUSSION_MAX}`}
-            rows={4}
-            maxLength={NOTE_DISCUSSION_MAX}
-            value={draft.text}
-            onValueChange={(v) => onDraft({ text: v.slice(0, NOTE_DISCUSSION_MAX) })}
-            placeholder="Capture the internal discussion…"
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={onCancel}>Cancel</Button>
-            <Button variant="solid" onClick={onSave}>Save Note</Button>
-          </div>
-        </div>
-      )}
-      {notes.length === 0 && !adding ? (
-        <EmptyState
-          icon={EmptyIcons.notes}
-          title="No internal notes yet"
-          subtitle="Record date, author and discussion so the team has one internal thread."
-          action={{ label: "Add Internal Note", onClick: onStartAdd }}
-        />
-      ) : notes.length > 0 ? (
-        <ul className="overflow-hidden rounded-xl border border-line bg-surface" aria-label="Internal notes">
-          {notes.map((note) => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              expanded={openId === note.id}
-              onToggle={() => setOpenId((prev) => (prev === note.id ? null : note.id))}
-            />
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  )
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
-const TABS = [
+const ALL_TABS = [
   "Emails",
   "Internal Notes",
   "Timeline",
 ] as const
-type Tab = (typeof TABS)[number]
+type Tab = (typeof ALL_TABS)[number]
+/** Hidden for now; the tab's code stays so it can be switched back on by removing it here. */
+const HIDDEN_TABS: readonly Tab[] = ["Emails"]
+const TABS = ALL_TABS.filter((tab) => !HIDDEN_TABS.includes(tab))
+const DEFAULT_TAB: Tab = TABS[0] ?? "Timeline"
+
+/** No in-app entity / contact catalogue on server leads — cards show only what the lead carries. */
+const NO_ENTITIES: BusinessEntity[] = []
+const NO_CONTACTS: Contact[] = []
 
 export default function LeadDetail({
   leadId,
@@ -2716,11 +1975,24 @@ export default function LeadDetail({
   onViewContact,
   onViewOpportunity,
 }: LeadDetailProps) {
-  const { activeLeadStageNames, activeLeadStatusNames, activeLeadSourceNames } = useMasterData()
+  // Server lists only for the stage track / status / source.
+  const { values: fill } = useLeadFormFillValues()
+  const activeLeadStageNames = fill ? bySequence(fill.leadStages).map((x) => x.leadStageName) : []
+  const activeLeadSourceNames = fill ? fill.leadSources.map((x) => x.leadSourceName) : []
+  // Server lead (id SL-…): reload it in full from load-data whenever the page opens.
+  const serverLeadNo = leadNoFromId(leadId)
+  const [serverRefresh, setServerRefresh] = useState<"idle" | "loading" | "done" | "failed">(serverLeadNo ? "loading" : "idle")
+  useEffect(() => {
+    if (!serverLeadNo) return
+    let cancelled = false
+    setServerRefresh("loading")
+    refreshServerLead(serverLeadNo)
+      .then(() => { if (!cancelled) setServerRefresh("done") })
+      .catch(() => { if (!cancelled) setServerRefresh("failed") })
+    return () => { cancelled = true }
+  }, [serverLeadNo])
   const {
     leads,
-    entities: storeEntities,
-    contacts: storeContacts,
     activities: storeActivities,
     meetings: storeMeetings,
     notes: storeNotes,
@@ -2728,52 +2000,60 @@ export default function LeadDetail({
     documents: storeDocuments,
   } = useCrmSelector(
     (state) => ({
-      leads: state.leads,
-      entities: state.entities,
-      contacts: state.contacts,
-      activities: state.activities.filter((item) => item.leadId === leadId),
+      // Server leads only — in-app sample leads are not shown.
+      leads: state.leads.filter((item) => item.spectrum),
+      // Opportunity activities are shown on the opportunity, not its lead.
+      activities: state.activities.filter((item) => item.leadId === leadId && !item.opportunityId),
       meetings: state.meetings.filter((item) => item.leadId === leadId),
       notes: state.notes.filter((item) => item.relatedLeadId === leadId),
       emails: state.emails.filter((item) => item.leadId === leadId),
       documents: state.documents.filter((item) => item.relatedId === leadId),
     }),
     (left, right) =>
-      left.leads === right.leads &&
-      left.entities === right.entities &&
-      left.contacts === right.contacts &&
+      sameList(left.leads, right.leads) &&
       sameList(left.activities, right.activities) &&
       sameList(left.meetings, right.meetings) &&
       sameList(left.notes, right.notes) &&
       sameList(left.emails, right.emails) &&
       sameList(left.documents, right.documents),
   )
-  const { addActivity, addMeeting, addNote, addEmail, addDocument, convertLead, patchLead } = useCrmActions()
+  const { addActivity, addMeeting, addNote, addEmail, addDocument, convertLead, patchActivity, removeActivity, removeNote, patchNote } = useCrmActions()
+  const confirm = useConfirm()
   const { data: linkedOppPage } = useApiQuery(
     () => api.opportunities.list({ leadId, pageSize: 1 }),
     [leadId],
   )
   const linkedOpportunity = linkedOppPage?.items[0] ?? null
   const { user } = useAuth()
-  const createdByName = user?.name ?? "Priya Mehta"
+  const createdByName = user?.name ?? ""
   const ALL_STAGES = activeLeadStageNames as LeadStage[]
-  const ALL_STATUSES = activeLeadStatusNames as LeadStatus[]
 
   const leadData = leads.find((l) => l.id === leadId)
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [activeTab, setActiveTab] = useState<Tab>("Emails")
+  const [activeTab, setActiveTab] = useState<Tab>(DEFAULT_TAB)
   const [activityScope, setActivityScope] = useState<"open" | "all">("open")
   const [stage, setStage] = useState<LeadStage>(leadData?.leadStage ?? "New")
   const [status, setStatus] = useState<LeadStatus>(
     leadData?.leadStatus ?? "Open",
   )
+  // Converted leads (or ones that already have an opportunity) are read-only.
+  const converted = isLeadConverted({ leadStage: stage, leadStatus: status }) || Boolean(linkedOpportunity)
+  // Locked: converted, or at a completed stage (load-data `leadStage.isStagedCompleted`) — no edits to
+  // the lead, and no adding / editing / deleting its activities or notes.
+  const locked = converted || Boolean(leadData?.spectrum?.stageCompleted)
+  const lockedReason = converted
+    ? "Converted to an opportunity — this lead can no longer be changed"
+    : "The lead is at a completed stage — it can no longer be changed"
   const [showConvert, setShowConvert] = useState(false)
-  const [showStatusModal, setShowStatusModal] = useState(false)
   const [editingField, setEditingField] = useState<FieldKey | null>(null)
   const [showActivityForm, setShowActivityForm] = useState(false)
   const [showMeetingForm, setShowMeetingForm] = useState(false)
   const [followUpFrom, setFollowUpFrom] = useState<Activity | null>(null)
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
+  /** Note being edited (its id); null when the note form adds a new one. */
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [leadDocs, setLeadDocs] = useState<LocalDoc[]>([])
@@ -2794,7 +2074,7 @@ export default function LeadDetail({
   useEffect(() => {
     setLoading(true)
     setLoadError(false)
-    setActiveTab("Emails")
+    setActiveTab(DEFAULT_TAB)
     setActivityScope("open")
     setAddingNote(false)
     setNoteDraft(EMPTY_NOTE_DRAFT)
@@ -2805,10 +2085,13 @@ export default function LeadDetail({
     const found = leads.find((l) => l.id === leadId)
     const timer = window.setTimeout(() => {
       if (!found) {
+        // A server lead opened by link may not be in the store until load-data finishes.
+        if (serverRefresh === "loading") return
         setLoadError(true)
         setLoading(false)
         return
       }
+      setLoadError(false)
       setStage(found.leadStage)
       setStatus(found.leadStatus)
       setActivities(storeActivities.filter((a) => a.leadId === leadId))
@@ -2819,7 +2102,7 @@ export default function LeadDetail({
           .map(toLocalDoc),
       )
       setNotes([
-        ...seedNotes(found),
+
         ...storeNotes
           .filter((n) => n.relatedLeadId === leadId)
           .map((n) => ({
@@ -2832,14 +2115,13 @@ export default function LeadDetail({
       ])
       setEmails([
         ...storeEmails.map(toLeadEmail),
-        ...seedEmails(found),
       ])
       setLoading(false)
     }, 420)
     return () => window.clearTimeout(timer)
     // Reload the lead record when the route id changes; extras merge below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leadId, leads])
+  }, [leadId, leads, serverRefresh])
 
   useEffect(() => {
     setActivities((prev) => {
@@ -2885,10 +2167,13 @@ export default function LeadDetail({
   )
   const visibleActivities = activityScope === "all" ? activities : openActivities
 
+  const [timelineOrder, setTimelineOrder] = useState<TimelineOrder>("received")
+  // Server leads read the paged timeline API (PagedTimeline below); others build theirs in the app.
   const timeline = useMemo(() => {
     if (!leadData) return []
-    return buildProgressTimeline(leadData, activities, notes, emails, meetings, linkedOpportunity)
-  }, [leadData, activities, notes, emails, meetings, linkedOpportunity])
+    const built = buildProgressTimeline(leadData, activities, notes, emails, meetings, linkedOpportunity)
+    return timelineOrder === "newest" ? [...built].reverse() : built
+  }, [leadData, activities, notes, emails, meetings, linkedOpportunity, timelineOrder])
 
   const recentEvents = useMemo<LeadEvent[]>(
     () =>
@@ -2904,7 +2189,35 @@ export default function LeadDetail({
     [timeline],
   )
 
-  function saveNote() {
+  /** Delete an activity (server leads → delete-activity-detail); the list updates once it is gone. */
+  async function deleteActivity(item: Activity) {
+    const ok = await confirm({
+      title: "Delete Activity",
+      message: `Delete "${item.subject}"? This cannot be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    })
+    if (!ok) return
+    if (!(await removeActivity(item.id))) return
+    setActivities((prev) => prev.filter((a) => a.id !== item.id))
+    onToast?.("info", "Activity Deleted", `"${item.subject}" has been deleted.`)
+  }
+
+  /** Delete a note (server leads → delete-notes-detail). */
+  async function deleteNote(note: LeadNote) {
+    const ok = await confirm({
+      title: "Delete Note",
+      message: `Delete this note by ${note.by || "unknown"}? This cannot be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    })
+    if (!ok) return
+    if (!(await removeNote(note.id))) return
+    setNotes((prev) => prev.filter((n) => n.id !== note.id))
+    onToast?.("info", "Note Deleted", "The internal note has been deleted.")
+  }
+
+  async function saveNote() {
     if (!leadData) return
     const dateTime = noteDraft.dateTime.trim()
     const by = noteDraft.createdBy.trim()
@@ -2920,7 +2233,19 @@ export default function LeadDetail({
       setNoteErrors(errs)
       return
     }
+    if (!(await confirm(saveConfirm("Note", Boolean(editingNoteId))))) return
     const { date, time } = splitDateTime(dateTime)
+    if (editingNoteId) {
+      // Server notes → save-notes-detail with their number (an update), then the lead reloads.
+      patchNote(editingNoteId, { text, by, date: `${date} ${time}`.trim() })
+      setNotes((prev) => prev.map((n) => (n.id === editingNoteId ? { ...n, text, by, date, time } : n)))
+      setNoteDraft(EMPTY_NOTE_DRAFT)
+      setNoteErrors({})
+      setAddingNote(false)
+      setEditingNoteId(null)
+      onToast?.("success", "Internal Note Updated", "The discussion has been updated.")
+      return
+    }
     const created = {
       id: `N-${Date.now()}`,
       title: "Internal note",
@@ -2947,8 +2272,9 @@ export default function LeadDetail({
     onToast?.("success", "Internal Note Added", "The discussion has been saved on this lead.")
   }
 
-  function saveEmail() {
+  async function saveEmail() {
     if (!leadData || !emailDraft.subject.trim() || !emailDraft.to.trim()) return
+    if (!(await confirm(saveConfirm("Email")))) return
     const stamp = nowStamp()
     const created: CrmEmail = {
       id: `EM-${Date.now()}`,
@@ -2957,7 +2283,7 @@ export default function LeadDetail({
       subject: emailDraft.subject.trim(),
       body: emailDraft.body.trim(),
       to: emailDraft.to.trim(),
-      from: user?.email ?? "priya.mehta@forceintellect.com",
+      from: user?.email ?? "",
       date: stamp.date,
       time: stamp.time,
       by: createdByName,
@@ -3049,6 +2375,7 @@ export default function LeadDetail({
                         onEdit={setEditingField}
                         onCancel={() => setEditingField(null)}
                         onToast={onToast}
+                        readOnly={locked}
                       />
                     ) : (
                       <h1 className="font-display text-xl font-bold text-ink">Loading lead…</h1>
@@ -3056,18 +2383,17 @@ export default function LeadDetail({
                 </div>
               </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
-                  <Button variant="secondary" onClick={onEdit}>
-                    <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Edit
-                  </Button>
-                  {leadData &&
-                  status !== "Dropped/Lost" &&
-                  status !== "Converted" &&
-                  stage !== "Converted to Opportunity" ? (
+                  <IconTooltip label={locked ? lockedReason : "Edit lead"}>
+                    <Button variant="secondary" onClick={onEdit} disabled={locked}>
+                      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit
+                    </Button>
+                  </IconTooltip>
+                  {leadData && status !== "Dropped/Lost" && !locked ? (
                     <Button variant="solid" onClick={() => setShowConvert(true)}>
-                      + Create Opportunity
+                       Convert to Opportunity
                     </Button>
                   ) : null}
                     </div>
@@ -3084,7 +2410,6 @@ export default function LeadDetail({
                   value={status}
                   hint="Whether work on this lead is active"
                   tone={leadStatusClass(status)}
-                  onEdit={() => setShowStatusModal(true)}
                 />
                 <HeaderFact
                   label="Owner"
@@ -3092,7 +2417,7 @@ export default function LeadDetail({
                   hint="Who owns follow-up on this lead"
                   tone="bg-surface text-ink border-line"
                   avatar
-                  onEdit={() => setEditingField("owner")}
+                  onEdit={locked ? undefined : () => setEditingField("owner")}
                 />
               </div>
               {ALL_STAGES.length > 0 ? (
@@ -3107,13 +2432,14 @@ export default function LeadDetail({
               <LeadSummaryEdit
                 key={leadData.id}
                 lead={leadData}
-                entities={storeEntities}
-                contacts={storeContacts}
+                entities={NO_ENTITIES}
+                contacts={NO_CONTACTS}
                 sources={activeLeadSourceNames}
                 editing={editingField}
                 onEdit={setEditingField}
                 onCancel={() => setEditingField(null)}
                 onToast={onToast}
+                readOnly={locked}
               />
             ) : null}
             </Card>
@@ -3129,6 +2455,9 @@ export default function LeadDetail({
                     { value: "all", label: "All Activities", count: activities.length },
                   ]}
                 />
+                {locked ? (
+                  <span className="text-[11px] font-semibold text-ink-faint" title={lockedReason}></span>
+                ) : (
                 <Button
                   variant="solid"
                   className="inline-flex !min-h-8 items-center gap-1.5 !px-3 !py-1.5 text-xs"
@@ -3142,14 +2471,16 @@ export default function LeadDetail({
                   </svg>
                   Add Activity
                 </Button>
+                )}
               </div>
               <div className="p-4">
                 {loading ? (
                   <SkeletonOverviewCards count={2} />
                 ) : (
                   <ActivitiesTab
+                    readOnly={locked}
                     activities={visibleActivities}
-                    contacts={storeContacts}
+                    contacts={NO_CONTACTS}
                     scope={activityScope}
                     onAdd={() => {
                       setFollowUpFrom(null)
@@ -3160,6 +2491,14 @@ export default function LeadDetail({
                       setShowActivityForm(true)
                     }}
                     onMarkComplete={(item) => setCompletingActivity(item)}
+                    onDelete={(item) => void deleteActivity(item)}
+                    onEdit={(item) => {
+                      if (!storeActivities.some((a) => a.id === item.id)) {
+                        onToast?.("info", "Still saving", "This activity is still being saved — try again in a moment.")
+                        return
+                      }
+                      setEditingActivity(item)
+                    }}
                   />
                     )}
                   </div>
@@ -3204,8 +2543,22 @@ export default function LeadDetail({
         {/* ── Tab content ───────────────────────────────────────────────────── */}
         <div className="page-gutter py-4">
           {loading && <SkeletonOverviewCards count={6} />}
-          {!loading && activeTab === "Timeline" && (
-            <TimelineTab timeline={timeline} contacts={storeContacts} />
+          {!loading && activeTab === "Timeline" && leadData?.spectrum ? (
+            // GET /api/crm/leads/timeline/{leadNo}: 20 at a time, more on scroll; reloads after changes.
+            <PagedTimeline
+              record="lead"
+              recordNo={leadData.spectrum.leadNo}
+              refreshKey={`${activities.length}:${notes.length}:${stage}:${status}:${leadData.audit?.modifiedAt ?? ""}`}
+              emptySubtitle="Timeline entries will appear as this lead progresses through stages."
+            />
+          ) : null}
+          {!loading && activeTab === "Timeline" && !leadData?.spectrum && (
+            <TimelineTab
+              timeline={timeline}
+              contacts={NO_CONTACTS}
+              order={timelineOrder}
+              onOrderChange={setTimelineOrder}
+            />
           )}
           {!loading && activeTab === "Emails" && (
             <EmailsTab
@@ -3226,6 +2579,7 @@ export default function LeadDetail({
           )}
           {!loading && activeTab === "Internal Notes" && (
             <InternalNotesTab
+              readOnly={locked}
               notes={notes}
               adding={addingNote}
               draft={noteDraft}
@@ -3243,14 +2597,29 @@ export default function LeadDetail({
               onStartAdd={() => {
                 setNoteDraft(EMPTY_NOTE_DRAFT)
                 setNoteErrors({})
+                setEditingNoteId(null)
                 setAddingNote(true)
               }}
               onCancel={() => {
                 setAddingNote(false)
                 setNoteDraft(EMPTY_NOTE_DRAFT)
                 setNoteErrors({})
+                setEditingNoteId(null)
               }}
               onSave={saveNote}
+              onDelete={(note) => void deleteNote(note)}
+              onEdit={(note) => {
+                const saved = storeNotes.find((n) => n.id === note.id)
+                if (!saved) {
+                  onToast?.("info", "Still saving", "This note is still being saved — try again in a moment.")
+                  return
+                }
+                setNoteDraft({ dateTime: noteDateToInput(saved.date), createdBy: saved.by, text: saved.text })
+                setNoteErrors({})
+                setEditingNoteId(saved.id)
+                setAddingNote(true)
+              }}
+              editing={Boolean(editingNoteId)}
             />
           )}
         </div>
@@ -3278,6 +2647,19 @@ export default function LeadDetail({
               "Activity Logged",
               `"${a.subject}" has been added.`,
             )
+          }}
+        />
+      )}
+      {editingActivity && leadData && (
+        <ActivityDrawer
+          preselectedLead={{ id: leadData.id, name: leadData.companyName, contact: leadData.contactPerson }}
+          editing={editingActivity}
+          onClose={() => setEditingActivity(null)}
+          onSave={(a) => {
+            // Server leads → save-activity-detail with its number (an update), then the lead reloads.
+            patchActivity(a.id, a)
+            setActivities((prev) => prev.map((item) => (item.id === a.id ? a : item)))
+            onToast?.("success", "Activity Updated", `"${a.subject}" has been updated.`)
           }}
         />
       )}
@@ -3322,41 +2704,20 @@ export default function LeadDetail({
           }}
         />
       )}
-      {showStatusModal && (
-        <ChangeModal
-          title="Change Lead Status"
-          options={ALL_STATUSES}
-          current={status}
-          onSelect={(v) => {
-            setStatus(v as LeadStatus)
-            patchLead(leadId, { leadStatus: v as LeadStatus })
-            onToast?.("info", "Status Updated", `Lead status set to "${v}".`)
-          }}
-          onClose={() => setShowStatusModal(false)}
-          colorFn={leadStatusClass}
-        />
-      )}
       {completingActivity && (
         <CompleteActivityModal
           activity={completingActivity}
           onConfirm={(outcome) => {
-            setActivities((prev) =>
-              prev.map((a) =>
-              a.id === completingActivity.id
-                  ? {
-                      ...a,
-                      status: "Completed",
-                      outcome,
-                      completeDate: new Date().toISOString().split("T")[0],
-                      completeTime: new Date().toLocaleTimeString("en-IN", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        hour12: false,
-                      }),
-                    }
-                  : a,
-              ),
-            )
+            const completion = {
+              status: "Completed" as const,
+              outcome,
+              completeDate: toIsoDate(),
+              completeTime: toTimeHHMM(),
+            }
+            // Saved through the store: server leads → POST /api/crm/leads/save-activity-detail (status Closed,
+            // outcome), then the lead reloads. The local update shows it straight away.
+            patchActivity(completingActivity.id, completion)
+            setActivities((prev) => prev.map((a) => (a.id === completingActivity.id ? { ...a, ...completion } : a)))
             onToast?.(
               "success",
               "Activity Completed",
@@ -3373,7 +2734,8 @@ export default function LeadDetail({
       {renamingDoc && (
         <RenameDocModal
           doc={renamingDoc}
-          onConfirm={(newName) => {
+          onConfirm={async (newName) => {
+            if (!(await confirm({ title: "Rename Document", message: `Rename this document to "${newName}"?`, confirmLabel: "Rename" }))) return
             setLeadDocs((prev) =>
               prev.map((d) =>
                 d.id === renamingDoc.id ? { ...d, name: newName } : d,
@@ -3434,11 +2796,7 @@ export default function LeadDetail({
             name: f.name,
               type: typeLabel,
               size: formatFileSize(f.size),
-              date: new Date().toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              }),
+              date: toIsoDate(),
               uploader: "You",
               previewUrl,
             }

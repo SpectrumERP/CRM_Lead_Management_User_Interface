@@ -71,24 +71,50 @@ export function assertIsoDate(value: string, label = 'Date'): string {
   return next
 }
 
+/**
+ * Master values loaded from the Spectrum fill-values API (e.g. "Proposal Sent"), accepted alongside the
+ * built-in lists so leads using them can be stored. Anything else is still rejected.
+ */
+const serverMasterValues = {
+  leadStage: new Set<string>(),
+  leadStatus: new Set<string>(),
+  leadSource: new Set<string>(),
+  leadPriority: new Set<string>(),
+}
+
+export type ServerMasterKind = keyof typeof serverMasterValues
+
+export function allowServerMasterValues(kind: ServerMasterKind, names: readonly string[]) {
+  for (const name of names) if (name.trim()) serverMasterValues[kind].add(name)
+}
+
+/** Test-only. */
+export function __resetServerMasterValues() {
+  for (const set of Object.values(serverMasterValues)) set.clear()
+}
+
+function isAllowed(value: string, builtIn: readonly string[], kind: ServerMasterKind) {
+  return isOneOf(value, builtIn) || serverMasterValues[kind].has(value)
+}
+
 export function assertLeadStage(value: string): LeadStage {
-  if (!isOneOf(value, LEAD_STAGES)) validation('Lead stage is invalid.')
-  return value
+  if (!isAllowed(value, LEAD_STAGES, 'leadStage')) validation('Lead stage is invalid.')
+  return value as LeadStage
 }
 
 export function assertLeadStatus(value: string): LeadStatus {
-  if (!isOneOf(value, LEAD_STATUSES)) validation('Lead status is invalid.')
-  return value
+  if (!isAllowed(value, LEAD_STATUSES, 'leadStatus')) validation('Lead status is invalid.')
+  return value as LeadStatus
 }
 
 export function assertLeadSource(value: string): LeadSource {
-  if (!isOneOf(value, LEAD_SOURCES)) validation('Lead source is invalid.')
-  return value
+  if (!isAllowed(value, LEAD_SOURCES, 'leadSource')) validation('Lead source is invalid.')
+  return value as LeadSource
 }
 
 export function assertLeadPriority(value: string): LeadPriority {
-  if (!isOneOf(value, LEAD_PRIORITIES)) validation('Lead priority is invalid.')
-  return value
+  if (!isAllowed(value, LEAD_PRIORITIES, 'leadPriority')) validation('Lead priority is invalid.')
+  return value as LeadPriority
 }
 
 export function assertDealStage(value: string): DealStage {
@@ -149,6 +175,7 @@ export const OPPORTUNITY_PATCH_KEYS = [
   'contactPerson',
   'email',
   'phone',
+  'contacts',
   'productsRequired',
   'dealValue',
   'valueCurrency',
@@ -237,7 +264,7 @@ export function validateConvertInput(input: {
 /** Validate + normalize an opportunity write payload (merged patch). */
 export function validateOpportunityWrite(item: Opportunity) {
   assertRecordId(item.id, 'Opportunity')
-  if (item.leadId?.trim()) assertRecordId(item.leadId, 'Reference lead')
+  // if (item.leadId?.trim()) assertRecordId(item.leadId, 'Reference lead')
   if (!sanitizeText(item.name, 200)) validation('Opportunity name is required.')
   if (!sanitizeText(item.companyName, 200)) validation('Company name is required.')
   if (!sanitizeText(item.contactPerson, 200)) validation('Contact person is required.')

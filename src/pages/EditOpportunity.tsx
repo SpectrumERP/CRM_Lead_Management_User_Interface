@@ -1,19 +1,29 @@
-import { useState, type ReactNode } from 'react'
-import { SALESPERSONS } from '../data/activities'
-import { LEAD_CURRENCIES, type LeadCurrency } from '../data/leads'
-import { currencyAmountPrefix } from '../data/currencies'
-import {
-  DEAL_STAGES,
-  OPPORTUNITY_STATUSES,
-  dealWeight,
-  formatOpportunityStage,
-  weightedDealValue,
-  type DealStage,
-  type Opportunity,
-  type OpportunityStatus,
-} from '../data/opportunities'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { DealStage, Opportunity, OpportunityStatus } from '../data/opportunities'
 import { useCrmActions } from '../contexts/CrmStoreContext'
-import { Button, Card, FormGrid, SelectField, TextField, TextInput } from '../ui'
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
+import { useOpportunityFillValues } from '../components/useOpportunityFillValues'
+import { spectrumEntityId } from '../components/useBusinessEntityOptions'
+import EntityContactsFields, {
+  contactDetailNos,
+  fromContactEntries,
+  toContactEntries,
+  type EntityContactsValue,
+} from '../components/EntityContactsFields'
+import { stageWeight } from '../api/opportunityFormFillValues'
+import { OptionLookupField } from '../components/OptionLookupField'
+import CurrencyAmountField from '../components/CurrencyAmountField'
+import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
+import { bySequence, guessIsoCurrency } from '../api/fillValues'
+import { Button, Card, FormGrid, TextField } from '../ui'
+import { UserSelectField } from '../components/UserSelect'
+import ProductPicker, { useProductCatalog } from '../components/ProductPicker'
+import { productsFromText, productsToText, type Product } from '../data/products'
+import { FIELD_LIMITS } from '../constants/fieldLimits'
+import AttachmentsField from '../components/AttachmentsField'
+import { useSpectrumCompany } from '../auth/useSpectrumCompany'
+import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
+import { formatDate } from '../utils/dateFormat'
 
 interface EditOpportunityProps {
   existing: Opportunity
@@ -79,30 +89,66 @@ const SECTION_ICONS = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   ),
+  documents: (
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+    </svg>
+  ),
 } as const
 
 export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpportunityProps) {
   const { patchOpportunity } = useCrmActions()
+  const confirm = useConfirm()
   const [name, setName] = useState(existing.name)
-  const [contactPerson, setContactPerson] = useState(existing.contactPerson)
-  const [email, setEmail] = useState(existing.email)
-  const [phone, setPhone] = useState(existing.phone)
-  const [productsRequired, setProductsRequired] = useState(existing.productsRequired)
+  // Business entity (fixed after creation) + primary / secondary contacts, shared with the lead form.
+  const [entityContacts, setEntityContacts] = useState<EntityContactsValue>(() => ({
+    entity: {
+      id: existing.spectrum?.businessEntityNo ? spectrumEntityId(existing.spectrum.businessEntityNo) : `name:${existing.companyName}`,
+      name: existing.companyName,
+      type: '',
+      city: '',
+      source: existing.spectrum ? 'spectrum' : 'local',
+      businessEntityNo: existing.spectrum?.businessEntityNo,
+    },
+    ...fromContactEntries(
+      existing.contacts?.length
+        ? existing.contacts
+        : [{ name: existing.contactPerson, email: existing.email, phones: existing.phone ? [existing.phone] : [], primary: true }],
+    ),
+  }))
+  const contactsTouched = useRef(false)
+  const productCatalog = useProductCatalog()
+  const [selectedProducts, setSelectedProducts] = useState<Product[]>(() =>
+    productsFromText(existing.productsRequired, productCatalog.products),
+  )
+  const productsTouched = useRef(false)
+  // Server products arrive after the first render — re-match the saved text until the user edits it.
+  useEffect(() => {
+    if (!productsTouched.current) setSelectedProducts(productsFromText(existing.productsRequired, productCatalog.products))
+  }, [existing.productsRequired, productCatalog.products])
   const [dealValue, setDealValue] = useState(String(existing.dealValue))
-  const [valueCurrency, setValueCurrency] = useState<LeadCurrency>(existing.valueCurrency)
   const [dealStage, setDealStage] = useState<DealStage>(existing.dealStage)
   const [status, setStatus] = useState<OpportunityStatus>(existing.status ?? 'Open')
   const [closingDate, setClosingDate] = useState(existing.closingDate)
   const [owner, setOwner] = useState(existing.owner)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  // Uploaded to the document store as they are picked; the save links them by docNo.
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [uploadsBusy, setUploadsBusy] = useState(false)
+  const spectrumCompany = useSpectrumCompany()
   const [submitted, setSubmitted] = useState(false)
+  // Server opportunity → server lists; contacts are read-only (they come from the business entity).
+  const serverRef = existing.spectrum
+  const { values: oppFill } = useOpportunityFillValues()
+  const serverMode = Boolean(serverRef && oppFill)
+  const [currencyNo, setCurrencyNo] = useState<number | undefined>(serverRef?.currencyNo)
+  const [ownerLoginNo, setOwnerLoginNo] = useState<number | undefined>(serverRef?.ownerLoginNo)
 
   function validate() {
     const next: Record<string, string> = {}
     if (!name.trim()) next.name = 'Opportunity name is required'
-    if (!contactPerson.trim()) next.contactPerson = 'Contact person is required'
-    if (!email.trim()) next.email = 'Email is required'
+    if (!entityContacts.primary?.name.trim()) next.contactPerson = 'Select the primary contact person'
     const value = Number(dealValue)
     if (!Number.isFinite(value) || value < 0) next.dealValue = 'Enter a valid opportunity value'
     if (!closingDate) next.closingDate = 'Expected closure date is required'
@@ -112,21 +158,44 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
     return Object.keys(next).length === 0
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (saving || !validate()) return
+    // Only server opportunities can be edited (no in-app copies).
+    if (!serverMode || !serverRef) {
+      setErrors({ form: 'Sign in with your Spectrum account to edit this opportunity.' })
+      return
+    }
+    if (uploadsBusy) {
+      setErrors({ form: 'Please wait for all attachments to finish uploading before saving the opportunity.' })
+      return
+    }
+    if (!(await confirm(saveConfirm('Opportunity', true)))) return
     setSaving(true)
+    const pickedCurrency = oppFill?.currencies.find((c) => c.currencyNo === currencyNo)
     patchOpportunity(existing.id, {
       name: name.trim(),
-      contactPerson: contactPerson.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      productsRequired: productsRequired.trim(),
+      contactPerson: entityContacts.primary?.name.trim() ?? '',
+      email: entityContacts.primary?.email.trim() ?? '',
+      phone: entityContacts.primary?.phone.trim() ?? '',
+      contacts: toContactEntries(entityContacts),
+      productsRequired: productsToText(selectedProducts),
       dealValue: Number(dealValue),
-      valueCurrency,
+      valueCurrency: pickedCurrency
+        ? guessIsoCurrency({ currencyName: pickedCurrency.currencyName, symbol: pickedCurrency.symbol ?? '' })
+        : existing.valueCurrency,
       dealStage,
       status,
       closingDate,
       owner: owner.trim(),
+      // Numbers picked from the server lists. Contacts only when changed here, so an opportunity whose
+      // detail never loaded keeps its server contacts.
+      spectrum: {
+        ...serverRef,
+        currencyNo,
+        ownerLoginNo,
+        ...(contactsTouched.current ? { contactPersonDetailNos: contactDetailNos(entityContacts) } : {}),
+        attachmentNos: attachments.map((a) => a.id),
+      },
     })
     setTimeout(() => {
       setSubmitted(true)
@@ -152,7 +221,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
   }
 
   return (
-    <div className="bg-canvas">
+    <div className="bg-canvas form-labels-as-written">
       <div className="page-gutter py-4 pb-4">
         <div className="mb-5">
           <button
@@ -174,6 +243,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
         </div>
 
         <div className="space-y-5">
+          <SpectrumRequiredNotice what="Opportunities and their lists" />
           <Section title="System fields" icon={SECTION_ICONS.system}>
             <FormGrid>
               <TextField label="Opportunity No" value={existing.id} disabled />
@@ -182,7 +252,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
                 value={existing.leadId?.trim() || '—'}
                 disabled
               />
-              <TextField label="Creation Date" value={existing.createdAt} disabled />
+              <TextField label="Creation Date" value={formatDate(existing.createdAt)} disabled />
               <TextField label="Created By" value={existing.createdBy || '—'} disabled />
             </FormGrid>
           </Section>
@@ -192,88 +262,82 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
               <TextField
                 fieldClassName="lg:col-span-2"
                 label="Opportunity Name"
+                maxLength={FIELD_LIMITS.opportunityName}
                 required
                 error={errors.name}
                 value={name}
                 onValueChange={setName}
-                placeholder="Deal / opportunity name"
+                placeholder="Enter opportunity name"
               />
-              <TextField label="Business Entity" value={existing.companyName} disabled />
-              <TextField
-                fieldClassName="lg:col-span-2"
-                label="Products Required"
-                value={productsRequired}
-                onValueChange={setProductsRequired}
-                placeholder="Products or solutions in this deal"
-              />
+              <div className="lg:col-span-2">
+                <ProductPicker
+                  label="Products Required"
+                  catalog={productCatalog.products}
+                  showUnit={!productCatalog.remote}
+                  selected={selectedProducts}
+                  onChange={(next) => {
+                    productsTouched.current = true
+                    setSelectedProducts(next)
+                  }}
+                />
+              </div>
             </FormGrid>
+          </Section>
+
+          <Section title="Business Entity & Contacts" icon={SECTION_ICONS.contact}>
+            <EntityContactsFields
+              value={entityContacts}
+              entityLocked
+              onChange={(next) => {
+                contactsTouched.current = true
+                setEntityContacts(next)
+                setErrors(({ contactPerson: _cleared, ...rest }) => rest)
+              }}
+              errors={{ contact: errors.contactPerson }}
+            />
           </Section>
 
           <Section title="Opportunity Details" icon={SECTION_ICONS.deal}>
             <FormGrid>
-              <SelectField
+              <OptionLookupField
                 label="Opportunity Stage"
                 required
+                placeholder="Select stage"
+                detailHeader="Win %"
                 value={dealStage}
                 onValueChange={(value) => setDealStage(value as DealStage)}
-                options={DEAL_STAGES.map((stage) => ({
-                  value: stage,
-                  label: formatOpportunityStage(stage, dealWeight(stage)),
-                }))}
+                options={bySequence(oppFill?.opportunityStages ?? []).map((stage) => ({ value: stage.opportunityStageName, label: stage.opportunityStageName, code: stage.code, detail: `${stageWeight(stage)}%` }))}
               />
-              <SelectField
+              <OptionLookupField
                 label="Opportunity Status"
                 required
                 error={errors.status}
+                placeholder="Select status"
                 value={status}
                 onValueChange={(value) => setStatus(value as OpportunityStatus)}
-                options={OPPORTUNITY_STATUSES}
+                options={(oppFill?.opportunityStatuses ?? []).map((st) => ({ value: st.opportunityStatusName, label: st.opportunityStatusName, code: st.code }))}
               />
-              <SelectField
+              <UserSelectField
                 label="Opportunity Owner"
                 required
                 error={errors.owner}
-                options={SALESPERSONS}
                 placeholder="Select owner"
                 value={owner}
-                onValueChange={setOwner}
+                onValueChange={(value, loginNo) => {
+                  setOwner(value)
+                  setOwnerLoginNo(loginNo)
+                }}
               />
-              <div role="group" aria-label="Opportunity Value">
-                <p className="form-label">
-                  Opportunity Value <span className="form-required">*</span>
-                </p>
-                <div className={`form-input-combo${errors.dealValue ? ' error' : ''}`}>
-                  <select
-                    className="form-input-combo-currency"
-                    aria-label="Currency"
-                    value={valueCurrency}
-                    onChange={(event) => setValueCurrency(event.target.value as LeadCurrency)}
-                  >
-                    {LEAD_CURRENCIES.map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="form-input-combo-divider" aria-hidden />
-                  <div className="form-input-combo-amount">
-                    <TextInput
-                      aria-label="Opportunity value amount"
-                      type="number"
-                      min={0}
-                      leading={currencyAmountPrefix(valueCurrency)}
-                      value={dealValue}
-                      onValueChange={setDealValue}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                {errors.dealValue ? (
-                  <p className="mt-1 text-xs text-accent" role="alert">
-                    {errors.dealValue}
-                  </p>
-                ) : null}
-              </div>
+              <CurrencyAmountField
+                label="Opportunity Value"
+                required
+                error={errors.dealValue}
+                amount={dealValue}
+                onAmountChange={setDealValue}
+                currencies={oppFill?.currencies ?? []}
+                currencyNo={currencyNo}
+                onCurrencyNoChange={setCurrencyNo}
+              />
               <TextField
                 label="Expected Closure Date"
                 type="date"
@@ -284,39 +348,31 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
               />
               <TextField
                 label="Weighted Value (auto)"
+                type="number"
                 value={String(
-                  weightedDealValue(Number(dealValue) || 0, dealStage),
+                  Math.round(((Number(dealValue) || 0) * stageWeight(oppFill?.opportunityStages.find((st) => st.opportunityStageName === dealStage))) / 100),
                 )}
                 disabled
               />
             </FormGrid>
           </Section>
 
-          <Section title="Primary Contact" icon={SECTION_ICONS.contact}>
-            <FormGrid>
-              <TextField
-                label="Contact Person"
-                required
-                error={errors.contactPerson}
-                value={contactPerson}
-                onValueChange={setContactPerson}
-              />
-              <TextField
-                label="Email"
-                type="email"
-                required
-                error={errors.email}
-                value={email}
-                onValueChange={setEmail}
-              />
-              <TextField label="Phone" value={phone} onValueChange={setPhone} />
-            </FormGrid>
+          <Section title="Documents / Attachments" icon={SECTION_ICONS.documents}>
+            <AttachmentsField
+              noun="opportunity"
+              formNo={ATTACHMENT_FORM_NO.opportunity}
+              companyNo={spectrumCompany.headOfficeNo}
+              value={attachments}
+              onChange={setAttachments}
+              transactionId={serverRef?.opportunityNo}
+              onBusyChange={setUploadsBusy}
+            />
           </Section>
 
           {Object.keys(errors).length > 0 && (
             <div className="flex items-start gap-3 rounded-xl border border-accent bg-accent-soft px-4 py-3" role="alert">
-              <p className="text-xs font-bold text-accent">Please fix the following before saving:</p>
-              <ul className="space-y-0.5">
+              <p className="text-xs font-bold w-full text-accent">Please fix the following before saving:</p>
+              <ul className="space-y-0.5 w-full">
                 {Object.values(errors).map((item) => (
                   <li key={item} className="text-xs text-accent">
                     • {item}
@@ -330,7 +386,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
             <Button variant="secondary" onClick={onBack} disabled={saving}>
               Cancel
             </Button>
-            <Button variant="solid" onClick={handleSave} disabled={saving}>
+            <Button variant="solid" onClick={handleSave} disabled={saving || !serverMode}>
               {saving ? 'Saving…' : 'Save Changes'}
             </Button>
           </div>

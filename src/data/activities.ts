@@ -1,3 +1,5 @@
+import { formatDateParts } from '../utils/dateFormat';
+
 export type ActivityType =
   | 'Task'
   | 'Follow-up'
@@ -11,7 +13,8 @@ export type ActivityType =
   | 'Document Submission'
   | 'Other';
 
-export type ActivityStatus = 'Pending' | 'Completed' | 'Cancelled';
+/** Pending = open; Closed = closed without completing (with a closure date); Completed = done (with a remark). */
+export type ActivityStatus = 'Pending' | 'Closed' | 'Completed' | 'Cancelled';
 
 export type ReminderOption =
   | 'None'
@@ -26,6 +29,8 @@ export interface Activity {
   type: ActivityType;
   subject: string;
   leadId: string;
+  /** Set when the activity belongs to an opportunity (server opportunity activities). */
+  opportunityId?: string;
   leadName: string;
   contactPerson: string;
   assignedTo: string;
@@ -34,7 +39,10 @@ export interface Activity {
   reminder: ReminderOption;
   notes: string;
   status: ActivityStatus;
+  /** Completion remark (Mark Complete) — the server's `completionRemark`. */
   outcome: string;
+  /** `YYYY-MM-DD` — set when the activity is Closed (the server's `closureDate`). */
+  closureDate?: string;
   completeDate: string;
   completeTime: string;
   hasAttachment: boolean;
@@ -56,17 +64,35 @@ export const ACTIVITY_TYPES: ActivityType[] = [
   'Other',
 ];
 
-export const ACTIVITY_STATUSES: ActivityStatus[] = ['Pending', 'Completed', 'Cancelled'];
+export const ACTIVITY_STATUSES: ActivityStatus[] = ['Pending', 'Closed', 'Completed', 'Cancelled'];
 
 export const ACTIVITY_FORM_STATUSES = ['Open', 'Closed'] as const
 export type ActivityFormStatus = (typeof ACTIVITY_FORM_STATUSES)[number]
 
 export function activityFormStatus(status: ActivityStatus): ActivityFormStatus {
-  return status === 'Completed' ? 'Closed' : 'Open'
+  return status === 'Closed' ? 'Closed' : 'Open'
 }
 
+/** Form Open / Closed → stored status. Completed is set only by Mark Complete (with its remark). */
 export function toStoredActivityStatus(status: ActivityFormStatus): ActivityStatus {
-  return status === 'Closed' ? 'Completed' : 'Pending'
+  return status === 'Closed' ? 'Closed' : 'Pending'
+}
+
+/** Which server activity status an app status is saved as. */
+export type ServerActivityStatusKind = 'open' | 'closed' | 'completed'
+
+export function serverActivityStatusKind(status: ActivityStatus): ServerActivityStatusKind {
+  if (status === 'Completed') return 'completed'
+  if (status === 'Closed' || status === 'Cancelled') return 'closed'
+  return 'open'
+}
+
+/** Server status name → app status ("Open" → Pending, "Closed" → Closed, "Completed" → Completed). */
+export function activityStatusFromServer(name?: string | null): ActivityStatus {
+  const n = (name ?? '').trim().toLowerCase()
+  if (/^(completed?|done)$/.test(n)) return 'Completed'
+  if (/^(closed|cancel+ed)$/.test(n)) return 'Closed'
+  return 'Pending'
 }
 
 export const REMINDER_OPTIONS: ReminderOption[] = [
@@ -350,9 +376,7 @@ export function activityStatusMeta(s: string) {
   return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' }; // Pending / Open
 }
 
+/** An activity's date and optional time — see utils/dateFormat. */
 export function formatDateTime(date: string, time: string): string {
-  if (!date) return '—';
-  const d = new Date(`${date}T${time || '00:00'}`);
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
-    (time ? ` · ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}` : '');
+  return formatDateParts(date, time);
 }

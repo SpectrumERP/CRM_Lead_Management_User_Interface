@@ -1,13 +1,19 @@
-import { useState } from 'react'
-import { Button, FormGrid, SearchSelectField, TextField } from '../ui'
+import { useEffect, useState } from 'react'
+import { Button, FormGrid, TextField } from '../ui'
 import { type Lead, type LeadCurrency } from '../data/leads'
-import { MAIN_CURRENCIES, currencyAmountPrefix, currencyLabel, findCurrency, matchesCurrency } from '../data/currencies'
 import { formatConversionStamp } from '../data/opportunities'
+import { guessIsoCurrency } from '../api/fillValues'
+import CurrencyAmountField from './CurrencyAmountField'
 import FormDrawer from './FormDrawer'
+import { useOpportunityFillValues } from './useOpportunityFillValues'
+import { useConfirm } from '../contexts/ConfirmContext'
 
 export interface ConvertOpportunityInput {
   dealValue: number
+  /** ISO code for in-app display; the server gets `currencyNo`. */
   valueCurrency: LeadCurrency
+  /** Server currency picked in the dialog. */
+  currencyNo?: number
   closingDate: string
 }
 
@@ -24,13 +30,20 @@ export default function ConvertOpportunityDialog({
   onConfirm,
   onCancel,
 }: ConvertOpportunityDialogProps) {
-  const [currency, setCurrency] = useState<LeadCurrency>(lead.valueCurrency ?? 'INR')
+  const confirm = useConfirm()
+  // Server currencies only (opportunity fill values); starts on the lead's currency.
+  const { values: oppFill } = useOpportunityFillValues()
+  const currencies = oppFill?.currencies ?? []
+  const [currencyNo, setCurrencyNo] = useState<number | undefined>(lead.spectrum?.currencyNo)
+  useEffect(() => {
+    if (!currencyNo && currencies[0]) setCurrencyNo(currencies[0].currencyNo)
+  }, [currencies, currencyNo])
   const [value, setValue] = useState(lead.opportunityValue ? String(lead.opportunityValue) : '')
   const [closingDate, setClosingDate] = useState(lead.expectedClosureDate ?? '')
   const [conversionAt] = useState(() => formatConversionStamp(new Date().toISOString()))
   const [error, setError] = useState('')
 
-  function submit() {
+  async function submit() {
     const dealValue = Number(String(value).replace(/[^\d.]/g, ''))
     if (!dealValue || dealValue <= 0) {
       setError('Enter an opportunity value')
@@ -40,13 +53,24 @@ export default function ConvertOpportunityDialog({
       setError('Enter an expected closure date')
       return
     }
-    onConfirm({ dealValue, valueCurrency: currency, closingDate })
+    const picked = currencies.find((c) => c.currencyNo === currencyNo)
+    if (!picked) {
+      setError('Select a currency')
+      return
+    }
+    if (!(await confirm({ title: 'Convert to Opportunity', message: `Convert "${lead.leadName || lead.companyName}" to an opportunity?`, confirmLabel: 'Convert' }))) return
+    onConfirm({
+      dealValue,
+      valueCurrency: guessIsoCurrency({ currencyName: picked.currencyName, symbol: picked.symbol ?? '' }),
+      currencyNo: picked.currencyNo,
+      closingDate,
+    })
   }
 
   return (
     <FormDrawer
       title="Create Opportunity"
-      subtitle={`Lead ${lead.id} → Convert to Opportunity · ${lead.companyName}`}
+      subtitle={`Lead ${lead.spectrum?.code ?? lead.id} → Convert to Opportunity · ${lead.companyName}`}
       onClose={onCancel}
       zClass="z-[90]"
       widthClass="w-[28rem]"
@@ -72,46 +96,21 @@ export default function ConvertOpportunityDialog({
     >
       <p className="mb-4 text-xs leading-relaxed text-ink-muted">
         This lead will be converted into an opportunity. Reference Lead No will stay linked as{' '}
-        <span className="font-mono font-semibold text-primary">{lead.id}</span>.
+        <span className="font-mono font-semibold text-primary">{lead.spectrum?.code ?? lead.id}</span>.
       </p>
 
       <FormGrid>
-        <SearchSelectField
-          label="Currency"
-          options={MAIN_CURRENCIES}
-          value={findCurrency(currency)}
-          onChange={(item) => {
-            if (item) setCurrency(item.code)
-          }}
-          getKey={(item) => item.code}
-          getLabel={currencyLabel}
-          filterItem={matchesCurrency}
-          searchPlaceholder="Search country, code or symbol…"
-          emptyText="No currency matches"
-          clearable={false}
-          preserveOrder
-          renderOption={(item) => (
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="w-8 shrink-0 text-xs font-bold text-primary">{item.symbol}</span>
-              <span className="min-w-0">
-                <span className="block text-xs font-semibold text-ink">
-                  {item.code} — {item.name}
-                </span>
-                <span className="block truncate text-xs text-ink-faint">{item.countries.join(', ')}</span>
-              </span>
-            </div>
-          )}
-        />
-        <TextField
-          label="Opportunity Value"
-          required
-          type="number"
-          min={0}
-          leading={currencyAmountPrefix(currency)}
-          value={value}
-          onValueChange={setValue}
-          placeholder="0"
-        />
+        <div className="lg:col-span-2">
+          <CurrencyAmountField
+            label="Opportunity Value"
+            required
+            amount={value}
+            onAmountChange={setValue}
+            currencies={currencies}
+            currencyNo={currencyNo}
+            onCurrencyNoChange={setCurrencyNo}
+          />
+        </div>
         <TextField
           fieldClassName="lg:col-span-2"
           label="Expected Closure Date"

@@ -4,6 +4,7 @@ import type { CrmEmail } from '../contexts/crmTypes'
 import { isEmail } from '../api/sanitize'
 import { Button, FormGrid, TextAreaField, TextField } from '../ui'
 import { useSheetClose } from './useSheetClose'
+import { toStoredStamp } from '../utils/dateFormat'
 
 export interface EmailDraftLead {
   id: string
@@ -19,11 +20,7 @@ interface EmailDrawerProps {
 }
 
 function nowStamp() {
-  const d = new Date()
-  return {
-    date: d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-'),
-    time: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
-  }
+  return toStoredStamp()
 }
 
 export function openMailto(to: string, subject: string, body: string) {
@@ -94,12 +91,8 @@ export default function EmailDrawer({ preselectedLead, onClose, onSave }: EmailD
 
   return (
     <div className={`fixed inset-0 z-[60] flex justify-end${closing ? ' is-sheet-closing' : ''}`} role="presentation">
-      <button
-        type="button"
-        aria-label="Close dialog"
-        className="ui-scrim crm-sheet-scrim absolute inset-0 border-0 p-0"
-        onClick={requestClose}
-      />
+      {/* Forms do not close on a backdrop click (that would discard the input); use Cancel, × or Esc. */}
+      <div aria-hidden="true" className="ui-scrim crm-sheet-scrim absolute inset-0" />
       <div
         role="dialog"
         aria-modal="true"

@@ -36,7 +36,7 @@ function ActionLink({
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="block text-[10px] font-bold uppercase tracking-wide text-ink-muted">{label}</span>
+        <span className="block text-[10px] font-bold tracking-wide text-ink-muted">{label}</span>
         <span className="block truncate text-xs font-semibold text-primary">{value}</span>
       </span>
     </a>

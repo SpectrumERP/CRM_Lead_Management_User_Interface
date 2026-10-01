@@ -6,14 +6,17 @@ import NoteDrawer from '../components/NoteDrawer';
 import EmailDrawer from '../components/EmailDrawer';
 import { RowQuickMenu } from '../components/RowQuickMenu';
 import { RecordRowActions } from '../components/RecordRowActions';
-import { Lead, displayLeadName, formatINR, leadStageClass, leadStagePalette, leadStatusClass, secondaryLeadContacts } from '../data/leads';
+import { Lead, displayLeadName, formatAuditStamp, formatLeadDate, formatLeadValue, formatMoneyTotals, isLeadLocked, leadDeleteBlockedReason, leadLockedReason, leadTouchedToday, leadStageClass, leadStagePalette, leadStatusClass, secondaryLeadContacts } from '../data/leads';
 import { Contact } from '../data/contacts';
 import { ToastType } from '../components/Toast';
 import { SkeletonTableRows, EmptyState, NoResults, SkeletonKanbanCard, EmptyIcons } from '../components/CRMStates';
-import { useMasterData } from '../contexts/MasterDataContext';
 import { useCrmActions } from '../contexts/CrmStoreContext';
 import { api } from '../api/crm';
 import { useApiQuery } from '../api/useApiQuery';
+import { bySequence } from '../api/fillValues';
+import { useServerLeadSync } from '../components/useServerLeadSync';
+import { useLeadFormFillValues } from '../components/useLeadFormFillValues';
+import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
 import { prefetchPage } from '../app/prefetch';
 import { SecondaryContactsMore } from '../components/SecondaryContactsMore';
 import { Button, IconTooltip, PageHeader, PageLoader, Select } from '../ui';
@@ -21,9 +24,35 @@ import { findContactForLead, LeadPrimaryContactCard } from '../components/Person
 import { matchesAny } from '../utils/text';
 import { stopBubbleProps } from '../utils/events';
 import { PAGE_COPY } from '../constants/messages';
+import { ColumnVisibilityMenu, useColumnVisibility, type GridColumn } from '../components/ColumnVisibility';
 
 type ViewMode = 'list' | 'kanban';
 type DateFilter = 'all' | 'today';
+
+type LeadColumnKey =
+  | 'code' | 'leadName' | 'entity' | 'primaryContact' | 'secondaryContact' | 'products' | 'value'
+  | 'stage' | 'status' | 'owner' | 'source' | 'lastActivityOn' | 'createdBy' | 'createdOn' | 'modifiedBy' | 'modifiedOn' | 'actions';
+
+/** Grid columns in order; `sort` = sortable field. Code and Actions cannot be hidden. */
+const LEAD_COLUMNS: (GridColumn<LeadColumnKey> & { sort?: keyof Lead })[] = [
+  { key: 'code', label: 'Lead Code', sort: 'id', locked: true },
+  { key: 'leadName', label: 'Lead Name', sort: 'leadName' },
+  { key: 'entity', label: 'Business Entity Name', sort: 'companyName' },
+  { key: 'primaryContact', label: 'Primary Contact', sort: 'contactPerson' },
+  { key: 'secondaryContact', label: 'Secondary Contact' },
+  { key: 'products', label: 'Products Required', sort: 'productsRequired' },
+  { key: 'value', label: 'Lead Value', sort: 'opportunityValue' },
+  { key: 'stage', label: 'Lead Stage', sort: 'leadStage' },
+  { key: 'status', label: 'Lead Status', sort: 'leadStatus' },
+  { key: 'owner', label: 'Lead Owner', sort: 'assignedSalesperson' },
+  { key: 'source', label: 'Lead Source', sort: 'leadSource' },
+  { key: 'lastActivityOn', label: 'Last Activity On', sort: 'lastActivityAt' },
+  { key: 'createdBy', label: 'Created By' },
+  { key: 'createdOn', label: 'Created On' },
+  { key: 'modifiedBy', label: 'Modified By' },
+  { key: 'modifiedOn', label: 'Modified On' },
+  { key: 'actions', label: 'Actions', locked: true },
+];
 const PAGE_SIZE = 10;
 
 interface LeadsListProps {
@@ -85,7 +114,7 @@ const KanbanCard = memo(function KanbanCard({
         <p className="truncate text-xs text-ink-faint">{lead.productsRequired}</p>
       </IconTooltip>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-bold text-accent">{formatINR(lead.opportunityValue)}</span>
+        <span className="text-xs font-bold text-accent">{formatLeadValue(lead)}</span>
         <span className="truncate text-xs text-ink-faint">{lead.assignedSalesperson.split(' ')[0]}</span>
       </div>
     </div>
@@ -93,12 +122,19 @@ const KanbanCard = memo(function KanbanCard({
 })
 
 export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToast }: LeadsListProps) {
-  const { activeLeadSourceNames, activeLeadStageNames, activeLeadStatusNames } = useMasterData();
   const { addActivity, addNote, addEmail, removeLead } = useCrmActions();
-  const { data: leadPage, loading } = useApiQuery(() => api.leads.list(), []);
-  const { data: contactPage } = useApiQuery(() => api.contacts.list(), []);
-  const leads = leadPage?.items ?? [];
-  const contacts = contactPage?.items ?? [];
+  const { data: leadPage, loading: localLoading } = useApiQuery(() => api.leads.list(), []);
+  // Server leads only (synced into the store from search-data) — the in-app sample leads are never shown.
+  const serverSync = useServerLeadSync();
+  const { values: fill } = useLeadFormFillValues();
+  const allLeads = leadPage?.items ?? [];
+  const leads = useMemo(() => allLeads.filter((l) => l.spectrum), [allLeads]);
+  const loading = localLoading || serverSync.loading;
+  const activeLeadStageNames = fill ? bySequence(fill.leadStages).map((x) => x.leadStageName) : [];
+  const activeLeadStatusNames = fill ? fill.leadStatuses.map((x) => x.leadStatusName) : [];
+  const activeLeadSourceNames = fill ? fill.leadSources.map((x) => x.leadSourceName) : [];
+  // No in-app contact catalogue: contact cards show only what the lead itself carries.
+  const contacts: Contact[] = [];
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [search, setSearch] = useState('');
@@ -109,6 +145,11 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
   const [sortField, setSortField] = useState<keyof Lead | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Show / hide grid columns (Actions header menu); remembered in this browser.
+  const columns = useColumnVisibility('crm.leads.hiddenColumns', LEAD_COLUMNS);
+  const show = columns.isVisible;
+  // Checkbox column + visible columns.
+  const gridColSpan = columns.visibleColumns.length + 1;
   const [page, setPage] = useState(1);
   const [pageLoading, setPageLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Lead | null>(null);
@@ -119,7 +160,8 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
   const filtered = useMemo(() => {
     let data = [...leads];
     if (dateFilter === 'today') {
-      data = data.filter((l) => l.createdAt === '2024-09-10' || l.lastActivity.includes('hour') || l.lastActivity.includes('min'));
+      // Created or modified today (local time).
+      data = data.filter((l) => leadTouchedToday(l));
     }
     if (deferredSearch) {
       const q = deferredSearch
@@ -146,8 +188,9 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
     if (sourceFilter) data = data.filter((l) => l.leadSource === sourceFilter);
     if (sortField) {
       data.sort((a, b) => {
-        const av = sortField === 'leadName' ? displayLeadName(a) : (a[sortField as keyof Lead] as string | number);
-        const bv = sortField === 'leadName' ? displayLeadName(b) : (b[sortField as keyof Lead] as string | number);
+        // Missing values (e.g. no last activity) sort as empty; ISO dates sort correctly as text.
+        const av = sortField === 'leadName' ? displayLeadName(a) : ((a[sortField as keyof Lead] ?? '') as string | number);
+        const bv = sortField === 'leadName' ? displayLeadName(b) : ((b[sortField as keyof Lead] ?? '') as string | number);
         const cmp = av < bv ? -1 : av > bv ? 1 : 0;
         return sortDir === 'asc' ? cmp : -cmp;
       });
@@ -222,19 +265,14 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
     return <span className="ml-0.5 text-primary">{sortDir === 'asc' ? '↑' : '↓'}</span>;
   }
 
-  const totalValue = filtered.reduce((s, l) => s + l.opportunityValue, 0);
+  // Per currency — a $ lead is not added into the ₹ total.
+  const totalValue = formatMoneyTotals(filtered.map((l) => ({ value: l.opportunityValue, currency: l.valueCurrency })));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         bordered
-        title="Leads"
-        subtitle={
-          <>
-            {filtered.length} lead{filtered.length !== 1 ? 's' : ''} · Pipeline:{' '}
-            <strong className="text-accent">{formatINR(totalValue)}</strong>
-          </>
-        }
+        title={`Lead${filtered.length !== 1 ? 's' : ''} - ${filtered.length}`}
         actions={
           <Button variant="solid" onClick={onCreateLead}>
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
@@ -339,6 +377,17 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
           </div>
         </div>
       </PageHeader>
+      <div className="page-gutter pt-3 empty:hidden">
+        <SpectrumRequiredNotice what="Leads" />
+      </div>
+      {serverSync.error ? (
+        <div className="page-gutter pt-3">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-xs text-accent" role="alert">
+            <span>Could not load leads from the server: {serverSync.error}</span>
+            <button type="button" className="font-bold underline" onClick={() => void serverSync.retry()}>Retry</button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
@@ -366,37 +415,42 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                       onChange={toggleAll}
                     />
                   </th>
-                  {([
-                    ['id', 'Lead Code', false, true],
-                    ['leadName', 'Lead Name', false, false],
-                    ['companyName', 'Business Entity Name', false, false],
-                    ['contactPerson', 'Primary Contact', false, false],
-                    [null, 'Secondary Contact', false, false],
-                    ['productsRequired', 'Products Required', false, false],
-                    ['opportunityValue', 'Lead Value', false, false],
-                    ['leadStage', 'Lead Stage', false, false],
-                    ['leadStatus', 'Lead Status', false, false],
-                    ['assignedSalesperson', 'Lead Owner', false, false],
-                    ['leadSource', 'Lead Source', false, false],
-                    ['lastActivity', 'Last Activity', false, false],
-                    [null, 'Actions', true, false],
-                  ] as [keyof Lead | null, string, boolean, boolean][]).map(([field, label, stickyEnd, stickyStart]) => (
-                    <th
-                      key={label}
-                      onClick={field ? () => toggleSort(field) : undefined}
-                      className={`${field ? 'cursor-pointer select-none' : ''} ${stickyEnd ? 'sticky-col-end' : ''} ${stickyStart ? 'sticky-col-id' : ''}`.trim()}
-                    >
-                      {label}
-                      {field && <SortIcon field={field} />}
-                    </th>
-                  ))}
+                  {columns.visibleColumns.map((column) => {
+                    const field = column.sort
+                    const sticky = column.key === 'actions' ? 'sticky-col-end' : column.key === 'code' ? 'sticky-col-id' : ''
+                    return (
+                      <th
+                        key={column.key}
+                        onClick={field ? () => toggleSort(field) : undefined}
+                        className={`${field ? 'cursor-pointer select-none' : ''} ${sticky}`.trim()}
+                      >
+                        {column.key === 'actions' ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            {column.label}
+                            <ColumnVisibilityMenu
+                              columns={LEAD_COLUMNS}
+                              isVisible={columns.isVisible}
+                              onToggle={columns.toggle}
+                              onShowAll={columns.showAll}
+                              hiddenCount={columns.hiddenCount}
+                            />
+                          </span>
+                        ) : (
+                          <>
+                            {column.label}
+                            {field && <SortIcon field={field} />}
+                          </>
+                        )}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {loading && <SkeletonTableRows cols={14} rows={7} />}
+                {loading && <SkeletonTableRows cols={gridColSpan} rows={7} />}
                 {!loading && leads.length === 0 && (
                   <tr>
-                    <td colSpan={14}>
+                    <td colSpan={gridColSpan} className="table-empty-td">
                       <EmptyState
                         icon={EmptyIcons.leads}
                         title="No leads found"
@@ -408,7 +462,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                 )}
                 {!loading && leads.length > 0 && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={14}>
+                    <td colSpan={gridColSpan} className="table-empty-td">
                       <NoResults onClear={clearFilters} />
                     </td>
                   </tr>
@@ -439,53 +493,95 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                         {lead.id}
                       </button>
                     </td>
-                    <td>
-                      <IconTooltip label={displayLeadName(lead)} overflowOnly className="max-w-52">
-                        <span className="block truncate text-xs font-bold text-ink">
-                          {displayLeadName(lead)}
-                        </span>
-                      </IconTooltip>
-                    </td>
-                    <td>
-                      <IconTooltip label={lead.companyName} overflowOnly className="max-w-44">
-                        <span className="block truncate text-xs font-semibold text-ink-soft">
-                          {lead.companyName}
-                        </span>
-                      </IconTooltip>
-                    </td>
-                    <td className="whitespace-normal" onClick={(e) => e.stopPropagation()}>
-                      <LeadPrimaryContactCard lead={lead} contacts={contacts} />
-                    </td>
-                    <td className="whitespace-normal" onClick={(e) => e.stopPropagation()}>
-                      <SecondaryContactCell lead={lead} contacts={contacts} />
-                    </td>
-                    <td>
-                      <IconTooltip label={lead.productsRequired} overflowOnly className="max-w-32">
-                        <span className="block truncate text-xs" style={{ color: '#4a5d82' }}>
-                        {lead.productsRequired}
-                      </span>
-                      </IconTooltip>
-                    </td>
-                    <td>
-                      <span className="text-xs font-bold" style={{ color: '#c41e1e' }}>{formatINR(lead.opportunityValue)}</span>
-                    </td>
-                    <td><span className={`badge ${leadStageClass(lead.leadStage)}`}>{lead.leadStage}</span></td>
-                    <td><span className={`badge ${leadStatusClass(lead.leadStatus)}`}>{lead.leadStatus}</span></td>
-                    <td>
-                      <div className="flex items-center gap-1.5">
-                        <div
-                          className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                          style={{ background: '#7c3aed' }}
-                        >
-                          {lead.assignedSalesperson.charAt(0)}
-                        </div>
-                        <IconTooltip label={lead.assignedSalesperson} overflowOnly className="min-w-0 max-w-24">
-                          <span className="block truncate text-xs" style={{ color: '#4a5d82' }}>{lead.assignedSalesperson}</span>
+                    {show('leadName') && (
+                      <td>
+                        <IconTooltip label={displayLeadName(lead)} overflowOnly className="max-w-52">
+                          <span className="block truncate text-xs font-bold text-ink">
+                            {displayLeadName(lead)}
+                          </span>
                         </IconTooltip>
-                      </div>
-                    </td>
-                    <td><span className="badge source-badge">{lead.leadSource}</span></td>
-                    <td className="text-xs" style={{ color: '#94a3b8' }}>{lead.lastActivity}</td>
+                      </td>
+                    )}
+                    {show('entity') && (
+                      <td>
+                        <IconTooltip label={lead.companyName} overflowOnly className="max-w-44">
+                          <span className="block truncate text-xs font-semibold text-ink-soft">
+                            {lead.companyName}
+                          </span>
+                        </IconTooltip>
+                      </td>
+                    )}
+                    {show('primaryContact') && (
+                      <td className="whitespace-normal" onClick={(e) => e.stopPropagation()}>
+                        <LeadPrimaryContactCard lead={lead} contacts={contacts} />
+                      </td>
+                    )}
+                    {show('secondaryContact') && (
+                      <td className="whitespace-normal" onClick={(e) => e.stopPropagation()}>
+                        <SecondaryContactCell lead={lead} contacts={contacts} />
+                      </td>
+                    )}
+                    {show('products') && (
+                      <td>
+                        <IconTooltip label={lead.productsRequired} overflowOnly className="max-w-32">
+                          <span className="block truncate text-xs" style={{ color: '#4a5d82' }}>
+                          {lead.productsRequired}
+                        </span>
+                        </IconTooltip>
+                      </td>
+                    )}
+                    {show('value') && (
+                      <td>
+                        <span className="text-xs font-bold" style={{ color: '#c41e1e' }}>{formatLeadValue(lead)}</span>
+                      </td>
+                    )}
+                    {show('stage') && (
+                      <td><span className={`badge ${leadStageClass(lead.leadStage)}`}>{lead.leadStage}</span></td>
+                    )}
+                    {show('status') && (
+                      <td><span className={`badge ${leadStatusClass(lead.leadStatus)}`}>{lead.leadStatus}</span></td>
+                    )}
+                    {show('owner') && (
+                      <td>
+                        <div className="flex items-center gap-1.5">
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            style={{ background: '#7c3aed' }}
+                          >
+                            {lead.assignedSalesperson.charAt(0)}
+                          </div>
+                          <IconTooltip label={lead.assignedSalesperson} overflowOnly className="min-w-0 max-w-24">
+                            <span className="block truncate text-xs" style={{ color: '#4a5d82' }}>{lead.assignedSalesperson}</span>
+                          </IconTooltip>
+                        </div>
+                      </td>
+                    )}
+                    {show('source') && (
+                      <td><span className="badge source-badge">{lead.leadSource}</span></td>
+                    )}
+                    {/* search-data `lastActivityDate` */}
+                    {show('lastActivityOn') && (
+                      <td className="whitespace-nowrap text-xs text-ink-soft">
+                        {lead.lastActivityAt ? formatAuditStamp(lead.lastActivityAt) : '—'}
+                      </td>
+                    )}
+                    {/* Server leads: who / when from search-data. In-app leads only know their dates. */}
+                    {show('createdBy') && (
+                      <td className="whitespace-nowrap text-xs text-ink-soft">{lead.audit?.createdBy || '—'}</td>
+                    )}
+                    {show('createdOn') && (
+                      <td className="whitespace-nowrap text-xs" style={{ color: '#94a3b8' }}>
+                        {lead.audit ? formatAuditStamp(lead.audit.createdAt) : formatLeadDate(lead.createdAt)}
+                      </td>
+                    )}
+                    {show('modifiedBy') && (
+                      <td className="whitespace-nowrap text-xs text-ink-soft">{lead.audit?.modifiedBy || '—'}</td>
+                    )}
+                    {show('modifiedOn') && (
+                      <td className="whitespace-nowrap text-xs" style={{ color: '#94a3b8' }}>
+                        {lead.audit ? formatAuditStamp(lead.audit.modifiedAt) : lead.lastActivity}
+                      </td>
+                    )}
                     <td className="sticky-col-end" onClick={(e) => e.stopPropagation()}>
                       <RecordRowActions
                         viewLabel="View Lead"
@@ -493,13 +589,18 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                         deleteLabel="Delete Lead"
                         onView={() => onViewLead(lead.id)}
                         onEdit={() => onEditLead(lead.id)}
+                        editDisabledReason={isLeadLocked(lead) ? leadLockedReason(lead) : undefined}
                         onDelete={() => setConfirmDelete(lead)}
+                        deleteDisabledReason={leadDeleteBlockedReason(lead)}
                       >
-                        <RowQuickMenu
-                          onAddActivity={() => setActivityLead(lead)}
-                          onAddNote={() => setNoteLead(lead)}
-                          onSendEmail={() => setEmailLead(lead)}
-                        />
+                        {/* Locked leads take no new activities or notes. */}
+                        {isLeadLocked(lead) ? null : (
+                          <RowQuickMenu
+                            onAddActivity={() => setActivityLead(lead)}
+                            onAddNote={() => setNoteLead(lead)}
+                            onSendEmail={() => setEmailLead(lead)}
+                          />
+                        )}
                       </RecordRowActions>
                     </td>
                   </tr>
@@ -515,7 +616,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
             {pageLoading && <PageLoader label={PAGE_COPY.pageLoading} />}
             {activeLeadStageNames.map((stage) => {
               const stageLeads = filtered.filter((l) => l.leadStage === stage);
-              const stageVal = stageLeads.reduce((s, l) => s + l.opportunityValue, 0);
+              const stageVal = formatMoneyTotals(stageLeads.map((l) => ({ value: l.opportunityValue, currency: l.valueCurrency })));
               const c = leadStagePalette(stage);
               return (
                 <div key={stage} className="flex h-full min-h-0 w-64 min-w-64 shrink-0 flex-col">
@@ -526,7 +627,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                     <div>
                       <p className="text-xs font-bold" style={{ color: c.text }}>{stage}</p>
                       <p className="text-xs font-semibold mt-0.5" style={{ color: c.text, opacity: 0.7 }}>
-                        {formatINR(stageVal)}
+                        {stageVal}
                       </p>
                     </div>
                     <span
@@ -572,12 +673,6 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
             total={filtered.length}
             onPageChange={handlePageChange}
             disabled={pageLoading}
-            end={
-              <span>
-                Total pipeline:&nbsp;
-                <strong className="text-accent">{formatINR(totalValue)}</strong>
-              </span>
-            }
           />
         ) : (
           <div className="grid w-full grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-x-3">
@@ -586,7 +681,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
             </span>
             <span className="justify-self-center text-xs leading-7 sm:col-start-3 sm:justify-self-end">
               Total pipeline:&nbsp;
-              <strong className="text-accent">{formatINR(totalValue)}</strong>
+              <strong className="text-accent">{totalValue}</strong>
             </span>
           </div>
         )}

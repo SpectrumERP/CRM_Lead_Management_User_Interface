@@ -16,6 +16,7 @@ import {
   TextAreaField,
   TextField,
 } from '../ui'
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 
 interface MeetingDrawerProps {
   preselectedLead?: { id: string; name: string; contact: string } | null
@@ -68,6 +69,7 @@ function statusTone(status: MeetingStatus, active: boolean): string {
 }
 
 export default function MeetingDrawer({ preselectedLead, onClose, onSave }: MeetingDrawerProps) {
+  const confirm = useConfirm()
   const leads = useCrmSelector((state) => state.leads)
   const leadOptions: LeadOption[] = leads.map((l) => ({
     id: l.id,
@@ -109,13 +111,14 @@ export default function MeetingDrawer({ preselectedLead, onClose, onSave }: Meet
     return errs
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (saving) return
     const errs = validate()
     if (Object.keys(errs).length) {
       setErrors(errs)
       return
     }
+    if (!(await confirm(saveConfirm('Meeting')))) return
     setSaving(true)
     setTimeout(() => {
       const participants = participantsRaw
@@ -159,12 +162,8 @@ export default function MeetingDrawer({ preselectedLead, onClose, onSave }: Meet
 
   return (
     <div className={`fixed inset-0 z-[60] flex justify-end${closing ? ' is-sheet-closing' : ''}`} role="presentation">
-      <button
-        type="button"
-        aria-label="Close dialog"
-        className="ui-scrim crm-sheet-scrim absolute inset-0 border-0 p-0"
-        onClick={requestClose}
-      />
+      {/* Forms do not close on a backdrop click (that would discard the input); use Cancel, × or Esc. */}
+      <div aria-hidden="true" className="ui-scrim crm-sheet-scrim absolute inset-0" />
       <div
         role="dialog"
         aria-modal="true"
@@ -309,7 +308,7 @@ export default function MeetingDrawer({ preselectedLead, onClose, onSave }: Meet
             rows={2}
             value={participantsRaw}
             onValueChange={setParticipantsRaw}
-            placeholder="Names separated by commas — e.g. Rajesh Sharma (CTO, TCS), Priya Mehta (FI)"
+            placeholder="Names separated by commas"
             hint="Separate multiple participants with commas"
           />
 

@@ -263,7 +263,7 @@ export default function GlobalSearchBar({ onViewLead, onViewContact, onViewEntit
           {showRecent && (
             <div className="p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#9aaccc', letterSpacing: '0.08em', fontSize: 10 }}>
+                <p className="text-xs font-bold tracking-widest" style={{ color: '#9aaccc', letterSpacing: '0.08em', fontSize: 10 }}>
                   Recent Searches
                 </p>
                 {recentSearches.length > 0 && (
@@ -358,7 +358,7 @@ export default function GlobalSearchBar({ onViewLead, onViewContact, onViewEntit
                       >
                         {TYPE_ICON[group.type]}
                       </div>
-                      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#4a5d82', letterSpacing: '0.07em', fontSize: 10 }}>
+                      <span className="text-xs font-bold tracking-wider" style={{ color: '#4a5d82', letterSpacing: '0.07em', fontSize: 10 }}>
                         {group.label}
                       </span>
                       <span className="text-xs font-bold ml-1" style={{ color: tc.color }}>{group.total}</span>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { shallowEqual, useCrmSelector } from '../contexts/CrmStoreContext'
+import { sameList, useCrmSelector } from '../contexts/CrmStoreContext'
+import { useAuth } from '../auth/AuthContext'
 import { useSheetClose } from './useSheetClose'
 import {
   formatFileSize,
@@ -8,6 +9,8 @@ import {
   type DocFileType,
 } from '../data/documents'
 import { Button, ChoiceField, FileField, SearchSelectField, SelectField, TextAreaField, TextField } from '../ui'
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
+import { toIsoDate } from '../utils/dateFormat'
 
 interface DocumentDrawerProps {
   preselectedLead?: { id: string; name: string } | null
@@ -33,9 +36,13 @@ export default function DocumentDrawer({
   onClose,
   onSave,
 }: DocumentDrawerProps) {
+  const confirm = useConfirm()
+  const { user } = useAuth()
   const { leads, entities } = useCrmSelector(
-    (state) => ({ leads: state.leads, entities: state.entities }),
-    shallowEqual,
+    // Server leads only (no sample leads to attach documents to).
+    (state) => ({ leads: state.leads.filter((lead) => lead.spectrum), entities: state.entities }),
+    // The filtered list is new on every read — compare its items, not the array.
+    (left, right) => sameList(left.leads, right.leads) && left.entities === right.entities,
   )
   const defaultRelated = preselectedLead
     ? { type: 'lead' as const, id: preselectedLead.id, name: preselectedLead.name }
@@ -75,6 +82,7 @@ export default function DocumentDrawer({
       setErrors(errs)
       return
     }
+    if (!(await confirm(saveConfirm('Document')))) return
     setSaving(true)
     const name = docName.trim() || fileName
     const previewUrl = pickedFile ? await readImagePreview(pickedFile) : undefined
@@ -86,12 +94,9 @@ export default function DocumentDrawer({
       relatedId,
       relatedType,
       relatedName,
-      uploadedBy: 'Priya Mehta',
-      uploadedDate: new Date().toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      }),
+      uploadedBy: user?.name ?? '',
+      // Stored as a plain date; screens format it (utils/dateFormat).
+      uploadedDate: toIsoDate(),
       category: remarks.trim() || 'General',
       previewUrl,
     })
@@ -100,12 +105,8 @@ export default function DocumentDrawer({
 
   return (
     <div className={`fixed inset-0 z-[60] flex justify-end${closing ? ' is-sheet-closing' : ''}`} role="presentation">
-      <button
-        type="button"
-        aria-label="Close dialog"
-        className="ui-scrim crm-sheet-scrim absolute inset-0 border-0 p-0"
-        onClick={requestClose}
-      />
+      {/* Forms do not close on a backdrop click (that would discard the input); use Cancel, × or Esc. */}
+      <div aria-hidden="true" className="ui-scrim crm-sheet-scrim absolute inset-0" />
       <div
         role="dialog"
         aria-modal="true"

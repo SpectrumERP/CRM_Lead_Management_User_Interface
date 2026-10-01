@@ -3,14 +3,14 @@ import { useQuickCreate, type QuickCreateKind } from '../contexts/QuickCreateCon
 import { IconTooltip } from '../ui'
 
 const ITEMS: { kind: QuickCreateKind; label: string; hint: string; tone: string }[] = [
-  { kind: 'lead', label: 'New Lead', hint: 'Add a pipeline record', tone: 'text-accent bg-accent-soft' },
+  { kind: 'lead', label: 'Create Lead', hint: 'Add a pipeline record', tone: 'text-accent bg-accent-soft' },
   { kind: 'opportunity', label: 'Create Opportunity', hint: 'Add a sales deal', tone: 'text-primary bg-primary-soft' },
-  { kind: 'entity', label: 'New Business Entity', hint: 'Company or prospect', tone: 'text-success-strong bg-success-soft' },
-  { kind: 'contact', label: 'New Contact', hint: 'Person at an entity', tone: 'text-purple bg-purple-soft' },
-  { kind: 'activity', label: 'New Activity', hint: 'Call, task or follow-up', tone: 'text-teal bg-teal-soft' },
-  { kind: 'meeting', label: 'New Meeting', hint: 'Schedule a discussion', tone: 'text-success bg-success-soft' },
-  { kind: 'note', label: 'New Note', hint: 'Capture internal context', tone: 'text-warning bg-warning-soft' },
-  { kind: 'document', label: 'Upload Document', hint: 'Attach a file', tone: 'text-ink-soft bg-surface-hover' },
+  // { kind: 'entity', label: 'New Business Entity', hint: 'Company or prospect', tone: 'text-success-strong bg-success-soft' },
+  // { kind: 'contact', label: 'New Contact', hint: 'Person at an entity', tone: 'text-purple bg-purple-soft' },
+  // { kind: 'activity', label: 'New Activity', hint: 'Call, task or follow-up', tone: 'text-teal bg-teal-soft' },
+  // { kind: 'meeting', label: 'New Meeting', hint: 'Schedule a discussion', tone: 'text-success bg-success-soft' },
+  // { kind: 'note', label: 'New Note', hint: 'Capture internal context', tone: 'text-warning bg-warning-soft' },
+  // { kind: 'document', label: 'Upload Document', hint: 'Attach a file', tone: 'text-ink-soft bg-surface-hover' },
 ]
 
 export default function QuickCreateMenu() {

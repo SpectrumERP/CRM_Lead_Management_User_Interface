@@ -2,10 +2,7 @@ import { ReactNode, useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import GlobalSearchBar from './GlobalSearchBar';
 import QuickCreateMenu from './QuickCreateMenu';
-import { useNotifications } from '../contexts/NotificationsContext';
-import { api } from '../api/crm';
-import { useApiQuery } from '../api/useApiQuery';
-import { AppNotification, NOTIFICATION_CATEGORY_LABELS } from '../data/notifications';
+// import { useNotifications } from '../contexts/NotificationsContext';
 import { matchAppPage, navPaths, paths, type AppPage } from '../app/paths';
 import { prefetchPage } from '../app/prefetch';
 import { useAuth } from '../auth/AuthContext';
@@ -40,36 +37,37 @@ interface LayoutProps {
 }
 
 const navItems = [
-  {
-    id: 'dashboard' as Page,
-    label: 'Dashboard',
-    icon: (
-      <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <rect x="3" y="3" width="7" height="7" rx="1.5" />
-        <rect x="14" y="3" width="7" height="7" rx="1.5" />
-        <rect x="3" y="14" width="7" height="7" rx="1.5" />
-        <rect x="14" y="14" width="7" height="7" rx="1.5" />
-      </svg>
-    ),
-  },
-  {
-    id: 'business-entities' as Page,
-    label: 'Business Entities',
-    icon: (
-      <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M9 21V7l6-4v18M9 11H3v10M15 21V11h6v10" />
-      </svg>
-    ),
-  },
-  {
-    id: 'contacts' as Page,
-    label: 'Contacts',
-    icon: (
-      <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
+  // Only Leads and Opportunities are shown for now — the other menus are kept here, commented out.
+  // {
+  //   id: 'dashboard' as Page,
+  //   label: 'Dashboard',
+  //   icon: (
+  //     <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+  //       <rect x="3" y="3" width="7" height="7" rx="1.5" />
+  //       <rect x="14" y="3" width="7" height="7" rx="1.5" />
+  //       <rect x="3" y="14" width="7" height="7" rx="1.5" />
+  //       <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  //     </svg>
+  //   ),
+  // },
+  // {
+  //   id: 'business-entities' as Page,
+  //   label: 'Business Entities',
+  //   icon: (
+  //     <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+  //       <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M9 21V7l6-4v18M9 11H3v10M15 21V11h6v10" />
+  //     </svg>
+  //   ),
+  // },
+  // {
+  //   id: 'contacts' as Page,
+  //   label: 'Contacts',
+  //   icon: (
+  //     <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+  //       <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+  //     </svg>
+  //   ),
+  // },
   {
     id: 'leads' as Page,
     label: 'Leads',
@@ -134,8 +132,8 @@ function SidebarHeader({
   return (
     <header className="flex flex-shrink-0 items-center border-b border-white/10 px-3 py-3.5">
       <img
-        src="/force-intellect-logo-on-dark.png"
-        alt="Force Intellect"
+        src="/spectrum-erp-logo-on-dark.png"
+        alt="Spectrum ERP"
         className="block h-9 w-full object-contain object-left"
       />
     </header>
@@ -199,16 +197,12 @@ function SidebarNavButton({
 function AppSidebar({
   activePage,
   currentPage,
-  leadCount,
-  opportunityCount,
   onNavigate,
   collapsed = false,
   onToggleCollapsed,
 }: {
   activePage: Page;
   currentPage: Page;
-  leadCount: number;
-  opportunityCount: number;
   onNavigate: (to: string) => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -221,37 +215,28 @@ function AppSidebar({
 
       <nav className={`min-h-0 flex-1 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2.5'}`} aria-label="Main">
         {!collapsed ? (
-          <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">
+          <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold tracking-[0.14em] text-white/40">
             Workspace
           </p>
         ) : null}
         <div className="space-y-0.5">
-          {navItems.map((item) => {
-            const count =
-              item.id === 'leads' ? leadCount : item.id === 'opportunities' ? opportunityCount : null
-            return (
-              <SidebarNavButton
-                key={item.id}
-                active={activePage === item.id}
-                label={item.label}
-                icon={item.icon}
-                collapsed={collapsed}
-                onClick={() => onNavigate(navPaths[item.id as keyof typeof navPaths])}
-                onPrefetch={() => prefetchPage(item.id)}
-                badge={
-                  count !== null ? (
-                    <span className="sidebar-count">{count}</span>
-                  ) : undefined
-                }
-              />
-            )
-          })}
+          {navItems.map((item) => (
+            <SidebarNavButton
+              key={item.id}
+              active={activePage === item.id}
+              label={item.label}
+              icon={item.icon}
+              collapsed={collapsed}
+              onClick={() => onNavigate(navPaths[item.id as keyof typeof navPaths])}
+              onPrefetch={() => prefetchPage(item.id)}
+            />
+          ))}
         </div>
 
         {admin && (
           <div className={collapsed ? 'mt-3' : 'mt-4'}>
             {!collapsed ? (
-              <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">
+              <p className="px-2 pb-1.5 text-[10px] font-bold tracking-[0.14em] text-white/40">
                 Admin
               </p>
             ) : (
@@ -266,6 +251,7 @@ function AppSidebar({
                 onClick={() => onNavigate(navPaths.settings)}
                 onPrefetch={() => prefetchPage('settings')}
               />
+              {/* Audit Log hidden for now.
               <SidebarNavButton
                 active={currentPage === 'audit-log'}
                 label="Audit Log"
@@ -278,6 +264,7 @@ function AppSidebar({
                 onClick={() => onNavigate(navPaths['audit-log'])}
                 onPrefetch={() => prefetchPage('audit-log')}
               />
+              */}
             </div>
           </div>
         )}
@@ -349,16 +336,6 @@ function CrumbHere({ children, className = '' }: { children: ReactNode; classNam
   return content
 }
 
-const NOTIFICATION_TONE: Record<string, string> = {
-  'overdue-task': 'bg-accent-soft text-accent',
-  'task-due-today': 'bg-warning-soft text-warning',
-  'follow-up-due': 'bg-warning-soft text-warning',
-  'meeting-today': 'bg-primary-soft text-primary',
-  'meeting-reminder': 'bg-primary-soft text-primary',
-  'upcoming-task': 'bg-success-soft text-success',
-  'stage-change': 'bg-purple-soft text-purple',
-  'status-change': 'bg-primary-soft text-primary',
-};
 
 export default function Layout({ children, detailName }: LayoutProps) {
   const navigate = useNavigate();
@@ -368,11 +345,8 @@ export default function Layout({ children, detailName }: LayoutProps) {
   const currentPage = matchAppPage(pathname);
   const bePages = ['create-business-entity', 'edit-business-entity', 'business-entity-detail'];
   const contactPages = ['create-contact', 'edit-contact', 'contact-detail'];
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
-  const { data: leadPage } = useApiQuery(() => api.leads.list(), []);
-  const { data: opportunityPage } = useApiQuery(() => api.opportunities.list(), []);
-  const leadCount = leadPage?.total ?? 0;
-  const opportunityCount = opportunityPage?.total ?? 0;
+  // Notifications are hidden for now (no bell, no profile-menu item).
+  // const { unreadCount } = useNotifications();
   const searchCallbacks = useMemo(() => ({
     onViewLead: (id: string) => navigate(paths.lead(id)),
     onViewContact: (id: string) => navigate(paths.contact(id)),
@@ -381,8 +355,6 @@ export default function Layout({ children, detailName }: LayoutProps) {
     onViewMeeting: () => navigate(paths.meetings),
     onOpenResults: (query: string) => navigate(paths.search(query)),
   }), [navigate]);
-  const [bellOpen, setBellOpen] = useState(false);
-  const bellRef = useRef<HTMLDivElement>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -409,14 +381,12 @@ export default function Layout({ children, detailName }: LayoutProps) {
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
       if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) setAvatarOpen(false);
     }
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setNavOpen(false);
         setMobileSearchOpen(false);
-        setBellOpen(false);
         setAvatarOpen(false);
       }
     }
@@ -441,14 +411,6 @@ export default function Layout({ children, detailName }: LayoutProps) {
   function go(to: string) {
     setNavOpen(false);
     navigate(to);
-  }
-
-  function openRecord(n: AppNotification) {
-    setBellOpen(false);
-    markAsRead(n.id);
-    if (n.relatedMeeting) { navigate(paths.meetings); return; }
-    if (n.relatedActivity) { navigate(paths.activities); return; }
-    if (n.relatedLead) { navigate(paths.lead(n.relatedLead.id)); return; }
   }
 
   const activePage = (
@@ -533,8 +495,6 @@ export default function Layout({ children, detailName }: LayoutProps) {
         <AppSidebar
           activePage={activePage}
           currentPage={currentPage}
-          leadCount={leadCount}
-          opportunityCount={opportunityCount}
           onNavigate={go}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={toggleSidebarCollapsed}
@@ -558,8 +518,6 @@ export default function Layout({ children, detailName }: LayoutProps) {
         <AppSidebar
           activePage={activePage}
           currentPage={currentPage}
-          leadCount={leadCount}
-          opportunityCount={opportunityCount}
           onNavigate={go}
         />
       </aside>
@@ -589,11 +547,11 @@ export default function Layout({ children, detailName }: LayoutProps) {
               <Link
                 to={paths.dashboard}
                 className="hidden min-w-0 items-center lg:inline-flex"
-                aria-label="Force Intellect home"
+                aria-label="Spectrum ERP home"
               >
                 <img
-                  src="/force-intellect-logo.png"
-                  alt="Force Intellect"
+                  src="/spectrum-erp-logo.png"
+                  alt="Spectrum ERP"
                   className="block h-8 w-auto max-w-[10.5rem] object-contain object-left"
                 />
               </Link>
@@ -627,7 +585,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
                 }`}
                 aria-label="Search"
                 aria-expanded={mobileSearchOpen}
-                onClick={() => { setMobileSearchOpen((o) => !o); setBellOpen(false); setAvatarOpen(false); }}
+                onClick={() => { setMobileSearchOpen((o) => !o); setAvatarOpen(false); }}
               >
                 <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35" />
@@ -658,124 +616,13 @@ export default function Layout({ children, detailName }: LayoutProps) {
               </div>
             )}
 
-            {/* Notification bell */}
-            <div className="relative" ref={bellRef}>
-              <IconTooltip label="Notifications">
-              <button
-                type="button"
-                aria-label="Notifications"
-                aria-expanded={bellOpen}
-                onClick={() => setBellOpen((o) => !o)}
-                className={`icon-hit relative flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft transition-colors hover:bg-surface-hover ${
-                  bellOpen ? 'bg-surface-hover' : ''
-                }`}
-              >
-                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                {unreadCount > 0 && (
-                  <CountBadge
-                    value={unreadCount > 9 ? '9+' : unreadCount}
-                    size="sm"
-                    tone="accent"
-                    className="pointer-events-none absolute -right-1 -top-1 z-[1] border-2 border-surface"
-                    aria-label={`${unreadCount} unread`}
-                  />
-                )}
-              </button>
-              </IconTooltip>
-
-              {/* Dropdown panel */}
-              {bellOpen && (
-                <div className="crm-dropdown absolute top-full right-0 z-50 mt-2 w-96 max-w-sm overflow-hidden rounded-xl border border-line bg-surface shadow-overlay">
-                  <div className="flex items-center justify-between border-b border-line-subtle px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-sm font-bold text-ink">Notifications</span>
-                      {unreadCount > 0 && (
-                        <CountBadge value={unreadCount} size="sm" tone="accent" />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {unreadCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => { markAllAsRead(); }}
-                          className="text-xs font-medium text-primary"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="max-h-96 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-10">
-                        <p className="text-sm text-ink-faint">No notifications</p>
-                      </div>
-                    ) : (
-                      notifications
-                        .slice()
-                        .sort((a, b) => b.dateTime.localeCompare(a.dateTime))
-                        .slice(0, 8)
-                        .map((n) => {
-                          const tone = NOTIFICATION_TONE[n.category] ?? 'bg-primary-soft text-primary';
-                          return (
-                            <button
-                              key={n.id}
-                              type="button"
-                              onClick={() => openRecord(n)}
-                              className={`flex w-full gap-3 border-b border-line-subtle px-4 py-3 text-left transition-colors hover:bg-surface-hover ${
-                                n.isRead ? 'bg-surface' : 'bg-surface-muted'
-                              }`}
-                            >
-                              <div className="flex w-2 flex-shrink-0 justify-center pt-1">
-                                {!n.isRead && (
-                                  <span className="h-2 w-2 rounded-full bg-primary" />
-                                )}
-                              </div>
-                              <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
-                                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                                </svg>
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className={`truncate text-xs leading-snug text-ink ${n.isRead ? 'font-normal' : 'font-semibold'}`}>
-                                  {n.title}
-                                </p>
-                                <p className="mt-0.5 truncate text-xs text-ink-muted">
-                                  {n.description}
-                                </p>
-                                <p className="mt-0.5 text-xs text-ink-faint">
-                                  {NOTIFICATION_CATEGORY_LABELS[n.category]} · {n.dateTime.split(' ')[1]}
-                                </p>
-                              </div>
-                            </button>
-                          );
-                        })
-                    )}
-                  </div>
-
-                  <div className="flex justify-center border-t border-line-subtle px-4 py-2.5">
-                    <button
-                      type="button"
-                      onClick={() => { setBellOpen(false); navigate(paths.notifications); }}
-                      className="text-xs font-semibold text-primary"
-                    >
-                      View All Notifications →
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Avatar menu */}
             <div className="relative" ref={avatarRef}>
               <button
                 type="button"
                 aria-label="Account menu"
                 aria-expanded={avatarOpen}
-                onClick={() => { setAvatarOpen((o) => !o); setBellOpen(false); }}
+                onClick={() => setAvatarOpen((o) => !o)}
                 className={`flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-surface-hover ${
                   avatarOpen ? 'bg-surface-hover' : ''
                 }`}
@@ -801,7 +648,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
                     </div>
                   </div>
 
-                  {[
+                  {([
                     {
                       icon: <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
                       label: 'My Profile',
@@ -812,13 +659,14 @@ export default function Layout({ children, detailName }: LayoutProps) {
                       label: 'Account Settings',
                       action: () => { setAvatarOpen(false); navigate(paths.settings); },
                     }] : []),
-                    {
-                      icon: <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
-                      label: 'Notifications',
-                      action: () => { setAvatarOpen(false); navigate(paths.notifications); },
-                      badge: unreadCount > 0 ? String(unreadCount > 9 ? '9+' : unreadCount) : undefined,
-                    },
-                  ].map((item) => (
+                    // Notifications hidden from the profile menu for now.
+                    // {
+                    //   icon: <svg …bell… />,
+                    //   label: 'Notifications',
+                    //   action: () => { setAvatarOpen(false); navigate(paths.notifications); },
+                    //   badge: unreadCount > 0 ? String(unreadCount > 9 ? '9+' : unreadCount) : undefined,
+                    // },
+                  ] as { icon: ReactNode; label: string; action: () => void; badge?: string }[]).map((item) => (
                     <button
                       key={item.label}
                       type="button"

@@ -10,8 +10,11 @@ export interface ListResponse<T> {
 }
 
 export interface OpportunityTotals {
+  /** Plain sums (meaningful only when every row is in one currency). */
   dealValue: number
   weightedValue: number
+  /** Sums per currency — amounts in different currencies are never added together. */
+  byCurrency?: { currency: LeadCurrency; dealValue: number; weightedValue: number }[]
 }
 
 export interface OpportunityListResponse extends ListResponse<Opportunity> {
@@ -22,6 +25,8 @@ export interface OpportunityListQuery {
   q?: string
   stages?: string[]
   leadId?: string
+  /** `server` → only opportunities synced from Spectrum. */
+  source?: 'server'
   page?: number
   pageSize?: number
 }

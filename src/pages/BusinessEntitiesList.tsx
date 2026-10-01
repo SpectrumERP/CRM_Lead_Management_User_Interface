@@ -11,6 +11,7 @@ import { api } from '../api/crm';
 import { useApiQuery } from '../api/useApiQuery';
 import { Button, CountBadge, PageHeader, SortChevrons, sortAlpha, StatPill, StatPillRow } from '../ui';
 import { FilterSearch, FilterSelect } from '../components/InlineFilterRow';
+import { formatDate } from '../utils/dateFormat';
 
 interface Props {
   onCreate: () => void;
@@ -216,7 +217,7 @@ export default function BusinessEntitiesList({ onCreate, onView, onEdit }: Props
               {loading && <SkeletonTableRows cols={11} rows={6} />}
               {!loading && entities.length === 0 && (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={11} className="table-empty-td">
                     <EmptyState
                       icon={EmptyIcons.entities}
                       title="No business entities found"
@@ -228,7 +229,7 @@ export default function BusinessEntitiesList({ onCreate, onView, onEdit }: Props
               )}
               {!loading && entities.length > 0 && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={11} className="table-empty-td">
                     <NoResults onClear={() => { setSearch(''); setTypeFilter('All'); setStatusFilter('All'); setTerritoryFilter('All'); setSalespersonFilter('All'); }} />
                   </td>
                 </tr>
@@ -293,7 +294,7 @@ export default function BusinessEntitiesList({ onCreate, onView, onEdit }: Props
                         <span className="text-xs text-line-strong">—</span>
                       )}
                     </td>
-                    <td className="text-xs text-ink-muted">{entity.lastActivity}</td>
+                    <td className="text-xs text-ink-muted">{formatDate(entity.lastActivity)}</td>
                     <td className="sticky-col-end" onClick={(e) => e.stopPropagation()}>
                       <RecordRowActions
                         onView={() => onView(entity.id)}

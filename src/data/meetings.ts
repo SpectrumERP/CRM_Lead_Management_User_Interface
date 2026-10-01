@@ -1,3 +1,5 @@
+import { formatTimeRange } from '../utils/dateFormat';
+
 export type MeetingMode = 'In Person' | 'Online' | 'Phone';
 export type MeetingStatus = 'Scheduled' | 'Completed' | 'Cancelled';
 
@@ -178,18 +180,9 @@ export function meetingStatusMeta(status: string) {
   return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' }; // Scheduled
 }
 
+/** A meeting's date and start (– end) time — see utils/dateFormat. */
 export function formatMeetingDateTime(date: string, time: string, endTime?: string): string {
-  if (!date) return '—';
-  const d = new Date(`${date}T${time || '00:00'}`);
-  const dateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  const timeStr = time ? d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
-  if (!time) return dateStr;
-  if (endTime) {
-    const e = new Date(`${date}T${endTime}`);
-    const endStr = e.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-    return `${dateStr} · ${timeStr} – ${endStr}`;
-  }
-  return `${dateStr} · ${timeStr}`;
+  return formatTimeRange(date, time, endTime);
 }
 
 export const SAMPLE_LEADS_FOR_MEETINGS = [

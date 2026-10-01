@@ -1,4 +1,5 @@
 import { currencySymbol } from "./currencies"
+import { formatDate, formatDateTime } from '../utils/dateFormat'
 
 export type LeadStage = "New" | "Contacted" | "Requirement Identified" | "Under Qualification" | "Qualified" | "Converted to Opportunity"
 
@@ -17,6 +18,9 @@ export interface LeadContactEntry {
   email: string
   phones: string[]
   primary: boolean
+  designation?: string
+  /** Server contact person (Spectrum business entity contact). */
+  businessEntityContactPersonDetailNo?: number
 }
 
 export const LEAD_PRIORITIES: LeadPriority[] = ["High", "Medium", "Low"]
@@ -44,8 +48,101 @@ export const PRODUCT_TYPES = [
   "Core Banking Modernisation",
 ] as const
 
+/** Who created / last changed a record, and when (ISO date-times), as sent by the server. */
+/** One entry of a lead / opportunity timeline (GET …/timeline/{id}). */
+export interface LeadTimelineEntry {
+  title: string
+  description: string
+  /** Server `timelineType`, e.g. `LeadCreated`, `LeadStage`, `Activity`. */
+  type: string
+  typeNo?: number
+  /** ISO date-time (`actionDate`). */
+  at: string
+  by: string
+}
+
+export interface RecordAudit {
+  createdBy: string
+  createdAt: string
+  modifiedBy: string
+  modifiedAt: string
+}
+
+/**
+ * Converted to an opportunity — such a lead can no longer be edited. Compared case-insensitively:
+ * the server names the stage "Converted To Opportunity", the app "Converted to Opportunity".
+ */
+export function isLeadConverted(lead: Pick<Lead, 'leadStage' | 'leadStatus'>): boolean {
+  const norm = (value?: string) => (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+  return norm(lead.leadStatus) === 'converted' || norm(lead.leadStage) === 'converted to opportunity'
+}
+
+/**
+ * Locked: converted to an opportunity, or at a completed stage (`isStagedCompleted`). A locked lead
+ * cannot be edited, and its activities and notes cannot be added, edited or deleted.
+ */
+export function isLeadLocked(lead: Pick<Lead, 'leadStage' | 'leadStatus' | 'spectrum'>): boolean {
+  return isLeadConverted(lead) || Boolean(lead.spectrum?.stageCompleted)
+}
+
+/** Why a lead cannot be deleted (converted / completed stage), or undefined when it can. */
+export function leadDeleteBlockedReason(lead: Pick<Lead, 'leadStage' | 'leadStatus' | 'spectrum'>): string | undefined {
+  if (!isLeadLocked(lead)) return undefined
+  return isLeadConverted(lead)
+    ? 'Converted to an opportunity — this lead cannot be deleted'
+    : 'The lead is at a completed stage — it cannot be deleted'
+}
+
+/** Why a locked lead cannot be changed (tooltips / messages). */
+export function leadLockedReason(lead: Pick<Lead, 'leadStage' | 'leadStatus' | 'spectrum'>): string {
+  return isLeadConverted(lead)
+    ? 'Converted to an opportunity — this lead can no longer be changed'
+    : 'The lead is at a completed stage — it can no longer be changed'
+}
+
+/** True when the ISO date-time (or `YYYY-MM-DD`) falls on today's date in local time. */
+export function isTodayIso(iso?: string | null, now: Date = new Date()): boolean {
+  if (!iso) return false
+  // A bare date is a calendar day, not UTC midnight.
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T00:00:00`) : new Date(iso)
+  if (Number.isNaN(date.getTime())) return false
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate()
+}
+
+/** Created or modified today (audit stamps; `createdAt` for records without them). */
+export function leadTouchedToday(lead: Pick<Lead, 'audit' | 'createdAt'>, now: Date = new Date()): boolean {
+  return isTodayIso(lead.audit?.createdAt || lead.createdAt, now) || isTodayIso(lead.audit?.modifiedAt, now)
+}
+
+/** Date and time of an audit stamp (created / modified) — see utils/dateFormat. */
+export function formatAuditStamp(iso?: string | null): string {
+  return formatDateTime(iso)
+}
+
+/** Server numbers for a lead that lives in Spectrum (`/api/crm/leads`). */
+export interface SpectrumLeadRef {
+  leadNo: number
+  code?: string
+  ownerLoginNo?: number
+  businessEntityNo?: number
+  contactPersonDetailNos?: number[]
+  currencyNo?: number
+  productNos?: number[]
+  salesOrganizationNo?: number
+  /** Server lead date (ISO), sent back unchanged on update. */
+  leadDate?: string
+  /** True once `load-data` has filled contacts / products / source (search rows lack them). */
+  detailLoaded?: boolean
+  /** The lead's stage is a completed one (`leadStage.isStagedCompleted`) — the lead is locked. */
+  stageCompleted?: boolean
+}
+
 export interface Lead {
   id: string
+  /** Set for leads loaded from / saved to the Spectrum server. */
+  spectrum?: SpectrumLeadRef
+  /** Created / modified by and when (server leads). */
+  audit?: RecordAudit
   leadName: string
   companyName: string
   contactPerson: string
@@ -59,6 +156,8 @@ export interface Lead {
   expectedClosureDate?: string
   assignedSalesperson: string
   lastActivity: string
+  /** Server leads: date-time of the latest activity (search-data `lastActivityDate`); null = none. */
+  lastActivityAt?: string | null
   createdAt: string
   description?: string
   estimatedLeadName?: string
@@ -550,14 +649,19 @@ export const LEADS: Lead[] = [
   },
 ]
 
+/**
+ * International amount: millions and billions (not lakh / crore) — 6,729,000 → "6.73 M",
+ * 2,500,000,000 → "2.50 B"; below a million the full amount with thousands separators.
+ */
+export function formatAmount(value: number): string {
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)} B`
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} M`
+  return value.toLocaleString("en-US", { maximumFractionDigits: 2 })
+}
+
 export function formatINR(value: number): string {
-  if (value >= 10_000_000) {
-    return `₹${(value / 10_000_000).toFixed(2)} Cr`
-  }
-  if (value >= 100_000) {
-    return `₹${(value / 100_000).toFixed(2)} L`
-  }
-  return `₹${value.toLocaleString("en-IN")}`
+  return `₹${formatAmount(value)}`
 }
 
 export const LEAD_STAGES: LeadStage[] = [
@@ -732,26 +836,49 @@ export function leadPriorityOf(lead: Lead): LeadPriority {
   return lead.priority ?? "Medium"
 }
 
-export function formatLeadValue(lead: Lead): string {
-  const code = lead.valueCurrency ?? "INR"
-  if (code === "INR") return formatINR(lead.opportunityValue)
-  const amount = lead.opportunityValue.toLocaleString("en-US")
-  const symbol = currencySymbol(code).trim()
-  if (/[\u0600-\u06FF]/.test(symbol)) {
-    return `${code} ${amount}`
-  }
+/**
+ * An amount in its own currency, in millions / billions for every currency (see formatAmount).
+ * Arabic-script symbols, which reorder next to digits, fall back to the ISO code.
+ */
+export function formatMoney(value: number, currency: LeadCurrency = "INR"): string {
+  if (currency === "INR") return formatINR(value)
+  const amount = formatAmount(value)
+  const symbol = currencySymbol(currency).trim()
+  if (!symbol || /[\u0600-\u06FF]/.test(symbol)) return `${currency} ${amount}`
   return `${symbol}\u00A0${amount}`
 }
 
+/**
+ * Total of amounts that may be in different currencies. Without exchange rates they cannot be added
+ * together, so each currency is summed on its own: "₹7.56 M + $500,000.75". INR comes first.
+ */
+export function formatMoneyTotals(
+  items: readonly { value: number; currency?: LeadCurrency }[],
+  options: { average?: boolean } = {},
+): string {
+  const groups = new Map<string, { sum: number; count: number }>()
+  for (const item of items) {
+    const code = item.currency || "INR"
+    const group = groups.get(code) ?? { sum: 0, count: 0 }
+    group.sum += item.value || 0
+    group.count += 1
+    groups.set(code, group)
+  }
+  if (groups.size === 0) return formatINR(0)
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === "INR" ? -1 : b === "INR" ? 1 : a.localeCompare(b)))
+    // `average`: mean within each currency (e.g. average deal size), listed side by side.
+    .map(([code, g]) => formatMoney(options.average ? Math.round(g.sum / g.count) : g.sum, code))
+    .join(options.average ? " · " : " + ")
+}
+
+export function formatLeadValue(lead: Lead): string {
+  return formatMoney(lead.opportunityValue, lead.valueCurrency)
+}
+
+/** A date (no time) — see utils/dateFormat. */
 export function formatLeadDate(iso: string): string {
-  if (!iso) return "—"
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })
+  return formatDate(iso)
 }
 
 export function normalizeOrgName(name: string): string {

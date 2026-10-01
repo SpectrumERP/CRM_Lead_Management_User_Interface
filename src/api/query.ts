@@ -26,3 +26,8 @@ export function splitUrl(path: string) {
     query: Object.fromEntries(new URLSearchParams(path.slice(index + 1))),
   }
 }
+
+/** Query array as repeated keys (ASP.NET `int[]` binding): `key=1&key=2`. */
+export function repeatedQuery(key: string, values: readonly (string | number)[]) {
+  return values.map((v) => `${encodeURIComponent(key)}=${encodeURIComponent(v)}`).join('&')
+}

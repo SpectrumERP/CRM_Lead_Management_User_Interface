@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { toApiError } from '../../api/errors';
-import { NAME_MAX, type MasterApi, type MasterRow } from '../../api/masters';
+import { NAME_MAX, needsDetailForEdit, type MasterApi, type MasterRow } from '../../api/masters';
+import { clearLeadFillValuesCache } from '../../api/leadFormFillValues';
+import { clearOpportunityFillValuesCache } from '../../api/opportunityFormFillValues';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import type { ToastType } from '../../components/Toast';
 import { IconTooltip, Spinner } from '../../ui';
 import { C, EmptyRows, FilterBar, FormField, MasterTable, Modal, SectionHeader, StatusBadge, Td, Th } from './atoms';
 import type { ApiMasterState } from './useApiMaster';
+import { saveConfirm, useConfirm } from '../../contexts/ConfirmContext'
+import { formatDate } from '../../utils/dateFormat';
 
 export interface ApiMasterSectionProps {
   api: MasterApi;
@@ -18,12 +22,6 @@ export interface ApiMasterSectionProps {
   onToast?: (type: ToastType, title: string, message?: string) => void;
 }
 
-function formatDate(value: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-}
 
 function DeleteAction({ onClick }: { onClick: () => void }) {
   return (
@@ -51,15 +49,35 @@ function EditAction({ onClick }: { onClick: () => void }) {
   );
 }
 
+/** Number fields → input text (empty when not set). */
+function numbersToText(values?: Record<string, number | undefined>): Record<string, string> {
+  return Object.fromEntries(Object.entries(values ?? {}).map(([key, value]) => [key, value === undefined ? '' : String(value)]));
+}
+
+/** Default colour for a new lead stage. */
+const DEFAULT_COLOR = '#2955A3';
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
 /** Master backed by the Spectrum Save / Search / Delete APIs. Status is read-only (the API has no toggle). */
 export default function ApiMasterSection({ api, state, title, subtitle, noun, namePlaceholder, onToast }: ApiMasterSectionProps) {
+  const confirm = useConfirm()
   const { rows, loading, error, reload } = state;
   const hasSequence = api.definition.hasSequence;
+  const hasDescription = Boolean(api.definition.hasDescription);
+  const nameMax = api.definition.nameMax ?? NAME_MAX;
+  const hasColor = Boolean(api.definition.hasColor);
+  const flagDefs = api.definition.flags ?? [];
+  const numberDefs = api.definition.numbers ?? [];
+  const listedNumbers = numberDefs.filter((n) => n.inList);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [editing, setEditing] = useState<MasterRow | null>(null);
   const [isNew, setIsNew] = useState(false);
-  const [form, setForm] = useState({ name: '', sequence: '' });
+  const [form, setForm] = useState<{
+    name: string; sequence: string; description: string; colorCoding: string; flags: Record<string, boolean>; numbers: Record<string, string>
+  }>({ name: '', sequence: '', description: '', colorCoding: '', flags: {}, numbers: {} });
+  // Editing a master with load-data-only fields (colour, flags): the record is loaded before saving.
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<MasterRow | null>(null);
@@ -78,24 +96,60 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
   function openAdd() {
     const next = Math.max(0, ...rows.map((x) => x.sequence ?? 0)) + 1;
     setIsNew(true); setEditing(null);
-    setForm({ name: '', sequence: hasSequence ? String(next) : '' }); setErrors({});
+    setForm({ name: '', sequence: hasSequence ? String(next) : '', description: '', colorCoding: hasColor ? DEFAULT_COLOR : '', flags: {}, numbers: {} }); setErrors({});
   }
-  function openEdit(item: MasterRow) {
+  async function openEdit(item: MasterRow) {
     setIsNew(false); setEditing(item);
-    setForm({ name: item.name, sequence: item.sequence ? String(item.sequence) : '' }); setErrors({});
+    setForm({
+      name: item.name, sequence: item.sequence ? String(item.sequence) : '', description: item.description ?? '',
+      colorCoding: '', flags: {}, numbers: numbersToText(item.numbers),
+    }); setErrors({});
+    if (!needsDetailForEdit(api.definition) || !state.companyNo) return;
+    // Colour / flags come only from load-data — without them a save would clear them.
+    setLoadingDetail(true);
+    try {
+      const detail = await api.load(item.no, state.companyNo);
+      setForm((prev) => ({
+        ...prev,
+        name: detail.name || prev.name,
+        sequence: detail.sequence ? String(detail.sequence) : prev.sequence,
+        colorCoding: detail.colorCoding ?? '',
+        flags: detail.flags ?? {},
+        numbers: { ...prev.numbers, ...numbersToText(detail.numbers) },
+      }));
+    } catch (err) {
+      onToast?.('error', `Could not load ${noun.toLowerCase()}`, toApiError(err).message);
+      setEditing(null);
+    } finally {
+      setLoadingDetail(false);
+    }
   }
-  function closeModal() { setEditing(null); setIsNew(false); setErrors({}); }
+  function closeModal() { setEditing(null); setIsNew(false); setErrors({}); setLoadingDetail(false); }
 
   function validate() {
     const e: Record<string, string> = {};
     const name = form.name.trim();
     if (!name) e.name = `${noun} name is required`;
-    else if (name.length > NAME_MAX) e.name = `Maximum ${NAME_MAX} characters`;
+    else if (name.length > nameMax) e.name = `Maximum ${nameMax} characters`;
     else if (rows.some((x) => x.name.toLowerCase() === name.toLowerCase() && x.no !== editing?.no))
       e.name = `This ${noun.toLowerCase()} already exists`;
-    if (hasSequence && form.sequence) {
+    // `sequence` is a required (non-nullable) number in the save API.
+    if (hasSequence) {
       const seq = Number(form.sequence);
-      if (!Number.isInteger(seq) || seq < 1) e.sequence = 'Sequence must be at least 1';
+      if (!form.sequence.trim()) e.sequence = 'Sequence is required';
+      else if (!Number.isInteger(seq) || seq < 1) e.sequence = 'Sequence must be a whole number of at least 1';
+    }
+    for (const field of numberDefs) {
+      const raw = form.numbers[field.key]?.trim() ?? '';
+      if (!raw) continue;
+      const value = Number(raw);
+      const min = field.min ?? 0;
+      const max = field.max ?? Number.MAX_SAFE_INTEGER;
+      if (!Number.isInteger(value) || value < min || value > max) e[`number:${field.key}`] = `Enter a whole number from ${min} to ${max}`;
+    }
+    // `colorCoding` is optional; when given it must be a #RRGGBB hex colour.
+    if (hasColor && form.colorCoding.trim() && !HEX_COLOR.test(form.colorCoding.trim())) {
+      e.colorCoding = 'Use a hex colour like #2955A3';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -103,13 +157,26 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
 
   async function save() {
     if (!validate()) return;
+    if (!(await confirm(saveConfirm(noun, !isNew)))) return;
     setSaving(true);
     try {
       await api.save({
         no: editing?.no ?? null,
         name: form.name.trim(),
-        sequence: hasSequence && form.sequence ? Number(form.sequence) : undefined,
+        sequence: hasSequence ? Number(form.sequence) : undefined,
+        description: hasDescription ? form.description : undefined,
+        colorCoding: hasColor ? form.colorCoding.trim().toUpperCase() : undefined,
+        flags: flagDefs.length ? form.flags : undefined,
+        numbers: numberDefs.length
+          ? Object.fromEntries(numberDefs.map((n) => {
+              const raw = form.numbers[n.key]?.trim() ?? '';
+              return [n.key, raw ? Number(raw) : undefined];
+            }))
+          : undefined,
       });
+      // Forms opened from now on fetch the changed lists.
+      clearLeadFillValuesCache();
+      clearOpportunityFillValuesCache();
       onToast?.('success', isNew ? `${noun} Added` : `${noun} Updated`, `"${form.name.trim()}" saved successfully.`);
       closeModal();
       await reload();
@@ -125,6 +192,8 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     setDeleting(true);
     try {
       await api.remove(item.no);
+      clearLeadFillValuesCache();
+      clearOpportunityFillValuesCache();
       onToast?.('info', `${noun} Deleted`, `"${item.name}" has been deleted.`);
       setConfirmDelete(null);
       await reload();
@@ -153,7 +222,9 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
       <MasterTable>
         <thead><tr>
           {hasSequence ? <Th narrow>Order</Th> : null}
-          <Th narrow>Code</Th><Th>Name</Th><Th>Status</Th><Th>Modified</Th><Th right narrow>Actions</Th>
+          <Th narrow>Code</Th><Th>Name</Th>{hasDescription ? <Th>Description</Th> : null}
+          {listedNumbers.map((n) => <Th key={n.key} narrow>{n.label}{n.suffix ? ` (${n.suffix})` : ''}</Th>)}
+          <Th>Status</Th><Th>Modified</Th><Th right narrow>Actions</Th>
         </tr></thead>
         <tbody>
           {loading && rows.length === 0 ? (
@@ -171,6 +242,14 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
               ) : null}
               <Td narrow><span className="font-mono text-xs" style={{ color: C.sub }}>{item.code || '—'}</span></Td>
               <Td><span className="text-sm font-semibold" style={{ color: C.text }}>{item.name}</span></Td>
+              {hasDescription ? <Td><span className="text-xs" style={{ color: C.sub }}>{item.description || '—'}</span></Td> : null}
+              {listedNumbers.map((n) => (
+                <Td key={n.key} narrow>
+                  <span className="text-xs font-semibold" style={{ color: C.sub }}>
+                    {item.numbers?.[n.key] ?? '—'}{item.numbers?.[n.key] !== undefined && n.suffix ? n.suffix : ''}
+                  </span>
+                </Td>
+              ))}
               <Td><StatusBadge status={item.inactive ? 'Inactive' : 'Active'} /></Td>
               <Td>
                 <span className="text-xs" style={{ color: '#94a3b8' }}>
@@ -180,7 +259,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
               </Td>
               <Td right narrow>
                 <div className="flex items-center gap-1 justify-end">
-                  <EditAction onClick={() => openEdit(item)} />
+                  <EditAction onClick={() => void openEdit(item)} />
                   <DeleteAction onClick={() => setConfirmDelete(item)} />
                 </div>
               </Td>
@@ -190,21 +269,66 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
       </MasterTable>
 
       {(isNew || editing) && (
-        <Modal title={isNew ? `Add ${noun}` : `Edit ${noun}`} onClose={closeModal} onSave={() => void save()} saving={saving}>
+        <Modal title={isNew ? `Add ${noun}` : `Edit ${noun}`} onClose={closeModal} onSave={() => void save()} saving={saving || loadingDetail}>
+          {loadingDetail ? (
+            <div className="flex justify-center py-2"><Spinner label={`Loading ${noun.toLowerCase()}`} /></div>
+          ) : null}
           {editing?.code ? (
             <FormField label="Code">
               <input className="form-input" value={editing.code} readOnly disabled />
             </FormField>
           ) : null}
           <FormField label={`${noun} Name`} required error={errors.name}>
-            <input className="form-input" style={{ borderColor: errors.name ? C.red : undefined }} maxLength={NAME_MAX}
+            <input className="form-input" style={{ borderColor: errors.name ? C.red : undefined }} maxLength={nameMax}
               value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus placeholder={namePlaceholder} />
           </FormField>
+          {hasDescription ? (
+            <FormField label="Description">
+              <textarea className="form-input resize-none" rows={2}
+                value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </FormField>
+          ) : null}
           {hasSequence ? (
-            <FormField label="Sequence" error={errors.sequence}>
+            <FormField label="Sequence" required error={errors.sequence}>
               <input type="number" min={1} className="form-input" style={{ borderColor: errors.sequence ? C.red : undefined }}
                 value={form.sequence} onChange={(e) => setForm({ ...form, sequence: e.target.value })} />
             </FormField>
+          ) : null}
+          {numberDefs.map((field) => (
+            <FormField key={field.key} label={`${field.label}${field.suffix ? ` (${field.suffix})` : ''}`} error={errors[`number:${field.key}`]}>
+              <input type="number" min={field.min ?? 0} max={field.max} className="form-input"
+                style={{ borderColor: errors[`number:${field.key}`] ? C.red : undefined }}
+                placeholder={field.hint} aria-label={field.label}
+                value={form.numbers[field.key] ?? ''}
+                onChange={(e) => setForm({ ...form, numbers: { ...form.numbers, [field.key]: e.target.value } })} />
+            </FormField>
+          ))}
+          {hasColor ? (
+            <FormField label="Colour" error={errors.colorCoding}>
+              <div className="flex items-center gap-2">
+                <input type="color" aria-label="Colour" className="h-9 w-12 cursor-pointer rounded-lg border p-0.5"
+                  style={{ borderColor: C.border }}
+                  value={HEX_COLOR.test(form.colorCoding.trim()) ? form.colorCoding.trim() : DEFAULT_COLOR}
+                  onChange={(e) => setForm({ ...form, colorCoding: e.target.value })} />
+                <input className="form-input font-mono" maxLength={7} placeholder="#2955A3" aria-label="Colour code"
+                  style={{ borderColor: errors.colorCoding ? C.red : undefined }}
+                  value={form.colorCoding} onChange={(e) => setForm({ ...form, colorCoding: e.target.value })} />
+              </div>
+            </FormField>
+          ) : null}
+          {flagDefs.length ? (
+            <div className="space-y-2">
+              {flagDefs.map((flag) => (
+                <label key={flag.key} className="flex cursor-pointer items-start gap-2.5 text-xs">
+                  <input type="checkbox" className="mt-0.5" checked={form.flags[flag.key] === true}
+                    onChange={(e) => setForm({ ...form, flags: { ...form.flags, [flag.key]: e.target.checked } })} />
+                  <span>
+                    <span className="font-semibold" style={{ color: C.text }}>{flag.label}</span>
+                    {flag.hint ? <span className="block" style={{ color: C.muted }}>{flag.hint}</span> : null}
+                  </span>
+                </label>
+              ))}
+            </div>
           ) : null}
         </Modal>
       )}

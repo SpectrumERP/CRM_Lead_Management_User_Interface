@@ -46,12 +46,8 @@ export default function FormDrawer({
       className={`fixed inset-0 ${zClass} flex justify-end${closing ? ' is-sheet-closing' : ''}`}
       role="presentation"
     >
-      <button
-        type="button"
-        aria-label="Close dialog"
-        className="ui-scrim crm-sheet-scrim absolute inset-0 border-0 p-0"
-        onClick={requestClose}
-      />
+      {/* Forms do not close on a backdrop click (that would discard the input); use Cancel, × or Esc. */}
+      <div aria-hidden="true" className="ui-scrim crm-sheet-scrim absolute inset-0" />
       <div
         role="dialog"
         aria-modal="true"

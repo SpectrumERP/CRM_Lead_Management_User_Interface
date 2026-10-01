@@ -290,8 +290,8 @@ function fmtDateTime(dt: string) {
 function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <th
-      className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap"
-      style={{ color: '#9aaccc', letterSpacing: '0.07em', background: '#f8faff', textAlign: right ? 'right' : 'left' }}
+      className="px-4 py-3 text-left text-xs font-bold whitespace-nowrap"
+      style={{ color: '#9aaccc', background: '#f8faff', textAlign: right ? 'right' : 'left' }}
     >
       {children}
     </th>

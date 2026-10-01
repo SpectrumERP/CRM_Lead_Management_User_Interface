@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { formatINR, leadStagePalette } from '../data/leads'
+import { formatMoneyTotals, leadStagePalette } from '../data/leads'
 import { api } from '../api/crm'
 import { useApiQuery } from '../api/useApiQuery'
 import { SkeletonStatCards, SkeletonPipelineRows, SkeletonActivityList } from '../components/CRMStates'
@@ -63,10 +63,10 @@ const recentActivity: Array<{ time: string; action: string; lead: string; by: st
 ]
 
 const topSalespeople: Array<{ name: string; leads: number; value: string; initials: string; tone: DashTone }> = [
-  { name: 'Meena Iyer', leads: 48, value: '₹6.2 Cr', initials: 'MI', tone: 'accent' },
-  { name: 'Vikram Nair', leads: 41, value: '₹5.1 Cr', initials: 'VN', tone: 'primary' },
-  { name: 'Priya Mehta', leads: 38, value: '₹4.7 Cr', initials: 'PM', tone: 'success' },
-  { name: 'Arjun Patel', leads: 29, value: '₹2.4 Cr', initials: 'AP', tone: 'purple' },
+  { name: 'Meena Iyer', leads: 48, value: '₹62.0 M', initials: 'MI', tone: 'accent' },
+  { name: 'Vikram Nair', leads: 41, value: '₹51.0 M', initials: 'VN', tone: 'primary' },
+  { name: 'Priya Mehta', leads: 38, value: '₹47.0 M', initials: 'PM', tone: 'success' },
+  { name: 'Arjun Patel', leads: 29, value: '₹24.0 M', initials: 'AP', tone: 'purple' },
 ]
 
 const STAGE_ORDER = [
@@ -96,15 +96,17 @@ export default function Dashboard({
     const openLeads = leads.filter((l) => l.leadStatus === 'Open').length
     const qualified = leads.filter((l) => l.leadStage === 'Qualified').length
     const converted = leads.filter((l) => l.leadStatus === 'Converted').length
-    const pipelineValue = leads.reduce((s, l) => s + l.opportunityValue, 0)
-    const avgDeal = totalLeads ? pipelineValue / totalLeads : 0
+    // Per currency — amounts in different currencies are not added together.
+    const money = (list: typeof leads) => list.map((l) => ({ value: l.opportunityValue, currency: l.valueCurrency }))
+    const pipelineValue = formatMoneyTotals(money(leads))
+    const avgDeal = formatMoneyTotals(money(leads), { average: true })
     const pendingActivities = activities.filter((a) => a.status === 'Pending').length
     const upcomingMeetings = meetings.filter((m) => m.status === 'Scheduled').length
     const stageData = STAGE_ORDER.map((stage) => ({
       stage,
       count: leads.filter((l) => l.leadStage === stage).length,
       color: leadStagePalette(stage).text,
-      value: leads.filter((l) => l.leadStage === stage).reduce((s, l) => s + l.opportunityValue, 0),
+      value: formatMoneyTotals(money(leads.filter((l) => l.leadStage === stage))),
     }))
     const pipelineTotal = stageData.reduce((s, d) => s + d.count, 0)
     return {
@@ -192,7 +194,7 @@ export default function Dashboard({
               onClick={s.nav}
               className={`min-w-0 rounded-xl border border-line bg-surface p-4 text-left shadow-card transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${TONE_BORDER_HOVER[s.tone]}`}
             >
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">{s.label}</p>
+              <p className="mb-1 text-xs font-semibold tracking-wide text-ink-muted">{s.label}</p>
               <p className={`font-display text-2xl font-bold ${TONE_TEXT[s.tone]}`}>{s.value}</p>
               <p className="mt-0.5 text-xs text-ink-faint">{s.sub}</p>
             </button>
@@ -202,9 +204,9 @@ export default function Dashboard({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-ink to-primary px-4 py-4 shadow-[0_4px_20px_rgba(41,85,163,0.25)] lg:px-5">
         <div>
-          <p className="mb-1 text-xs font-bold uppercase tracking-widest text-surface/50">Total Pipeline Value</p>
-          <p className="font-display text-3xl font-bold text-surface">{formatINR(pipelineValue)}</p>
-          <p className="mt-1 text-xs text-surface/50">Avg. deal size: {formatINR(Math.round(avgDeal))}</p>
+          <p className="mb-1 text-xs font-bold tracking-widest text-surface/50">Total Pipeline Value</p>
+          <p className="font-display text-3xl font-bold text-surface">{pipelineValue}</p>
+          <p className="mt-1 text-xs text-surface/50">Avg. deal size: {avgDeal}</p>
         </div>
         <Button
           type="button"
@@ -256,8 +258,8 @@ export default function Dashboard({
                     </div>
                   </div>
                   <div className="w-[72px] flex-shrink-0 lg:w-[100px]">
-                    <span className="truncate text-xs font-bold" style={{ color: d.color }}>
-                      {formatINR(d.value)}
+                    <span className="block truncate text-xs font-bold" style={{ color: d.color }} title={d.value}>
+                      {d.value}
                     </span>
                   </div>
                 </div>

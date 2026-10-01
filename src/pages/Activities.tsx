@@ -15,6 +15,7 @@ import { SkeletonTableRows, EmptyState, NoResults, EmptyIcons } from '../compone
 import { ToastType } from '../components/Toast';
 import { Button, IconTooltip, PageHeader, SortChevrons, sortAlpha, StatPill, StatPillRow } from '../ui';
 import { matchesAny } from '../utils/text';
+import { toIsoDate, toTimeHHMM } from '../utils/dateFormat';
 
 interface ActivitiesPageProps {
   onViewLead?: (id: string) => void;
@@ -219,7 +220,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
               {loading && <SkeletonTableRows cols={12} rows={6} />}
               {!loading && activities.length === 0 && (
                 <tr>
-                  <td colSpan={12}>
+                  <td colSpan={12} className="table-empty-td">
                     <EmptyState
                       icon={EmptyIcons.activities}
                       title="No activities found"
@@ -231,7 +232,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
               )}
               {!loading && activities.length > 0 && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={12}>
+                  <td colSpan={12} className="table-empty-td">
                     <NoResults onClear={() => { setSearch(''); setTypeFilter('All'); setStatusFilter('All'); setDateFilter(''); }} />
                   </td>
                 </tr>
@@ -365,7 +366,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                           <div className="rounded-xl p-4 flex gap-6 mr-4 border border-primary-soft bg-surface">
                             {/* Notes */}
                             <div className="flex-1">
-                              <p className="text-xs font-bold mb-1.5 uppercase tracking-wider text-[10px] text-ink-faint">Notes / Agenda</p>
+                              <p className="text-xs font-bold mb-1.5 tracking-wider text-[10px] text-ink-faint">Notes / Agenda</p>
                               <p className="text-xs leading-relaxed text-ink-soft">
                                 {activity.notes || <span className="text-line-strong">No notes added</span>}
                               </p>
@@ -373,7 +374,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                             {/* Outcome */}
                             {activity.status === 'Completed' && (
                               <div className="flex-1">
-                                <p className="text-xs font-bold mb-1.5 uppercase tracking-wider text-[10px] text-success">Outcome / Result</p>
+                                <p className="text-xs font-bold mb-1.5 tracking-wider text-[10px] text-success">Outcome / Result</p>
                                 <p className="text-xs leading-relaxed text-success">
                                   {activity.outcome}
                                 </p>
@@ -438,8 +439,8 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
             patchActivity(completingActivity.id, {
               status: 'Completed',
               outcome,
-              completeDate: now.toISOString().split('T')[0],
-              completeTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+              completeDate: toIsoDate(now),
+              completeTime: toTimeHHMM(now),
             });
             onToast?.('success', 'Activity Completed', `"${completingActivity.subject}" marked as complete.`);
             setCompletingActivity(null);

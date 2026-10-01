@@ -7,6 +7,8 @@ export interface ConfirmDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   danger?: boolean
+  /** Stacking layer; the save confirm sits above other dialogs. */
+  zClass?: string
   onConfirm: () => void
   onCancel: () => void
 }
@@ -17,6 +19,7 @@ export default function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   danger = false,
+  zClass = 'z-[90]',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -30,7 +33,7 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="ui-scrim fixed inset-0 z-[90] flex items-center justify-center px-4"
+      className={`ui-scrim fixed inset-0 ${zClass} flex items-center justify-center px-4`}
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
     >
       <Card

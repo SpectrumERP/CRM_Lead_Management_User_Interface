@@ -1,10 +1,11 @@
-import { lazy } from 'react'
+import { lazy, useEffect } from 'react'
 import { Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useCrmSelector } from '../contexts/CrmStoreContext'
 import { useToast } from '../contexts/ToastContext'
 import AppShell from './AppShell'
 import { AdminGuard, AuthGuard } from './guards'
 import { paths } from './paths'
+import { isLeadLocked, leadLockedReason } from '../data/leads'
 
 const Dashboard = lazy(() => import('../pages/Dashboard'))
 const LeadsList = lazy(() => import('../pages/LeadsList'))
@@ -188,7 +189,14 @@ function EditLeadPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   const existing = useCrmSelector((state) => state.leads.find((lead) => lead.id === id) ?? null)
+  // A converted / completed-stage lead is read-only: an old edit link goes back to its view page.
+  const locked = existing ? isLeadLocked(existing) : false
+  const reason = existing && locked ? leadLockedReason(existing) : ''
+  useEffect(() => {
+    if (reason) addToast('info', 'Lead Locked', `${reason}.`)
+  }, [reason, addToast])
   if (!existing) return <Navigate to={paths.leads} replace />
+  if (locked) return <Navigate to={paths.lead(id)} replace />
   return (
     <CreateLead
       existing={existing}
@@ -364,7 +372,9 @@ export function AppRouter() {
       <Route path="login" element={<Login />} />
       <Route element={<AuthGuard />}>
         <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
+          {/* Home is the Leads list for now (Dashboard hidden). */}
+          {/* <Route index element={<DashboardPage />} /> */}
+          <Route index element={<Navigate to={paths.leads} replace />} />
           <Route path="entities" element={<EntitiesListPage />} />
           <Route path="entities/new" element={<CreateEntityPage />} />
           <Route path="entities/:id" element={<EntityDetailPage />} />
@@ -391,7 +401,7 @@ export function AppRouter() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="audit-log" element={<AuditLogPage />} />
           </Route>
-          <Route path="*" element={<Navigate to={paths.dashboard} replace />} />
+          <Route path="*" element={<Navigate to={paths.leads} replace />} />
         </Route>
       </Route>
     </Routes>

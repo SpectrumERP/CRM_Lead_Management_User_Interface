@@ -1,29 +1,32 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSheetClose } from './useSheetClose'
+import { useLeadFormFillValues } from './useLeadFormFillValues'
 import {
   Activity,
   ActivityFormStatus,
   ActivityType,
-  SALESPERSONS,
-  activityFormStatus,
   toStoredActivityStatus,
 } from '../data/activities'
-import { useMasterData } from '../contexts/MasterDataContext'
 import { api } from '../api/crm'
+import { isLeadLocked } from '../data/leads'
 import { useApiQuery } from '../api/useApiQuery'
 import {
   Button,
   ChoiceField,
   FormGrid,
   SearchSelectField,
-  SelectField,
   TextAreaField,
   TextField,
 } from '../ui'
+import { UserSelectField } from './UserSelect'
+import { FIELD_LIMITS } from '../constants/fieldLimits'
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 
 interface ActivityDrawerProps {
   preselectedLead?: { id: string; name: string; contact: string } | null
   followUpFrom?: Activity | null
+  /** Edit this activity: the form starts from it and `onSave` returns it with the same id. */
+  editing?: Activity | null
   onClose: () => void
   onSave: (a: Activity) => void
   /** Render the form inside a parent card instead of a side sheet. */
@@ -32,25 +35,42 @@ interface ActivityDrawerProps {
 
 type LeadOption = { id: string; name: string; contact: string }
 
-export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose, onSave, inline = false }: ActivityDrawerProps) {
-  const { activeActivityTypeNames } = useMasterData()
+
+export default function ActivityDrawer({ preselectedLead, followUpFrom, editing, onClose, onSave, inline = false }: ActivityDrawerProps) {
+  const confirm = useConfirm()
+  // Server activity types and server leads only (what the save APIs accept).
+  const { values: fill } = useLeadFormFillValues()
+  const activeActivityTypeNames = fill ? fill.leadActivityTypes.map((t) => t.leadActivityTypeName) : []
   const { data: leadPage } = useApiQuery(() => api.leads.list(), [])
-  const leadOptions: LeadOption[] = (leadPage?.items ?? []).map((lead) => ({
+  // Server leads only, and not locked ones (converted / completed stage take no new activities).
+  const leadOptions: LeadOption[] = (leadPage?.items ?? []).filter((lead) => lead.spectrum && !isLeadLocked(lead)).map((lead) => ({
     id: lead.id,
     name: lead.companyName,
     contact: lead.contactPerson,
   }))
 
-  const [type, setType] = useState<ActivityType>(followUpFrom ? 'Follow-up' : 'Phone Call')
-  const [subject, setSubject] = useState(followUpFrom ? `Follow-up: ${followUpFrom.subject}` : '')
-  const [dueDate, setDueDate] = useState('')
-  const [assignedTo, setAssignedTo] = useState(followUpFrom?.assignedTo ?? 'Priya Mehta')
-  const [notes, setNotes] = useState('')
-  const [formStatus, setFormStatus] = useState<ActivityFormStatus>(
-    followUpFrom ? activityFormStatus(followUpFrom.status) : 'Open',
+  const [type, setType] = useState<ActivityType>(editing?.type ?? (followUpFrom ? 'Follow-up' : 'Phone Call'))
+  useEffect(() => {
+    // Use the server's own name for the preferred type (e.g. "Follow Up"), else its first type.
+    if (!activeActivityTypeNames.length || activeActivityTypeNames.includes(type)) return
+    const norm = (v: string) => v.toLowerCase().replace(/[\s_-]+/g, '')
+    const match = activeActivityTypeNames.find((name) => norm(name) === norm(type))
+    setType((match ?? activeActivityTypeNames[0]) as ActivityType)
+  }, [activeActivityTypeNames, type])
+  const [subject, setSubject] = useState(editing?.subject ?? (followUpFrom ? `Follow-up: ${followUpFrom.subject}` : ''))
+  const [dueDate, setDueDate] = useState(editing?.scheduleDate ?? '')
+  const [assignedTo, setAssignedTo] = useState(editing?.assignedTo ?? followUpFrom?.assignedTo ?? '')
+  const [notes, setNotes] = useState(editing?.notes ?? '')
+  // New work, including a follow-up of a finished activity, starts Open. Editing keeps the status —
+  // a completed activity can stay Completed (with its remark) or be reopened / closed.
+  const [formStatus, setFormStatus] = useState<ActivityFormStatus | 'Completed'>(
+    editing?.status === 'Completed' ? 'Completed' : editing?.status === 'Closed' ? 'Closed' : 'Open',
   )
-  const [closureDate, setClosureDate] = useState('')
+  const [closureDate, setClosureDate] = useState(editing?.closureDate ?? '')
+  const [remark, setRemark] = useState(editing?.outcome ?? '')
+  const statusOptions = editing?.status === 'Completed' ? (['Open', 'Closed', 'Completed'] as const) : (['Open', 'Closed'] as const)
   const [lead, setLead] = useState<LeadOption | null>(() => {
+    if (editing) return { id: editing.leadId, name: editing.leadName, contact: editing.contactPerson }
     if (preselectedLead) return preselectedLead
     if (followUpFrom) {
       return { id: followUpFrom.leadId, name: followUpFrom.leadName, contact: followUpFrom.contactPerson }
@@ -63,7 +83,8 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
   const dismiss = inline ? onClose : requestClose
   const fromLeadForm = Boolean(preselectedLead)
   const isClosed = formStatus === 'Closed'
-  const typeOptions = activeActivityTypeNames.length ? activeActivityTypeNames : [type]
+  const isCompleted = formStatus === 'Completed'
+  const typeOptions = activeActivityTypeNames
 
   function clearErr(key: string) {
     setErrors((prev) => {
@@ -81,10 +102,11 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
     if (!dueDate) errs.dueDate = 'Due date is required'
     if (!assignedTo) errs.assignedTo = 'Assigned to is required'
     if (isClosed && !closureDate) errs.closureDate = 'Closure date is required when status is Closed'
+    if (isCompleted && !remark.trim()) errs.remark = 'Completion remark is required when status is Completed'
     return errs
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (saving) return
     const errs = validate()
     if (Object.keys(errs).length) {
@@ -92,10 +114,12 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
       return
     }
     if (!lead) return
+    if (!(await confirm(saveConfirm('Activity', Boolean(editing))))) return
     setSaving(true)
     window.setTimeout(() => {
       onSave({
-        id: `ACT-${Date.now()}`,
+        ...editing,
+        id: editing?.id ?? `ACT-${Date.now()}`,
         type,
         subject: subject.trim(),
         leadId: lead.id,
@@ -106,12 +130,15 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
         scheduleTime: '',
         reminder: 'None',
         notes: notes.trim(),
-        status: toStoredActivityStatus(formStatus),
-        outcome: isClosed ? notes.trim() : '',
-        completeDate: isClosed ? closureDate : '',
-        completeTime: '',
-        hasAttachment: false,
-        parentActivityId: followUpFrom?.id,
+        // Open → Pending; Closed → Closed with its closure date; Completed (Mark Complete, or kept when
+        // editing a completed activity) with its remark.
+        status: isCompleted ? 'Completed' : toStoredActivityStatus(formStatus as ActivityFormStatus),
+        outcome: isCompleted ? remark.trim() : '',
+        closureDate: isClosed ? closureDate : undefined,
+        completeDate: isCompleted ? (editing?.completeDate ?? '') : '',
+        completeTime: isCompleted ? (editing?.completeTime ?? '') : '',
+        hasAttachment: editing?.hasAttachment ?? false,
+        parentActivityId: editing?.parentActivityId ?? followUpFrom?.id,
       })
       dismiss()
     }, 400)
@@ -143,6 +170,7 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
         <TextField
           fieldClassName="lg:col-span-2"
           label="Subject"
+          maxLength={FIELD_LIMITS.activitySubject}
           required
           error={errors.subject}
           value={subject}
@@ -184,11 +212,10 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
           }}
         />
 
-        <SelectField
+        <UserSelectField
           label="Assigned To"
           required
           error={errors.assignedTo}
-          options={SALESPERSONS}
           placeholder="Select assignee"
           value={assignedTo}
           onValueChange={(value) => {
@@ -200,6 +227,7 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
         <TextAreaField
           fieldClassName="lg:col-span-2"
           label="Notes / Outcome"
+          maxLength={FIELD_LIMITS.activityNotesOutcome}
           rows={4}
           value={notes}
           onValueChange={setNotes}
@@ -210,11 +238,12 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
           label="Status"
           name="activity-form-status"
           layout="radio"
-          options={['Open', 'Closed'] as const}
+          options={statusOptions}
           value={formStatus}
           onChange={(value) => {
             setFormStatus(value)
-            if (value === 'Open') {
+            clearErr('remark')
+            if (value !== 'Closed') {
               setClosureDate('')
               clearErr('closureDate')
               return
@@ -222,6 +251,23 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
             setClosureDate((current) => current || new Date().toISOString().slice(0, 10))
           }}
         />
+
+        {isCompleted ? (
+          <TextAreaField
+            fieldClassName="lg:col-span-2"
+            label="Completion Remark"
+            required
+            maxLength={FIELD_LIMITS.activityNotesOutcome}
+            rows={3}
+            error={errors.remark}
+            value={remark}
+            onValueChange={(value) => {
+              setRemark(value)
+              clearErr('remark')
+            }}
+            placeholder="What was the result?"
+          />
+        ) : null}
 
         {isClosed ? (
           <TextField
@@ -252,7 +298,7 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
             Cancel
           </Button>
           <Button variant="solid" className={inline ? '' : 'flex-1'} onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Activity'}
+            {saving ? 'Saving…' : editing ? 'Update Activity' : 'Save Activity'}
           </Button>
         </div>
   )
@@ -268,12 +314,8 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
 
   return (
     <div className={`fixed inset-0 z-[60] flex justify-end${closing ? ' is-sheet-closing' : ''}`}>
-      <button
-        type="button"
-        aria-label="Close dialog"
-        className="ui-scrim crm-sheet-scrim absolute inset-0 border-0 p-0"
-        onClick={requestClose}
-      />
+      {/* Forms do not close on a backdrop click (that would discard the input); use Cancel, × or Esc. */}
+      <div aria-hidden="true" className="ui-scrim crm-sheet-scrim absolute inset-0" />
 
       <div className="crm-sheet relative z-[1] flex h-full w-[32rem] max-w-[calc(100vw-1rem)] flex-col overflow-hidden border-l border-line bg-surface shadow-overlay sm:max-w-full">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-primary/15 bg-primary-soft px-5 py-4">
@@ -292,9 +334,13 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, onClose,
             </span>
             <div className="min-w-0">
               <h2 className="font-display text-sm font-bold text-ink">
-              {followUpFrom ? 'Create Follow-up Task' : 'Add Activity'}
+              {editing ? 'Edit Activity' : followUpFrom ? 'Create Follow-up Task' : 'Add Activity'}
             </h2>
-              {followUpFrom ? (
+              {editing ? (
+                <p className="mt-0.5 truncate text-xs text-ink-muted">
+                  Editing: <span className="font-semibold text-primary">{editing.subject}</span>
+                </p>
+              ) : followUpFrom ? (
                 <p className="mt-0.5 truncate text-xs text-ink-muted">
                   Follow-up from: <span className="font-semibold text-primary">{followUpFrom.subject}</span>
                 </p>

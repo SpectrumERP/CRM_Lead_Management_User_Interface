@@ -1,25 +1,7 @@
 import { useEffect, useState } from 'react'
-import { loadAuth, type SpectrumCompany } from '../api/authStore'
+import type { SpectrumCompany } from '../api/authStore'
+import { headOfficeNoOf, rememberCompany, resolveSpectrumCompany } from '../api/spectrumCompany'
 import { useAuth } from './AuthContext'
-
-const STORAGE_KEY = 'fi-crm-company'
-
-function rememberedCompany(): number | null {
-  try {
-    const value = Number(localStorage.getItem(STORAGE_KEY))
-    return Number.isInteger(value) && value > 0 ? value : null
-  } catch {
-    return null
-  }
-}
-
-function remember(companyNo: number) {
-  try {
-    localStorage.setItem(STORAGE_KEY, String(companyNo))
-  } catch {
-    // Storage blocked — selection just won't survive a reload.
-  }
-}
 
 /**
  * Companies from the Spectrum login, plus the one currently selected.
@@ -34,18 +16,10 @@ export function useSpectrumCompany() {
   useEffect(() => {
     let cancelled = false
     setReady(false)
-    loadAuth().then((auth) => {
+    resolveSpectrumCompany().then((resolved) => {
       if (cancelled) return
-      const list = auth?.companies ?? []
-      const has = (no: number | null | undefined) => !!no && list.some((c) => c.CompanyNo === no)
-      const remembered = rememberedCompany()
-      const initial = has(remembered)
-        ? remembered
-        : has(auth?.user.LastLoginCompanyNo)
-          ? auth!.user.LastLoginCompanyNo
-          : (list[0]?.CompanyNo ?? null)
-      setCompanies(list)
-      setCompanyNoState(initial)
+      setCompanies(resolved?.companies ?? [])
+      setCompanyNoState(resolved?.companyNo ?? null)
       setReady(true)
     })
     return () => {
@@ -55,8 +29,11 @@ export function useSpectrumCompany() {
 
   function setCompanyNo(next: number) {
     setCompanyNoState(next)
-    remember(next)
+    rememberCompany(next)
   }
 
-  return { enabled: ready && companyNo !== null, ready, companies, companyNo, setCompanyNo }
+  // Head office of the selected company (fill values and the document store are per head office).
+  const headOfficeNo = companyNo === null ? null : headOfficeNoOf(companies, companyNo)
+
+  return { enabled: ready && companyNo !== null, ready, companies, companyNo, headOfficeNo, setCompanyNo }
 }

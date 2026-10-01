@@ -8,6 +8,53 @@ export const spectrumEndpoints = {
   },
   /** Base for Save / Load Data / Search / Delete master routes (see masters.ts). */
   masters: '/api/master',
+  users: {
+    /** User search for owner / assignee pickers (see users.ts). */
+    search: '/api/security/users',
+  },
+  /** Shared document store used by every form (see attachments.ts). */
+  attachments: {
+    /** GET ?transactionId=&formNo= (list) · POST [{fileName, companyNo, formNo}] (entry) · PUT multipart (file) */
+    root: '/api/document-attachments',
+    status: '/api/document-attachments/status',
+    rename: '/api/document-attachments/rename',
+    delete: '/api/document-attachments/delete',
+    /** `${root}/{docNo}/download` */
+    download: (docNo: number) => `/api/document-attachments/${docNo}/download`,
+  },
+  businessEntities: {
+    /** Paged search used for the Business Entity field (see businessEntities.ts). */
+    search: '/api/master/business-entities/search/business-entity-wise',
+    /** Contact persons of one entity (see businessEntities.ts). */
+    contactPersons: '/api/master/business-entities/contact-persons',
+  },
+  leads: {
+    /** All lead form dropdowns in one call (see leadFormFillValues.ts). */
+    fillValues: '/api/crm/leads/fill-values',
+    save: '/api/crm/leads/save',
+    convert: '/api/crm/leads/convert-to-opportunity',
+    /** `${timeline}/{leadNo}` — paged (see timeline.ts). */
+    timeline: '/api/crm/leads/timeline',
+    search: '/api/crm/leads/search-data',
+    loadData: '/api/crm/leads/load-data',
+    delete: '/api/crm/leads/delete',
+    saveActivity: '/api/crm/leads/save-activity-detail',
+    deleteActivities: '/api/crm/leads/delete-activity-detail',
+    saveNote: '/api/crm/leads/save-notes-detail',
+    deleteNotes: '/api/crm/leads/delete-notes-detail',
+  },
+  opportunities: {
+    /** All opportunity form dropdowns in one call (see opportunityFormFillValues.ts). */
+    fillValues: '/api/crm/opportunities/fill-values',
+    save: '/api/crm/opportunities/save',
+    search: '/api/crm/opportunities/search-data',
+    loadData: '/api/crm/opportunities/load-data',
+    delete: '/api/crm/opportunities/delete',
+    saveActivity: '/api/crm/opportunities/save-activity-detail',
+    deleteActivities: '/api/crm/opportunities/delete-activity-detail',
+    /** `${timeline}/{opportunityNo}` — paged (see timeline.ts). */
+    timeline: '/api/crm/opportunities/timeline',
+  },
 }
 
 export const endpoints = {

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { IconTooltip } from '../IconTooltip'
 import { controlClass } from './controlClass'
 import { useFixedMenu } from './useFixedMenu'
+import { initialFocusIndex, scrollSelectedIntoView } from './selectedOption'
 
 export interface SearchSelectProps<T> {
   id?: string
@@ -22,6 +23,14 @@ export interface SearchSelectProps<T> {
   clearable?: boolean
   /** Keep options in the given order (skip A–Z sort by label). */
   preserveOrder?: boolean
+  /** Server-side search: called with the typed text; `options` are then shown as given (no local filtering). */
+  onQueryChange?: (query: string) => void
+  /** Show a searching state instead of the empty text. */
+  loading?: boolean
+  /** Small note under the list, e.g. "Showing 50 of 1,240 — keep typing to narrow". */
+  footer?: ReactNode
+  /** Fires when the list opens / closes — lets callers load options only once the user opens the field. */
+  onOpenChange?: (open: boolean) => void
 }
 
 /**
@@ -44,6 +53,10 @@ export function SearchSelect<T>({
   disabled,
   clearable = true,
   preserveOrder = false,
+  onQueryChange,
+  loading = false,
+  footer,
+  onOpenChange,
 }: SearchSelectProps<T>) {
   const autoId = useId()
   const buttonId = id ?? autoId
@@ -57,14 +70,14 @@ export function SearchSelect<T>({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = q
+    const list = q && !onQueryChange
       ? options.filter((item) =>
           filterItem ? filterItem(item, query) : getLabel(item).toLowerCase().includes(q),
         )
       : [...options]
     if (preserveOrder) return list
     return list.sort((left, right) => compareAlpha(getLabel(left), getLabel(right)))
-  }, [options, query, filterItem, getLabel, preserveOrder])
+  }, [options, query, filterItem, getLabel, preserveOrder, onQueryChange])
 
   useEffect(() => {
     function onDoc(event: MouseEvent) {
@@ -76,13 +89,34 @@ export function SearchSelect<T>({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
+  const selectedKey = value ? getKey(value) : null
+  const listRef = useRef<HTMLDivElement>(null)
+  // Open on the selected option (not the first row); a search starts from the first match.
   useEffect(() => {
-    if (open) setFocusIdx(0)
+    if (open) setFocusIdx(initialFocusIndex(filtered, selectedKey, getKey, Boolean(query.trim())))
+    // Only when the list opens or the search changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, query])
+  useEffect(() => {
+    if (!open) return
+    const frame = requestAnimationFrame(() => scrollSelectedIntoView(listRef.current))
+    return () => cancelAnimationFrame(frame)
+  }, [open])
+
+  const onOpenChangeRef = useRef(onOpenChange)
+  onOpenChangeRef.current = onOpenChange
+  useEffect(() => {
+    onOpenChangeRef.current?.(open)
+  }, [open])
+
+  function updateQuery(next: string) {
+    setQuery(next)
+    onQueryChange?.(next)
+  }
 
   function select(item: T | null) {
     onChange(item)
-    setQuery('')
+    updateQuery('')
     setOpen(false)
   }
 
@@ -166,31 +200,46 @@ export function SearchSelect<T>({
                   autoFocus
                   type="search"
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => updateQuery(event.target.value)}
                   placeholder={searchPlaceholder}
                   className={controlClass({ className: 'text-xs' })}
                   aria-label={searchPlaceholder}
                 />
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {filtered.length === 0 ? (
+              <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
+                {loading && filtered.length === 0 ? (
+                  <p className="text-xs text-center py-4 text-ink-faint" role="status">Searching…</p>
+                ) : filtered.length === 0 ? (
                   <p className="text-xs text-center py-4 text-ink-faint">{emptyText}</p>
                 ) : (
-                  filtered.map((item, idx) => (
+                  filtered.map((item, idx) => {
+                    const selected = selectedKey !== null && getKey(item) === selectedKey
+                    return (
                     <button
                       key={getKey(item)}
                       type="button"
                       role="option"
-                      aria-selected={value ? getKey(value) === getKey(item) : false}
-                      className={`w-full px-3 py-2 text-left ${idx === focusIdx ? 'bg-primary-soft' : 'bg-surface'}`}
+                      aria-selected={selected}
+                      // Selected: tinted with a primary bar; the row under the pointer / arrow keys: hover tint.
+                      className={`w-full px-3 py-2 text-left ${
+                        selected
+                          ? 'bg-primary-soft shadow-[inset_3px_0_0_var(--color-primary)]'
+                          : idx === focusIdx
+                            ? 'bg-surface-hover'
+                            : 'bg-surface'
+                      }`}
                       onMouseEnter={() => setFocusIdx(idx)}
                       onClick={() => select(item)}
                     >
-                      {renderOption ? renderOption(item) : <span className="text-xs font-semibold text-ink">{getLabel(item)}</span>}
+                      {renderOption ? renderOption(item) : <span className={`text-xs font-semibold ${selected ? 'text-primary' : 'text-ink'}`}>{getLabel(item)}</span>}
                     </button>
-                  ))
+                    )
+                  })
                 )}
               </div>
+              {footer ? (
+                <div className="shrink-0 border-t border-line-subtle px-3 py-1.5 text-[11px] text-ink-faint">{footer}</div>
+              ) : null}
             </div>,
             document.body,
           )

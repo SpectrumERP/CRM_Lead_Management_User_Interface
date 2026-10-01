@@ -21,8 +21,10 @@ function RouteTransition({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(hide)
   }, [pathname])
 
+  // Flex column filling <main>: list pages (root `flex-1 min-h-0`) get exactly the screen height, so
+  // their grid scrolls inside with the header and pagination kept in view; longer pages still scroll.
   return (
-    <div className="relative min-h-[calc(100dvh-3.5rem)]">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {busy ? <PageLoader label={PAGE_COPY.pageLoading} /> : null}
       <Suspense fallback={<PageLoader label={PAGE_COPY.pageLoading} />}>{children}</Suspense>
     </div>

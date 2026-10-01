@@ -31,7 +31,7 @@ export function useApiMaster(api: MasterApi, companyNo: number | null) {
     void reload();
   }, [reload]);
 
-  return { rows, loading, error, reload };
+  return { rows, loading, error, reload, companyNo };
 }
 
 export type ApiMasterState = ReturnType<typeof useApiMaster>;

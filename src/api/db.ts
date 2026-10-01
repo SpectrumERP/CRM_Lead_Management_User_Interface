@@ -1,4 +1,4 @@
-import { LEADS, LEAD_CURRENCIES, normalizeOrgName, type Lead, type LeadCurrency } from '../data/leads'
+import { LEADS, LEAD_CURRENCIES, normalizeOrgName, type Lead, type LeadContactEntry, type LeadCurrency } from '../data/leads'
 import {
   DEAL_STAGES,
   DEAL_STAGE_WEIGHT,
@@ -241,12 +241,24 @@ function sanitizeOpportunity(item: Opportunity): Opportunity {
     email: sanitizeEmail(item.email),
     phone: sanitizeText(item.phone, 40),
     productsRequired: sanitizeText(item.productsRequired, 500),
+    contacts: item.contacts?.map(sanitizeContactEntry),
     owner: sanitizeName(item.owner),
     status: item.status ?? 'Open',
     createdBy: sanitizeName(item.createdBy || item.convertedBy || item.owner || 'System'),
     closingDate: sanitizeText(item.closingDate, 40),
     convertedAt: item.convertedAt ? sanitizeText(item.convertedAt, 40) : undefined,
     convertedBy: item.convertedBy ? sanitizeName(item.convertedBy) : undefined,
+  }
+}
+
+function sanitizeContactEntry(item: LeadContactEntry): LeadContactEntry {
+  return {
+    name: sanitizeName(item.name),
+    email: sanitizeEmail(item.email),
+    phones: item.phones.map((phone) => sanitizeText(phone, 40)).filter(Boolean),
+    primary: Boolean(item.primary),
+    ...(item.designation ? { designation: sanitizeName(item.designation) } : {}),
+    ...(item.businessEntityContactPersonDetailNo ? { businessEntityContactPersonDetailNo: item.businessEntityContactPersonDetailNo } : {}),
   }
 }
 
@@ -259,12 +271,7 @@ function sanitizeLead(lead: Lead): Lead {
     phone: sanitizeText(lead.phone, 40),
     productsRequired: sanitizeText(lead.productsRequired, 500),
     productTypes: lead.productTypes?.map((item) => sanitizeText(item, 80)).filter(Boolean),
-    contacts: lead.contacts?.map((item) => ({
-      name: sanitizeName(item.name),
-      email: sanitizeEmail(item.email),
-      phones: item.phones.map((phone) => sanitizeText(phone, 40)).filter(Boolean),
-      primary: Boolean(item.primary),
-    })),
+    contacts: lead.contacts?.map(sanitizeContactEntry),
     assignedSalesperson: sanitizeName(lead.assignedSalesperson),
     description: lead.description ? sanitizeText(lead.description, 2000) : lead.description,
     estimatedLeadName: lead.estimatedLeadName ? sanitizeName(lead.estimatedLeadName) : lead.estimatedLeadName,
@@ -428,26 +435,125 @@ export function patchLead(id: string, patch: Partial<Lead>) {
   )
 }
 
+/** State with a lead and everything hanging off it removed. */
+function withoutLead(id: string): CrmDb {
+  return {
+    ...state,
+    leads: state.leads.filter((item) => item.id !== id),
+    activities: state.activities.filter((item) => item.leadId !== id),
+    meetings: state.meetings.filter((item) => item.leadId !== id),
+    notes: state.notes.filter((item) => item.relatedLeadId !== id),
+    emails: state.emails.filter((item) => item.leadId !== id),
+    documents: state.documents.filter((item) => !(item.relatedType === 'lead' && item.relatedId === id)),
+    opportunities: state.opportunities.filter((item) => item.leadId !== id),
+  }
+}
+
 export function removeLead(id: string) {
   const current = requireRow(state.leads.find((item) => item.id === id), 'Lead')
   assertCanWriteRecord(current.assignedSalesperson)
   setState(
     withAudit(
-      {
-        ...state,
-        leads: state.leads.filter((item) => item.id !== id),
-        activities: state.activities.filter((item) => item.leadId !== id),
-        meetings: state.meetings.filter((item) => item.leadId !== id),
-        notes: state.notes.filter((item) => item.relatedLeadId !== id),
-        emails: state.emails.filter((item) => item.leadId !== id),
-        documents: state.documents.filter((item) => !(item.relatedType === 'lead' && item.relatedId === id)),
-        opportunities: state.opportunities.filter((item) => item.leadId !== id),
-      },
+      withoutLead(id),
       auditEntry('Lead', 'Deleted', current.id, current.companyName, {
         details: `Lead ${current.id} deleted.`,
       }),
     ),
   )
+}
+
+// ─── Server-backed leads ──────────────────────────────────────────────────────
+// Leads with `spectrum` set come from /api/crm/leads. The server is the source of truth, so they are
+// stored as received (sanitised, not re-validated against the in-app lists).
+
+function definedOnly<T extends object>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>
+}
+
+/**
+ * Insert / update server leads. Fields the incoming lead leaves undefined keep their stored value, so a
+ * search row (no contacts or products) does not wipe details loaded earlier. `replaceAll` also drops
+ * server leads that are no longer returned.
+ */
+export function upsertServerLeads(leads: Lead[], options: { replaceAll?: boolean } = {}) {
+  const incomingIds = new Set(leads.map((lead) => lead.id))
+  const byId = new Map(state.leads.map((lead) => [lead.id, lead]))
+  const merged = leads.map((lead) => {
+    const current = byId.get(lead.id)
+    const next = current
+      ? { ...current, ...definedOnly(lead), spectrum: { ...current.spectrum, ...definedOnly(lead.spectrum ?? { leadNo: 0 }) } as Lead['spectrum'] }
+      : lead
+    return sanitizeLead(next)
+  })
+  const others = state.leads.filter((lead) => {
+    if (incomingIds.has(lead.id)) return false
+    return !(options.replaceAll && lead.spectrum)
+  })
+  setState({ ...state, leads: [...merged, ...others] })
+}
+
+/** Replace the server-sourced notes / activities of one lead (in-app ones are kept). */
+export function replaceServerLeadChildren(
+  leadId: string,
+  children: { notes: CrmNote[]; activities: Activity[] },
+  isServerId: (id: string) => boolean,
+) {
+  setState({
+    ...state,
+    notes: [
+      ...children.notes.map(sanitizeNote),
+      ...state.notes.filter((item) => !(item.relatedLeadId === leadId && isServerId(item.id))),
+    ],
+    activities: [
+      ...children.activities,
+      ...state.activities.filter((item) => !(item.leadId === leadId && isServerId(item.id))),
+    ],
+  })
+}
+
+/** Insert / update server opportunities; same merge rules as `upsertServerLeads`. */
+export function upsertServerOpportunities(items: Opportunity[], options: { replaceAll?: boolean } = {}) {
+  const incomingIds = new Set(items.map((item) => item.id))
+  const byId = new Map(state.opportunities.map((item) => [item.id, item]))
+  const merged = items.map((item) => {
+    const current = byId.get(item.id)
+    const next = current
+      ? {
+          ...current,
+          ...definedOnly(item),
+          spectrum: { ...current.spectrum, ...definedOnly(item.spectrum ?? { opportunityNo: 0 }) } as Opportunity['spectrum'],
+        }
+      : item
+    return sanitizeOpportunity(next)
+  })
+  const others = state.opportunities.filter((item) => {
+    if (incomingIds.has(item.id)) return false
+    return !(options.replaceAll && item.spectrum)
+  })
+  setState({ ...state, opportunities: [...merged, ...others] })
+}
+
+/** Replace the server activities of one opportunity (in-app ones are kept). */
+export function replaceServerOpportunityActivities(opportunityId: string, activities: Activity[]) {
+  setState({
+    ...state,
+    activities: [
+      ...activities,
+      ...state.activities.filter((item) => !(item.opportunityId === opportunityId && item.id.startsWith('SOA-'))),
+    ],
+  })
+}
+
+/** Remove an opportunity locally after the server has deleted it. */
+export function dropServerOpportunity(id: string) {
+  if (!state.opportunities.some((item) => item.id === id)) return
+  setState({ ...state, opportunities: state.opportunities.filter((item) => item.id !== id) })
+}
+
+/** Remove a lead locally after the server has deleted it. */
+export function dropServerLead(id: string) {
+  if (!state.leads.some((item) => item.id === id)) return
+  setState(withoutLead(id))
 }
 
 export function convertLeadToOpportunity(
@@ -837,6 +943,8 @@ export function listOpportunities(query: Record<string, string> = {}): Opportuni
     .filter(Boolean)
   const leadId = query.leadId?.trim() ?? ''
   let items = getState().opportunities
+  // `source=server`: Spectrum logins list server opportunities only (demo ones are hidden).
+  if (query.source === 'server') items = items.filter((item) => item.spectrum)
   if (leadId) items = items.filter((item) => item.leadId === leadId)
   if (stages.length) items = items.filter((item) => stages.includes(item.dealStage))
   if (q) {
@@ -849,9 +957,18 @@ export function listOpportunities(query: Record<string, string> = {}): Opportuni
         item.owner.toLowerCase().includes(q),
     )
   }
+  const perCurrency = new Map<string, { currency: string; dealValue: number; weightedValue: number }>()
+  for (const item of items) {
+    const currency = item.valueCurrency || 'INR'
+    const row = perCurrency.get(currency) ?? { currency, dealValue: 0, weightedValue: 0 }
+    row.dealValue += item.dealValue
+    row.weightedValue += item.weightedValue
+    perCurrency.set(currency, row)
+  }
   const totals = {
     dealValue: items.reduce((sum, item) => sum + item.dealValue, 0),
     weightedValue: items.reduce((sum, item) => sum + item.weightedValue, 0),
+    byCurrency: [...perCurrency.values()],
   }
   const total = items.length
   const page = Math.max(1, Number(query.page) || 1)
@@ -865,4 +982,22 @@ export function __resetDb(next: CrmDb = seed()) {
   state = next
   viewCache = null
   listeners.clear()
+}
+
+/** Remove an in-app activity (server ones are deleted through the API and reloaded). */
+export function removeActivity(id: string) {
+  if (!state.activities.some((item) => item.id === id)) return
+  setState({ ...state, activities: state.activities.filter((item) => item.id !== id) })
+}
+
+/** Remove an in-app note (server ones are deleted through the API and reloaded). */
+export function removeNote(id: string) {
+  if (!state.notes.some((item) => item.id === id)) return
+  setState({ ...state, notes: state.notes.filter((item) => item.id !== id) })
+}
+
+/** Update an in-app note (server ones are saved through the API and reloaded). */
+export function patchNote(id: string, patch: Partial<CrmNote>) {
+  if (!state.notes.some((item) => item.id === id)) return
+  setState({ ...state, notes: state.notes.map((item) => (item.id === id ? sanitizeNote({ ...item, ...patch, id }) : item)) })
 }

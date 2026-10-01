@@ -10,7 +10,7 @@ export interface DetailFieldProps {
 export function DetailField({ label, value, className = '' }: DetailFieldProps) {
   return (
     <div className={`min-w-0 ${className}`.trim()}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">{label}</p>
+      <p className="text-[10px] font-bold tracking-wider text-ink-faint">{label}</p>
       <p className="mt-0.5 truncate text-sm font-semibold text-ink">{value || '—'}</p>
     </div>
   )

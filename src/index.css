@@ -129,14 +129,16 @@ body.nav-lock {
   background: var(--color-surface-hover);
   color: var(--color-ink-soft);
   font-weight: 700;
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  /* Running case, exactly as written (no all-caps) — every grid in the app. */
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
   padding: 10px 12px;
   text-align: left;
   position: sticky;
   top: 0;
-  z-index: 1;
+  /* Above the frozen body columns (z 3) so rows scroll under the header. */
+  z-index: 4;
   border-top: 1px solid var(--color-line);
   border-right: 1px solid var(--color-line);
   border-bottom: 1px solid var(--color-line);
@@ -319,6 +321,13 @@ body.nav-lock {
   text-transform: uppercase;
 }
 
+/* Lead and opportunity forms: labels in running case, exactly as written (no all-caps). */
+.form-labels-as-written .form-label {
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .form-required {
   color: var(--color-accent);
   margin-left: 0.2em;
@@ -413,6 +422,21 @@ body.nav-lock {
   align-self: stretch;
   margin: 0.45rem 0;
   background: var(--color-line);
+}
+
+.form-input-combo-picker {
+  flex: 0 0 auto;
+  width: 7.5rem;
+  min-width: 0;
+}
+
+/* A lookup trigger inside the combo: borderless, sharing the combo's border and focus ring. */
+.form-input-combo-picker .form-input {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent;
+  font-weight: 600;
 }
 
 .form-input-combo-amount {
@@ -940,6 +964,24 @@ select.active-filter {
   overflow: auto;
   width: 100%;
   -webkit-overflow-scrolling: touch;
+  /* Lets an empty-state row size itself to the visible width (100cqw), not the full table width. */
+  container-type: inline-size;
+}
+
+/*
+ * Empty / no-results row of a wide grid: the message stays centred in the visible part of the grid
+ * (pinned to its left edge at the grid's visible width) instead of the middle of a table wider than the screen.
+ */
+.crm-table td.table-empty-td {
+  padding: 0;
+  white-space: normal;
+}
+
+.crm-table td.table-empty-td > * {
+  position: sticky;
+  left: 0;
+  width: 100cqw;
+  box-sizing: border-box;
 }
 
 @keyframes slideSheetIn {
@@ -1152,7 +1194,8 @@ select.active-filter {
 .crm-table thead .sticky-col-name,
 .crm-table thead .sticky-col-id,
 .crm-table thead .sticky-col-after-id {
-  z-index: 5;
+  /* Frozen header corners: above both the header row and the frozen body columns. */
+  z-index: 6;
   background: var(--color-surface-hover);
 }
 
@@ -1199,7 +1242,7 @@ select.active-filter {
 }
 
 .crm-table thead .sticky-col-end {
-  z-index: 5;
+  z-index: 6;
   background: var(--color-surface-hover);
 }
 
@@ -1382,4 +1425,16 @@ a:focus-visible,
   .stage-label-in {
     animation: none;
   }
+}
+/* Number fields: right-aligned, no spinner arrows (value changes only by typing). */
+input[type='number'] {
+  text-align: right;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }

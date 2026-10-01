@@ -170,7 +170,7 @@ function NotificationRow({
             {n.title}
           </p>
           {!n.isRead ? (
-            <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-surface">
+            <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold tracking-wide text-surface">
               New
             </span>
           ) : null}
@@ -462,7 +462,7 @@ export default function Notifications({ onNavigateLead, onNavigateActivity, onNa
               <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-line-subtle bg-surface-muted/95 px-4 py-2.5 backdrop-blur-sm sm:px-5">
                 <h2
                   id={`notif-group-${bucket}`}
-                  className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-soft"
+                  className="text-[11px] font-bold tracking-[0.08em] text-ink-soft"
                 >
                   {TIME_BUCKET_LABEL[bucket]}
                 </h2>

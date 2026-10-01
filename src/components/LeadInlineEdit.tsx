@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import {
   Button,
   SearchSelect,
@@ -10,18 +10,11 @@ import {
 } from '../ui'
 import { PersonContactCard } from './PersonContactCard'
 import { useCrmActions } from '../contexts/CrmStoreContext'
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 import type { ToastType } from './Toast'
 import type { BusinessEntity } from '../data/businessEntities'
-import { SALESPERSONS } from '../data/businessEntities'
 import type { Contact } from '../data/contacts'
 import {
-  MAIN_CURRENCIES,
-  currencyAmountPrefix,
-  findCurrency,
-  matchesCurrency,
-} from '../data/currencies'
-import {
-  LEAD_PRIORITIES,
   displayLeadName,
   formatLeadDate,
   formatLeadValue,
@@ -36,15 +29,14 @@ import {
   type LeadPriority,
   type LeadSource,
 } from '../data/leads'
-import {
-  PRODUCTS,
-  matchesProduct,
-  productLine,
-  productUnit,
-  productsFromLeadNames,
-  type Product,
-} from '../data/products'
+import { matchesProduct, productLine, type Product } from '../data/products'
 import { SecondaryContactsMore } from './SecondaryContactsMore'
+import { UserSelect } from './UserSelect'
+import CurrencyAmountField from './CurrencyAmountField'
+import { useProductCatalog } from './ProductPicker'
+import { useLeadFormFillValues } from './useLeadFormFillValues'
+import { bySequence, guessIsoCurrency } from '../api/fillValues'
+import { FIELD_LIMITS } from '../constants/fieldLimits'
 
 type FieldKey =
   | 'name'
@@ -73,9 +65,10 @@ function EditCue() {
 }
 
 function SaveCancel({ onSave, onCancel, disabled }: { onSave: () => void; onCancel: () => void; disabled?: boolean }) {
+  const confirm = useConfirm()
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
-      <Button variant="solid" className="!min-h-6 !px-2 !py-0.5 text-[11px]" onClick={onSave} disabled={disabled}>
+      <Button variant="solid" className="!min-h-6 !px-2 !py-0.5 text-[11px]" onClick={async () => { if (await confirm(saveConfirm('Lead', true))) onSave() }} disabled={disabled}>
         Save
       </Button>
       <Button variant="secondary" className="!min-h-6 !px-2 !py-0.5 text-[11px]" onClick={onCancel}>
@@ -84,6 +77,9 @@ function SaveCancel({ onSave, onCancel, disabled }: { onSave: () => void; onCanc
     </div>
   )
 }
+
+/** True for leads that can no longer be edited (converted to an opportunity): every cell is read-only. */
+const ReadOnlyContext = createContext(false)
 
 function Cell({
   label,
@@ -106,8 +102,9 @@ function Cell({
   editor?: ReactNode
   children: ReactNode
 }) {
+  const readOnly = useContext(ReadOnlyContext)
   const active = Boolean(field && editing === field)
-  const editable = Boolean(!locked && field && !active && onEdit)
+  const editable = Boolean(!readOnly && !locked && field && !active && onEdit)
 
   function startEdit(event: { target: EventTarget; currentTarget: EventTarget }) {
     if (!editable || !field || !onEdit) return
@@ -142,7 +139,7 @@ function Cell({
       }}
     >
       <div className="mb-1 flex items-center justify-between gap-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-faint">{label}</p>
+        <p className="text-[10px] font-semibold  tracking-[0.06em] text-ink-faint">{label}</p>
         {editable ? <EditCue /> : null}
       </div>
       {active ? editor : <div className="min-h-5 text-sm font-semibold leading-snug text-ink">{children}</div>}
@@ -154,7 +151,7 @@ function DetailBand({ title, children }: { title: string; children: ReactNode })
   return (
     <section className="overflow-hidden border-b border-line last:border-b-0">
       <div className="border-b border-line bg-surface-muted px-3 py-1.5">
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-muted">{title}</h3>
+        <h3 className="text-[10px] font-bold  tracking-[0.1em] text-ink-muted">{title}</h3>
       </div>
       <div className="grid grid-cols-1 bg-surface sm:grid-cols-2 xl:grid-cols-4 sm:[&>*:nth-child(2n)]:border-r-0 xl:[&>*:nth-child(2n)]:border-r xl:[&>*:nth-child(4n)]:border-r-0">
         {children}
@@ -195,8 +192,11 @@ export function LeadIdentityEdit({
   onEdit,
   onCancel,
   onToast,
+  readOnly = false,
 }: {
   lead: Lead
+  /** Converted leads: name and description are shown, not editable. */
+  readOnly?: boolean
   editing: FieldKey | null
   onEdit: (field: FieldKey) => void
   onCancel: () => void
@@ -222,11 +222,22 @@ export function LeadIdentityEdit({
 
   const description = leadDescriptionOf(lead)
 
+  if (readOnly) {
+    return (
+      <div className="min-w-0">
+        <h1 className="min-w-0 font-display text-xl font-bold text-ink">{displayLeadName(lead)}</h1>
+        {description ? (
+          <p className="mt-1 min-w-0 truncate font-display text-sm font-semibold text-ink-soft" title={description}>{description}</p>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className="min-w-0">
       {editing === 'name' ? (
         <div>
-          <TextInput value={nameDraft} onValueChange={setNameDraft} aria-label="Lead name" />
+          <TextInput value={nameDraft} onValueChange={setNameDraft} aria-label="Lead name" maxLength={FIELD_LIMITS.leadName} />
           <SaveCancel onSave={saveName} onCancel={onCancel} disabled={!nameDraft.trim()} />
         </div>
       ) : (
@@ -244,7 +255,7 @@ export function LeadIdentityEdit({
       )}
       {editing === 'description' ? (
         <div className="mt-2">
-          <TextArea rows={3} value={descriptionDraft} onValueChange={setDescriptionDraft} aria-label="Lead description" />
+          <TextArea rows={3} value={descriptionDraft} onValueChange={setDescriptionDraft} aria-label="Lead description" maxLength={FIELD_LIMITS.leadDescription} />
           <SaveCancel onSave={saveDescription} onCancel={onCancel} />
         </div>
       ) : description ? (
@@ -285,8 +296,11 @@ export function LeadSummaryEdit({
   onEdit,
   onCancel,
   onToast,
+  readOnly = false,
 }: {
   lead: Lead
+  /** Converted leads: every field is shown, none is editable. */
+  readOnly?: boolean
   entities: BusinessEntity[]
   contacts: Contact[]
   sources: string[]
@@ -314,10 +328,19 @@ export function LeadSummaryEdit({
   const [secondaryDraft, setSecondaryDraft] = useState<LeadContactEntry[]>(secondaryLeadContacts(lead))
   const [addSecondary, setAddSecondary] = useState<Contact | null>(null)
   const [replacingName, setReplacingName] = useState<string | null>(null)
-  const [productDraft, setProductDraft] = useState<Product[]>(() => productsFromLeadNames(leadProductList(lead)))
+  // Server products only; saved names are matched to catalogue rows by name.
+  const productCatalog = useProductCatalog()
+  const productsForLead = () =>
+    leadProductList(lead).map(
+      (name, i): Product => productCatalog.products.find((p) => p.itemName === name) ?? { id: -(i + 1), itemName: name, itemCode: '' },
+    )
+  const [productDraft, setProductDraft] = useState<Product[]>(productsForLead)
   const [priorityDraft, setPriorityDraft] = useState<LeadPriority>(leadPriorityOf(lead))
   const [ownerDraft, setOwnerDraft] = useState(lead.assignedSalesperson)
-  const [currencyDraft, setCurrencyDraft] = useState(lead.valueCurrency ?? 'INR')
+  const { values: fill } = useLeadFormFillValues()
+  const serverCurrencies = fill?.currencies ?? []
+  const [currencyNoDraft, setCurrencyNoDraft] = useState<number | undefined>(lead.spectrum?.currencyNo)
+  const currencyDraft = serverCurrencies.find((c) => c.currencyNo === currencyNoDraft)
   const [valueDraft, setValueDraft] = useState(String(lead.opportunityValue || ''))
   const [sourceDraft, setSourceDraft] = useState(lead.leadSource)
   const [closureDraft, setClosureDraft] = useState(lead.expectedClosureDate ?? '')
@@ -390,7 +413,12 @@ export function LeadSummaryEdit({
   function saveValue() {
     const amount = Number(valueDraft)
     if (!Number.isFinite(amount) || amount < 0) return
-    patchLead(lead.id, { opportunityValue: amount, valueCurrency: currencyDraft })
+    patchLead(lead.id, {
+      opportunityValue: amount,
+      ...(currencyDraft ? { valueCurrency: guessIsoCurrency(currencyDraft) } : {}),
+      // The picked server currency is sent as its number (no ISO guessing on save).
+      ...(lead.spectrum ? { spectrum: { ...lead.spectrum, currencyNo: currencyNoDraft } } : {}),
+    })
     saved('Estimated lead value saved.')
   }
 
@@ -405,6 +433,7 @@ export function LeadSummaryEdit({
   }
 
   return (
+    <ReadOnlyContext.Provider value={readOnly}>
     <div>
       <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
         <span
@@ -430,6 +459,7 @@ export function LeadSummaryEdit({
           <Cell
             label="Business Entity"
             field="entity"
+            locked
             editing={editing}
             onEdit={(field) => {
               setEntityDraft(entity ?? null)
@@ -455,6 +485,7 @@ export function LeadSummaryEdit({
           <Cell
             label="Primary Contact"
             field="primary"
+            locked
             editing={editing}
             onEdit={(field) => {
               setPrimaryDraft(catalogPrimary ?? null)
@@ -493,6 +524,7 @@ export function LeadSummaryEdit({
           <Cell
             label="Secondary Contact"
             field="secondary"
+            locked
             editing={editing}
             onEdit={(field) => {
               setSecondaryDraft(secondaryLeadContacts(lead))
@@ -522,8 +554,7 @@ export function LeadSummaryEdit({
                                 .split(' ')
                                 .slice(0, 2)
                                 .map((part) => part[0] ?? '')
-                                .join('')
-                                .toUpperCase()}
+                                .join('')}
                             </span>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-xs font-bold text-ink">
@@ -637,13 +668,13 @@ export function LeadSummaryEdit({
             wide
             editing={editing}
             onEdit={(field) => {
-              setProductDraft(productsFromLeadNames(leadProductList(lead)))
+              setProductDraft(productsForLead())
               onEdit(field)
             }}
             editor={
               <div>
                 <TableSearchSelect
-                  options={PRODUCTS.filter((item) => !productDraft.some((row) => row.id === item.id))}
+                  options={productCatalog.products.filter((item) => !productDraft.some((row) => row.id === item.id))}
                   value={null}
                   onChange={(item) => {
                     if (item) setProductDraft((prev) => [...prev, item])
@@ -656,8 +687,7 @@ export function LeadSummaryEdit({
                   emptyText="No matching products"
                   clearable={false}
                   columns={[
-                    { header: 'Code - Item Name', getValue: productLine, truncate: true },
-                    { header: 'Unit', getValue: productUnit, width: '3.5rem' },
+                    { header: 'Product', getValue: (item) => item.itemName, truncate: true },
                   ]}
                 />
                 {productDraft.length ? (
@@ -696,7 +726,12 @@ export function LeadSummaryEdit({
             }}
             editor={
               <div>
-                <Select options={LEAD_PRIORITIES} value={priorityDraft} onValueChange={(value) => setPriorityDraft(value as LeadPriority)} />
+                <Select
+                  options={bySequence(fill?.leadPriorities ?? []).map((x) => x.leadPriorityName)}
+                  value={priorityDraft}
+                  onValueChange={(value) => setPriorityDraft(value as LeadPriority)}
+                  preserveOrder
+                />
                 <SaveCancel onSave={savePriority} onCancel={onCancel} />
               </div>
             }
@@ -713,7 +748,7 @@ export function LeadSummaryEdit({
             }}
             editor={
               <div>
-                <Select options={SALESPERSONS} value={ownerDraft} onValueChange={setOwnerDraft} placeholder="Select owner" />
+                <UserSelect value={ownerDraft} onValueChange={setOwnerDraft} placeholder="Select owner" aria-label="Lead owner" />
                 <SaveCancel onSave={saveOwner} onCancel={onCancel} disabled={!ownerDraft} />
               </div>
             }
@@ -726,39 +761,22 @@ export function LeadSummaryEdit({
             full
             editing={editing}
             onEdit={(field) => {
-              setCurrencyDraft(lead.valueCurrency ?? 'INR')
+              setCurrencyNoDraft(lead.spectrum?.currencyNo)
               setValueDraft(String(lead.opportunityValue || ''))
               onEdit(field)
             }}
             editor={
               <div>
-                <div className="flex gap-2">
-                  <div className="w-[7.5rem] shrink-0">
-                    <SearchSelect
-                      options={MAIN_CURRENCIES}
-                      value={findCurrency(currencyDraft)}
-                      onChange={(item) => {
-                        if (item) setCurrencyDraft(item.code)
-                      }}
-                      getKey={(item) => item.code}
-                      getLabel={(item) => item.code}
-                      filterItem={matchesCurrency}
-                      placeholder="Currency"
-                      clearable={false}
-                      preserveOrder
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <TextInput
-                      aria-label="Estimated value amount"
-                      type="number"
-                      min={0}
-                      leading={currencyAmountPrefix(currencyDraft)}
-                      value={valueDraft}
-                      onValueChange={setValueDraft}
-                    />
-                  </div>
-                </div>
+                {/* Same combined currency | amount field as the lead form. */}
+                <CurrencyAmountField
+                  label="Estimated Lead Value"
+                  hideLabel
+                  amount={valueDraft}
+                  onAmountChange={setValueDraft}
+                  currencies={serverCurrencies}
+                  currencyNo={currencyNoDraft}
+                  onCurrencyNoChange={setCurrencyNoDraft}
+                />
                 <SaveCancel onSave={saveValue} onCancel={onCancel} disabled={!Number.isFinite(Number(valueDraft)) || Number(valueDraft) < 0} />
               </div>
             }
@@ -807,6 +825,7 @@ export function LeadSummaryEdit({
         </DetailBand>
       </div>
     </div>
+    </ReadOnlyContext.Provider>
   )
 }
 

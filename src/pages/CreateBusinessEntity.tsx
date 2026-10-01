@@ -1,11 +1,13 @@
 import { useState, useRef, type ReactNode } from 'react';
 import {
   BusinessEntity, EntityType, EntityStatus, EntityLocation, EntityContact,
-  ENTITY_STATUSES, TERRITORIES, INDIAN_STATES, SALESPERSONS,
+  ENTITY_STATUSES, TERRITORIES, INDIAN_STATES,
 } from '../data/businessEntities';
 import { useMasterData } from '../contexts/MasterDataContext';
 import { useCrmActions } from '../contexts/CrmStoreContext';
 import { Card, FormGrid, IconTooltip, SelectField, TextAreaField, TextField } from '../ui';
+import { UserSelectField } from '../components/UserSelect';
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 
 interface Props {
   existing?: BusinessEntity | null;
@@ -82,6 +84,7 @@ const EMPTY_CONTACT: Omit<EntityContact, 'id'> = {
 };
 
 export default function CreateBusinessEntity({ existing, onBack, onSuccess, embedded, onCreated }: Props) {
+  const confirm = useConfirm()
   const { activeEntityTypeNames } = useMasterData();
   const { addEntity } = useCrmActions();
   const isEdit = !!existing;
@@ -154,10 +157,11 @@ export default function CreateBusinessEntity({ existing, onBack, onSuccess, embe
     return errs;
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (saving) return;
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (!(await confirm(saveConfirm('Business Entity', isEdit)))) return;
     setSaving(true);
     if (!isEdit) {
       const created = {
@@ -257,7 +261,7 @@ export default function CreateBusinessEntity({ existing, onBack, onSuccess, embe
           <FormGrid cols={3} className="mb-4">
             <TextField label="Website" value={website} onValueChange={setWebsite} placeholder="www.example.com" />
             <TextField label="GST / Tax Registration No." value={gstin} onValueChange={setGstin} placeholder="e.g. 27AABCT1332L000" className="font-mono tracking-wide" />
-            <SelectField label="Assigned Salesperson" options={SALESPERSONS} value={salesperson} onValueChange={setSalesperson} />
+            <UserSelectField label="Assigned Salesperson" placeholder="Select salesperson" value={salesperson} onValueChange={setSalesperson} />
           </FormGrid>
         </Section>
 

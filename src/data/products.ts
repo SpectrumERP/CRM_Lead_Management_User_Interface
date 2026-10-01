@@ -263,3 +263,36 @@ export function productsFromLeadNames(names: string[]): Product[] {
   })
   return next
 }
+
+/**
+ * Rebuild the selection from stored text (`productsRequired`). Catalogue names are matched inside the
+ * text, so names containing commas survive; anything left over is kept as one custom entry.
+ */
+export function productsFromText(text: string, catalog: readonly Product[]): Product[] {
+  let rest = text
+  const found: { item: Product; at: number }[] = []
+  // Longest names first, so "ERO 10" is not consumed as "ERO 1".
+  for (const item of [...catalog].sort((a, b) => b.itemName.length - a.itemName.length)) {
+    if (!item.itemName) continue
+    // Whole entries only: the name must sit between separators (or the ends of the text).
+    const escaped = item.itemName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const match = new RegExp(`(^|[,;]\\s*)${escaped}(?=\\s*[,;]|\\s*$)`).exec(rest)
+    if (!match) continue
+    const at = match.index + match[1]!.length
+    found.push({ item, at })
+    // Blank the name out (same length) so later positions stay valid.
+    rest = rest.slice(0, at) + ' '.repeat(item.itemName.length) + rest.slice(at + item.itemName.length)
+  }
+  const leftover = rest
+    .split(/[,;]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(', ')
+  const ordered = found.sort((a, b) => a.at - b.at).map((entry) => entry.item)
+  return leftover ? [...ordered, { id: -1, itemName: leftover, itemCode: '' }] : ordered
+}
+
+/** Stored text for a product selection (inverse of `productsFromText`). */
+export function productsToText(items: readonly Product[]): string {
+  return items.map((item) => item.itemName).join(', ')
+}

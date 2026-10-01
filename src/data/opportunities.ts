@@ -1,12 +1,14 @@
 import {
   LEADS,
   displayLeadName,
-  formatINR,
+  formatMoney,
   type Lead,
+  type LeadContactEntry,
+  type RecordAudit,
   type LeadCurrency,
   type LeadSource,
 } from './leads'
-import { currencySymbol } from './currencies'
+import { formatDateTime } from '../utils/dateFormat'
 
 export type DealStage =
   | 'Qualification'
@@ -60,8 +62,29 @@ export function formatOpportunityStage(stage: DealStage, weightPercent?: number)
   return `${stage} (${weight}%)`
 }
 
+/** Server numbers for an opportunity that lives in Spectrum (`/api/crm/opportunities`). */
+export interface SpectrumOpportunityRef {
+  opportunityNo: number
+  code?: string
+  leadNo?: number
+  ownerLoginNo?: number
+  businessEntityNo?: number
+  contactPersonDetailNos?: number[]
+  currencyNo?: number
+  salesOrganizationNo?: number
+  productNos?: number[]
+  /** Document-store files (docNos) picked on the edit form, sent with that save only. */
+  attachmentNos?: number[]
+  /** True once `load-data` has filled contacts / products. */
+  detailLoaded?: boolean
+}
+
 export interface Opportunity {
   id: string
+  /** Set for opportunities loaded from / saved to the Spectrum server. */
+  spectrum?: SpectrumOpportunityRef
+  /** Created / modified by and when (server opportunities). */
+  audit?: RecordAudit
   /** Reference Lead No — set when converted from a lead; empty/undefined for direct create. */
   leadId?: string
   name: string
@@ -69,6 +92,8 @@ export interface Opportunity {
   contactPerson: string
   email: string
   phone: string
+  /** Primary + secondary contacts (primary first). `contactPerson` / `email` / `phone` mirror the primary. */
+  contacts?: LeadContactEntry[]
   productsRequired: string
   dealValue: number
   valueCurrency: LeadCurrency
@@ -80,6 +105,8 @@ export interface Opportunity {
   owner: string
   leadSource: LeadSource | string
   lastActivity: string
+  /** Server opportunities: date-time of the latest activity (search-data `lastActivityDate`); null = none. */
+  lastActivityAt?: string | null
   createdAt: string
   createdBy: string
   convertedAt?: string
@@ -95,14 +122,7 @@ export function weightedDealValue(dealValue: number, stage: DealStage): number {
 }
 
 export function formatDealValue(value: number, currency: LeadCurrency = 'INR'): string {
-  if (currency === 'INR') return formatINR(value)
-  const amount = value.toLocaleString('en-US')
-  const symbol = currencySymbol(currency).trim()
-  // Arabic / RTL glyphs reorder next to digits — show ISO code instead.
-  if (/[\u0600-\u06FF]/.test(symbol)) {
-    return `${currency} ${amount}`
-  }
-  return `${symbol}\u00A0${amount}`
+  return formatMoney(value, currency)
 }
 
 export function buildOpportunity(
@@ -149,16 +169,9 @@ export function buildOpportunity(
   }
 }
 
+/** When a lead was converted — see utils/dateFormat. */
 export function formatConversionStamp(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return iso
-  return date.toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(iso)
 }
 
 function seedFrom(id: string, leadId: string, stage: DealStage): Opportunity | null {

@@ -1,0 +1,347 @@
+{
+  "success": true,
+  "message": "",
+  "data": {
+    "leadSources": [
+      {
+        "leadSourceNo": 9,
+        "code": "LS0008",
+        "leadSourceName": "Advertisement"
+      },
+      {
+        "leadSourceNo": 4,
+        "code": "LS0003",
+        "leadSourceName": "Cold Call"
+      },
+      {
+        "leadSourceNo": 5,
+        "code": "LS0004",
+        "leadSourceName": "Email Campaign"
+      },
+      {
+        "leadSourceNo": 8,
+        "code": "LS0007",
+        "leadSourceName": "Partner"
+      },
+      {
+        "leadSourceNo": 3,
+        "code": "LS0002",
+        "leadSourceName": "Referral"
+      },
+      {
+        "leadSourceNo": 6,
+        "code": "LS0005",
+        "leadSourceName": "Social Media"
+      },
+      {
+        "leadSourceNo": 7,
+        "code": "LS0006",
+        "leadSourceName": "Trade Show"
+      },
+      {
+        "leadSourceNo": 2,
+        "code": "LS0001",
+        "leadSourceName": "Website"
+      }
+    ],
+    "leadStages": [
+      {
+        "leadStageNo": 3,
+        "code": "LG0002",
+        "leadStageName": "Contacted",
+        "sequence": 2,
+        "colorCode": "#06B6D4"
+      },
+      {
+        "leadStageNo": 7,
+        "code": "LG0006",
+        "leadStageName": "Converted",
+        "sequence": 6,
+        "colorCode": "#22C55E"
+      },
+      {
+        "leadStageNo": 8,
+        "code": "LG0007",
+        "leadStageName": "Lost",
+        "sequence": 7,
+        "colorCode": "#EF4444"
+      },
+      {
+        "leadStageNo": 6,
+        "code": "LG0005",
+        "leadStageName": "Negotiation",
+        "sequence": 5,
+        "colorCode": "#F97316"
+      },
+      {
+        "leadStageNo": 2,
+        "code": "LG0001",
+        "leadStageName": "New",
+        "sequence": 1,
+        "colorCode": "#3B82F6"
+      },
+      {
+        "leadStageNo": 5,
+        "code": "LG0004",
+        "leadStageName": "Proposal Sent",
+        "sequence": 4,
+        "colorCode": "#F59E0B"
+      },
+      {
+        "leadStageNo": 4,
+        "code": "LG0003",
+        "leadStageName": "Qualified",
+        "sequence": 3,
+        "colorCode": "#8B5CF6"
+      }
+    ],
+    "leadStatuses": [
+      {
+        "leadStatusNo": 7,
+        "code": "LT0007",
+        "leadStatusName": "Closed"
+      },
+      {
+        "leadStatusNo": 5,
+        "code": "LT0005",
+        "leadStatusName": "Converted"
+      },
+      {
+        "leadStatusNo": 6,
+        "code": "LT0006",
+        "leadStatusName": "Disqualified"
+      },
+      {
+        "leadStatusNo": 3,
+        "code": "LT0003",
+        "leadStatusName": "Follow Up"
+      },
+      {
+        "leadStatusNo": 2,
+        "code": "LT0002",
+        "leadStatusName": "In Progress"
+      },
+      {
+        "leadStatusNo": 4,
+        "code": "LT0004",
+        "leadStatusName": "On Hold"
+      },
+      {
+        "leadStatusNo": 1,
+        "code": "LT0001",
+        "leadStatusName": "Open"
+      }
+    ],
+    "leadPriorities": [
+      {
+        "leadPriorityNo": 6,
+        "code": "LP0006",
+        "leadPriorityName": "Critical",
+        "sequence": 5
+      },
+      {
+        "leadPriorityNo": 4,
+        "code": "LP0004",
+        "leadPriorityName": "High",
+        "sequence": 3
+      },
+      {
+        "leadPriorityNo": 2,
+        "code": "LP0002",
+        "leadPriorityName": "Low",
+        "sequence": 1
+      },
+      {
+        "leadPriorityNo": 3,
+        "code": "LP0003",
+        "leadPriorityName": "Medium",
+        "sequence": 2
+      },
+      {
+        "leadPriorityNo": 1,
+        "code": "LP0001",
+        "leadPriorityName": "string",
+        "sequence": 0
+      },
+      {
+        "leadPriorityNo": 5,
+        "code": "LP0005",
+        "leadPriorityName": "Urgent",
+        "sequence": 4
+      }
+    ],
+    "leadActivityTypes": [
+      {
+        "leadActivityTypeNo": 3,
+        "code": "AT0002",
+        "leadActivityTypeName": "Email"
+      },
+      {
+        "leadActivityTypeNo": 6,
+        "code": "AT0005",
+        "leadActivityTypeName": "Follow Up"
+      },
+      {
+        "leadActivityTypeNo": 4,
+        "code": "AT0003",
+        "leadActivityTypeName": "Meeting"
+      },
+      {
+        "leadActivityTypeNo": 2,
+        "code": "AT0001",
+        "leadActivityTypeName": "Phone Call"
+      },
+      {
+        "leadActivityTypeNo": 5,
+        "code": "AT0004",
+        "leadActivityTypeName": "Product Demo"
+      },
+      {
+        "leadActivityTypeNo": 7,
+        "code": "AT0006",
+        "leadActivityTypeName": "Site Visit"
+      },
+      {
+        "leadActivityTypeNo": 8,
+        "code": "AT0007",
+        "leadActivityTypeName": "Task"
+      }
+    ],
+    "activityStatuses": [
+      {
+        "statusNo": 1,
+        "statusName": "Open",
+        "isDefault": false
+      },
+      {
+        "statusNo": 1,
+        "statusName": "Open",
+        "isDefault": false
+      }
+    ],
+    "currencies": [
+      {
+        "currencyNo": 6,
+        "currencyCode": "CM0005",
+        "currencyName": "Dirham",
+        "symbol": "DI",
+        "isDefault": false
+      },
+      {
+        "currencyNo": 3,
+        "currencyCode": "CM0003",
+        "currencyName": "dollar",
+        "symbol": "",
+        "isDefault": false
+      },
+      {
+        "currencyNo": 10,
+        "currencyCode": "CM0009",
+        "currencyName": "INR",
+        "symbol": "INR",
+        "isDefault": false
+      },
+      {
+        "currencyNo": 7,
+        "currencyCode": "CM0006",
+        "currencyName": "Nepalese Rupee",
+        "symbol": "",
+        "isDefault": false
+      },
+      {
+        "currencyNo": 4,
+        "currencyCode": "CM0004",
+        "currencyName": "POUND",
+        "symbol": "£",
+        "isDefault": false
+      },
+      {
+        "currencyNo": 1,
+        "currencyCode": "CM0001",
+        "currencyName": "Rupees",
+        "symbol": "₹",
+        "isDefault": false
+      },
+      {
+        "currencyNo": 8,
+        "currencyCode": "CM0007",
+        "currencyName": "Temp Currency Exc",
+        "symbol": "$",
+        "isDefault": false
+      },
+      {
+        "currencyNo": 9,
+        "currencyCode": "CM0008",
+        "currencyName": "Temp Currency Inv",
+        "symbol": "$",
+        "isDefault": false
+      },
+      {
+        "currencyNo": 2,
+        "currencyCode": "CM0002",
+        "currencyName": "US Dollar",
+        "symbol": "$",
+        "isDefault": false
+      }
+    ],
+    "products": [
+      {
+        "crmProductNo": 7,
+        "productName": "CRM",
+        "code": "PM0007"
+      },
+      {
+        "crmProductNo": 5,
+        "productName": "ERO 1",
+        "code": "PM0005"
+      },
+      {
+        "crmProductNo": 6,
+        "productName": "ERO 10",
+        "code": "PM0006"
+      },
+      {
+        "crmProductNo": 1,
+        "productName": "P1",
+        "code": "PM0001"
+      },
+      {
+        "crmProductNo": 2,
+        "productName": "P2",
+        "code": "PM0002"
+      },
+      {
+        "crmProductNo": 3,
+        "productName": "P3",
+        "code": "PM0003"
+      },
+      {
+        "crmProductNo": 4,
+        "productName": "P4",
+        "code": "PM0004"
+      }
+    ],
+    "salesOrganizations": [
+      {
+        "salesOrganizationNo": 1,
+        "salesOrganizationName": "EPC",
+        "code": "S00001"
+      },
+      {
+        "salesOrganizationNo": 2,
+        "salesOrganizationName": "General",
+        "code": "S00002"
+      },
+      {
+        "salesOrganizationNo": 3,
+        "salesOrganizationName": "Process",
+        "code": "S00003"
+      },
+      {
+        "salesOrganizationNo": 4,
+        "salesOrganizationName": "Trading",
+        "code": "S00004"
+      }
+    ]
+  }
+}

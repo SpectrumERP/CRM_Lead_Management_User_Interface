@@ -1,20 +1,34 @@
-import { useState, type ReactNode } from 'react'
-import { SALESPERSONS } from '../data/activities'
-import { LEAD_CURRENCIES, type LeadCurrency } from '../data/leads'
-import { currencyAmountPrefix } from '../data/currencies'
-import {
-  DEAL_STAGES,
-  OPPORTUNITY_STATUSES,
-  dealWeight,
-  formatOpportunityStage,
-  weightedDealValue,
-  type DealStage,
-  type Opportunity,
-  type OpportunityStatus,
-} from '../data/opportunities'
+import { useEffect, useState, type ReactNode } from 'react'
+import type { Lead } from '../data/leads'
+import type { DealStage, OpportunityStatus } from '../data/opportunities'
 import { useAuth } from '../auth/AuthContext'
-import { useCrmActions } from '../contexts/CrmStoreContext'
-import { Button, Card, FormGrid, SelectField, TextField, TextInput } from '../ui'
+import { sameList, useCrmSelector } from '../contexts/CrmStoreContext'
+import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
+import { spectrumEntityId } from '../components/useBusinessEntityOptions'
+import EntityContactsFields, {
+  EMPTY_ENTITY_CONTACTS,
+  contactDetailNos,
+  fromContactEntries,
+  type EntityContactsValue,
+} from '../components/EntityContactsFields'
+import { useOpportunityFillValues } from '../components/useOpportunityFillValues'
+import { useSpectrumCompany } from '../auth/useSpectrumCompany'
+import { bySequence, guessIsoCurrency } from '../api/fillValues'
+import { stageWeight } from '../api/opportunityFormFillValues'
+import { OptionLookupField } from '../components/OptionLookupField'
+import CurrencyAmountField from '../components/CurrencyAmountField'
+import { buildOpportunitySaveBody, saveOpportunity } from '../api/opportunities'
+import { refreshServerOpportunity } from '../api/opportunitySync'
+import { loginNoForName, syncServerLeads } from '../api/leadSync'
+import { toApiError } from '../api/errors'
+import { Button, Card, FormGrid, TableSearchSelectField, TextField, type TableSearchColumn } from '../ui'
+import { UserSelectField } from '../components/UserSelect'
+import ProductPicker, { useProductCatalog } from '../components/ProductPicker'
+import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
+import type { Product } from '../data/products'
+import { FIELD_LIMITS } from '../constants/fieldLimits'
+import AttachmentsField from '../components/AttachmentsField'
+import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
 
 interface CreateOpportunityProps {
   onBack: () => void
@@ -81,36 +95,106 @@ const SECTION_ICONS = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   ),
+  documents: (
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+    </svg>
+  ),
 } as const
 
+const LEAD_COLUMNS: TableSearchColumn<Lead>[] = [
+  { header: 'Code', getValue: (l) => l.spectrum?.code || l.id, width: '7rem' },
+  { header: 'Lead', getValue: (l) => l.leadName, truncate: true },
+  { header: 'Business Entity', getValue: (l) => l.companyName || '—', truncate: true },
+  { header: 'Owner', getValue: (l) => l.assignedSalesperson || '—', width: '10rem', truncate: true },
+]
+
 export default function CreateOpportunity({ onBack, onSuccess, embedded }: CreateOpportunityProps) {
+  const confirm = useConfirm()
   const { user } = useAuth()
-  const { addOpportunity } = useCrmActions()
   const createdBy = user?.name ?? 'System'
   const today = new Date().toISOString().slice(0, 10)
 
   const [name, setName] = useState('')
-  const [companyName, setCompanyName] = useState('')
-  const [contactPerson, setContactPerson] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [productsRequired, setProductsRequired] = useState('')
+  // Business entity + one primary and any number of secondary contacts (shared with the lead form).
+  const [entityContacts, setEntityContacts] = useState<EntityContactsValue>(EMPTY_ENTITY_CONTACTS)
+  const entity = entityContacts.entity
+  const companyName = entity?.name ?? ''
+  const productCatalog = useProductCatalog()
+  const [selectedProducts, setSelectedProducts] = useState<Product[]>([])
   const [dealValue, setDealValue] = useState('')
-  const [valueCurrency, setValueCurrency] = useState<LeadCurrency>('INR')
-  const [dealStage, setDealStage] = useState<DealStage>('Qualification')
-  const [status, setStatus] = useState<OpportunityStatus>('Open')
+  // Set from the server lists once they load (first stage, "Open" status).
+  const [dealStage, setDealStage] = useState<DealStage>('' as DealStage)
+  const [status, setStatus] = useState<OpportunityStatus>('' as OpportunityStatus)
   const [closingDate, setClosingDate] = useState('')
   const [owner, setOwner] = useState(createdBy)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  // Uploaded to the document store as they are picked; the save links them by docNo.
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [uploadsBusy, setUploadsBusy] = useState(false)
   const [submittedId, setSubmittedId] = useState<string | null>(null)
+
+  // ── Spectrum login: save through POST /api/crm/opportunities/save ─────────────
+  const { values: oppFill } = useOpportunityFillValues()
+  const spectrumCompany = useSpectrumCompany()
+  const serverMode = Boolean(oppFill && spectrumCompany.headOfficeNo)
+  const serverLeads = useCrmSelector((state) => state.leads.filter((l) => l.spectrum), sameList)
+  const [referenceLead, setReferenceLead] = useState<Lead | null>(null)
+  const [leadsRequested, setLeadsRequested] = useState(false)
+  const [leadsLoading, setLeadsLoading] = useState(false)
+  const [salesOrganizationNo, setSalesOrganizationNo] = useState<number>()
+  const [ownerLoginNo, setOwnerLoginNo] = useState<number>()
+  const [currencyNo, setCurrencyNo] = useState<number>()
+  const serverStages = oppFill ? bySequence(oppFill.opportunityStages) : []
+
+  // Server defaults once the lists arrive: first stage, "Open" status, INR-like currency, first sales org.
+  useEffect(() => {
+    if (!oppFill) return
+    const stages = bySequence(oppFill.opportunityStages)
+    if (stages.length && !stages.some((st) => st.opportunityStageName === dealStage)) setDealStage(stages[0]!.opportunityStageName as DealStage)
+    const statuses = oppFill.opportunityStatuses.map((st) => st.opportunityStatusName)
+    if (statuses.length && !statuses.includes(status)) {
+      setStatus((statuses.find((st) => /^open$/i.test(st)) ?? statuses[0]!) as OpportunityStatus)
+    }
+    if (!currencyNo) {
+      const pick = oppFill.currencies.find((c) => guessIsoCurrency({ currencyName: c.currencyName, symbol: c.symbol ?? '' }) === 'INR') ?? oppFill.currencies[0]
+      if (pick) setCurrencyNo(pick.currencyNo)
+    }
+    if (!salesOrganizationNo && oppFill.salesOrganizations[0]) setSalesOrganizationNo(oppFill.salesOrganizations[0].salesOrganizationNo)
+    // Only when the lists first arrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oppFill])
+
+  /** Server leads are loaded the first time the Reference Lead field opens. */
+  function onLeadFieldOpen(open: boolean) {
+    if (!open || leadsRequested) return
+    setLeadsRequested(true)
+    setLeadsLoading(true)
+    syncServerLeads().catch(() => undefined).finally(() => setLeadsLoading(false))
+  }
+
+  function pickReferenceLead(next: Lead | null) {
+    setReferenceLead(next)
+    setErrors(({ lead: _cleared, ...rest }) => rest)
+    if (!next?.spectrum) return
+    const no = next.spectrum.businessEntityNo
+    if (no) {
+      // The lead's entity, and its contacts when the lead detail has been loaded.
+      setEntityContacts({
+        entity: { id: spectrumEntityId(no), name: next.companyName, type: '', city: '', source: 'spectrum', businessEntityNo: no },
+        ...fromContactEntries(next.contacts),
+      })
+    }
+    if (!name.trim()) setName(next.leadName)
+    if (next.spectrum.salesOrganizationNo) setSalesOrganizationNo(next.spectrum.salesOrganizationNo)
+  }
 
   function validate() {
     const next: Record<string, string> = {}
     if (!name.trim()) next.name = 'Opportunity name is required'
     if (!companyName.trim()) next.companyName = 'Business entity is required'
-    if (!contactPerson.trim()) next.contactPerson = 'Contact person is required'
-    if (!email.trim()) next.email = 'Email is required'
+    if (!entityContacts.primary?.name.trim()) next.contactPerson = 'Select the primary contact person'
     const value = Number(dealValue)
     if (!Number.isFinite(value) || value < 0) next.dealValue = 'Enter a valid opportunity value'
     if (!closingDate) next.closingDate = 'Expected closure date is required'
@@ -119,37 +203,56 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
     return Object.keys(next).length === 0
   }
 
-  function handleSave() {
-    if (saving || !validate()) return
-    setSaving(true)
-    const id = `OPP-${Date.now().toString(36).toUpperCase()}`
-    const value = Number(dealValue)
-    const payload: Opportunity = {
-      id,
-      // Direct create — no lead conversion
-      leadId: undefined,
-      name: name.trim(),
-      companyName: companyName.trim(),
-      contactPerson: contactPerson.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      productsRequired: productsRequired.trim(),
-      dealValue: value,
-      valueCurrency,
-      dealStage,
-      status,
-      weightPercent: dealWeight(dealStage),
-      weightedValue: weightedDealValue(value, dealStage),
+  async function handleServerSave() {
+    if (!oppFill || !spectrumCompany.headOfficeNo) return
+    const resolvedOwner = ownerLoginNo ?? (owner.trim() ? await loginNoForName(owner.trim()).catch(() => undefined) : undefined)
+    const built = buildOpportunitySaveBody({
+      companyNo: spectrumCompany.headOfficeNo,
+      leadNo: referenceLead?.spectrum?.leadNo,
+      name,
+      ownerLoginNo: resolvedOwner,
+      salesOrganizationNo,
+      stageName: dealStage,
+      statusName: status,
+      businessEntityNo: entity?.businessEntityNo,
+      currencyNo,
       closingDate,
-      owner: owner.trim(),
-      leadSource: 'Inbound',
-      lastActivity: 'Just now',
-      createdAt: today,
-      createdBy,
+      value: Number(dealValue) || 0,
+      contactPersonDetailNos: contactDetailNos(entityContacts),
+      productNos: selectedProducts.map((item) => item.id),
+      attachmentNos: attachments.map((a) => a.id),
+    }, oppFill)
+    if (built.errors) {
+      setErrors(built.errors)
+      setSaving(false)
+      return
     }
-    addOpportunity(payload)
-    setSubmittedId(id)
-    setTimeout(() => onSuccess(id), embedded ? 700 : 1200)
+    try {
+      const opportunityNo = await saveOpportunity(built.body)
+      const created = await refreshServerOpportunity(opportunityNo)
+      setSubmittedId(created.id)
+      setTimeout(() => onSuccess(created.id), embedded ? 700 : 1200)
+    } catch (error) {
+      setErrors({ form: `Could not save the opportunity: ${toApiError(error).message}` })
+      setSaving(false)
+    }
+  }
+
+  async function handleSave() {
+    if (saving || !validate()) return
+    if (uploadsBusy) {
+      setErrors({ form: 'Please wait for all attachments to finish uploading before saving the opportunity.' })
+      return
+    }
+    if (!(await confirm(saveConfirm('Opportunity')))) return
+    setSaving(true)
+    // Opportunities are saved on the server only (no in-app copies).
+    if (!serverMode) {
+      setErrors({ form: 'Sign in with your Spectrum account to create opportunities.' })
+      setSaving(false)
+      return
+    }
+    void handleServerSave()
   }
 
   if (submittedId) {
@@ -171,7 +274,7 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
   }
 
   return (
-    <div className="bg-canvas">
+    <div className="bg-canvas form-labels-as-written">
       <div className={`page-gutter py-4 pb-4 ${embedded ? 'pt-2' : ''}`}>
         {!embedded ? (
           <div className="mb-5">
@@ -193,108 +296,120 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
         ) : null}
 
         <div className="space-y-5">
-          <Section title="System fields" icon={SECTION_ICONS.system}>
-            <FormGrid>
-              <TextField label="Opportunity No" value="Auto-generated on save" disabled />
-              <TextField label="Reference Lead No" value="—" disabled />
-              <TextField label="Creation Date" value={today} disabled />
-              <TextField label="Created By" value={createdBy} disabled />
-            </FormGrid>
-          </Section>
+          <SpectrumRequiredNotice what="Opportunities and their lists" />
 
           <Section title="Opportunity Info" icon={SECTION_ICONS.info}>
             <FormGrid>
               <TextField
                 fieldClassName="lg:col-span-2"
                 label="Opportunity Name"
+                maxLength={FIELD_LIMITS.opportunityName}
                 required
                 error={errors.name}
                 value={name}
                 onValueChange={setName}
-                placeholder="Deal / opportunity name"
+                placeholder="Enter opportunity name"
               />
-              <TextField
-                label="Business Entity"
-                required
-                error={errors.companyName}
-                value={companyName}
-                onValueChange={setCompanyName}
-                placeholder="Company / organisation name"
-              />
-              <TextField
-                fieldClassName="lg:col-span-2"
-                label="Products Required"
-                value={productsRequired}
-                onValueChange={setProductsRequired}
-                placeholder="Products or solutions in this deal"
-              />
+              {/* {serverMode ? (
+                <TableSearchSelectField
+                  label="Reference Lead"
+                  required
+                  error={errors.lead}
+                  placeholder="Search lead…"
+                  options={serverLeads}
+                  value={referenceLead}
+                  onChange={pickReferenceLead}
+                  getKey={(l) => l.id}
+                  getLabel={(l) => `${l.spectrum?.code ?? l.id} · ${l.leadName}`}
+                  filterItem={(l, q) => `${l.spectrum?.code ?? ''} ${l.leadName} ${l.companyName} ${l.assignedSalesperson}`.toLowerCase().includes(q.trim().toLowerCase())}
+                  columns={LEAD_COLUMNS}
+                  searchPlaceholder="Search by code, lead, business entity or owner"
+                  loading={leadsLoading}
+                  onOpenChange={onLeadFieldOpen}
+                  emptyText="No leads found"
+                  clearable={false}
+                />
+              ) : null} */}
+              <div className="lg:col-span-2">
+                <ProductPicker
+                  label="Products Required"
+                  catalog={productCatalog.products}
+                  showUnit={!productCatalog.remote}
+                  selected={selectedProducts}
+                  onChange={setSelectedProducts}
+                />
+              </div>
             </FormGrid>
+          </Section>
+
+          <Section title="Business Entity & Contacts" icon={SECTION_ICONS.contact}>
+            <EntityContactsFields
+              value={entityContacts}
+              onChange={(next) => {
+                setEntityContacts(next)
+                setErrors(({ companyName: _entity, contactPerson: _contact, ...rest }) => rest)
+              }}
+              errors={{ entity: errors.companyName, contact: errors.contactPerson }}
+            />
           </Section>
 
           <Section title="Opportunity Details" icon={SECTION_ICONS.deal}>
             <FormGrid>
-              <SelectField
+              <OptionLookupField
                 label="Opportunity Stage"
                 required
+                error={errors.stage}
+                placeholder="Select stage"
+                detailHeader="Win %"
                 value={dealStage}
                 onValueChange={(value) => setDealStage(value as DealStage)}
-                options={DEAL_STAGES.map((stage) => ({
-                  value: stage,
-                  label: formatOpportunityStage(stage, dealWeight(stage)),
-                }))}
+                options={serverStages.map((stage) => ({ value: stage.opportunityStageName, label: stage.opportunityStageName, code: stage.code, detail: `${stageWeight(stage)}%` }))}
               />
-              <SelectField
+              <OptionLookupField
                 label="Opportunity Status"
                 required
+                error={errors.status}
+                placeholder="Select status"
                 value={status}
                 onValueChange={(value) => setStatus(value as OpportunityStatus)}
-                options={OPPORTUNITY_STATUSES}
+                options={(oppFill?.opportunityStatuses ?? []).map((st) => ({ value: st.opportunityStatusName, label: st.opportunityStatusName, code: st.code }))}
               />
-              <SelectField
+              {serverMode ? (
+                <OptionLookupField
+                  label="Sales Organization"
+                  required
+                  error={errors.salesOrganization}
+                  placeholder="Select sales organization"
+                  value={salesOrganizationNo ? String(salesOrganizationNo) : ''}
+                  onValueChange={(value) => setSalesOrganizationNo(Number(value) || undefined)}
+                  options={(oppFill?.salesOrganizations ?? []).map((org) => ({
+                    value: String(org.salesOrganizationNo),
+                    label: org.salesOrganizationName,
+                    code: org.code,
+                  }))}
+                />
+              ) : null}
+              <UserSelectField
                 label="Opportunity Owner"
                 required
                 error={errors.owner}
-                options={SALESPERSONS}
                 placeholder="Select owner"
                 value={owner}
-                onValueChange={setOwner}
+                onValueChange={(value, loginNo) => {
+                  setOwner(value)
+                  setOwnerLoginNo(loginNo)
+                }}
               />
-              <div role="group" aria-label="Opportunity Value">
-                <p className="form-label">
-                  Opportunity Value <span className="form-required">*</span>
-                </p>
-                <div className={`form-input-combo${errors.dealValue ? ' error' : ''}`}>
-                  <select
-                    className="form-input-combo-currency"
-                    aria-label="Currency"
-                    value={valueCurrency}
-                    onChange={(event) => setValueCurrency(event.target.value as LeadCurrency)}
-                  >
-                    {LEAD_CURRENCIES.map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="form-input-combo-divider" aria-hidden />
-                  <div className="form-input-combo-amount">
-                    <TextInput
-                      aria-label="Opportunity value amount"
-                      type="number"
-                      min={0}
-                      leading={currencyAmountPrefix(valueCurrency)}
-                      value={dealValue}
-                      onValueChange={setDealValue}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                {errors.dealValue ? (
-                  <p className="mt-1 text-xs text-accent" role="alert">
-                    {errors.dealValue}
-                  </p>
-                ) : null}
-              </div>
+              <CurrencyAmountField
+                label="Opportunity Value"
+                required
+                error={errors.dealValue ?? errors.currency}
+                amount={dealValue}
+                onAmountChange={setDealValue}
+                currencies={oppFill?.currencies ?? []}
+                currencyNo={currencyNo}
+                onCurrencyNoChange={setCurrencyNo}
+              />
               <TextField
                 label="Expected Closure Date"
                 type="date"
@@ -306,31 +421,21 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
             </FormGrid>
           </Section>
 
-          <Section title="Primary Contact" icon={SECTION_ICONS.contact}>
-            <FormGrid>
-              <TextField
-                label="Contact Person"
-                required
-                error={errors.contactPerson}
-                value={contactPerson}
-                onValueChange={setContactPerson}
-              />
-              <TextField
-                label="Email"
-                type="email"
-                required
-                error={errors.email}
-                value={email}
-                onValueChange={setEmail}
-              />
-              <TextField label="Phone" value={phone} onValueChange={setPhone} />
-            </FormGrid>
+          <Section title="Documents / Attachments" icon={SECTION_ICONS.documents}>
+            <AttachmentsField
+              noun="opportunity"
+              formNo={ATTACHMENT_FORM_NO.opportunity}
+              companyNo={spectrumCompany.headOfficeNo}
+              value={attachments}
+              onChange={setAttachments}
+              onBusyChange={setUploadsBusy}
+            />
           </Section>
 
           {Object.keys(errors).length > 0 && (
             <div className="flex items-start gap-3 rounded-xl border border-accent bg-accent-soft px-4 py-3" role="alert">
-              <p className="text-xs font-bold text-accent">Please fix the following before saving:</p>
-              <ul className="space-y-0.5">
+              <p className="text-xs w-full font-bold text-accent">Please fix the following before saving:</p>
+              <ul className="space-y-0.5 w-full">
                 {Object.values(errors).map((item) => (
                   <li key={item} className="text-xs text-accent">
                     • {item}
@@ -344,7 +449,7 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
             <Button variant="secondary" onClick={onBack} disabled={saving}>
               Cancel
             </Button>
-            <Button variant="solid" onClick={handleSave} disabled={saving}>
+            <Button variant="solid" onClick={handleSave} disabled={saving || !serverMode}>
               {saving ? 'Creating…' : 'Create Opportunity'}
             </Button>
           </div>

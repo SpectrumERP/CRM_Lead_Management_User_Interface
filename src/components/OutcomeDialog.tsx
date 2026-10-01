@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { Button, TextArea } from '../ui'
 import FormDrawer from './FormDrawer'
+import { FIELD_LIMITS } from '../constants/fieldLimits'
+import { useConfirm } from '../contexts/ConfirmContext'
 
 export interface OutcomeDialogProps {
   title: string
@@ -22,14 +24,16 @@ export default function OutcomeDialog({
   onConfirm,
   onClose,
 }: OutcomeDialogProps) {
+  const confirm = useConfirm()
   const [outcome, setOutcome] = useState('')
   const [err, setErr] = useState('')
 
-  function submit() {
+  async function submit() {
     if (!outcome.trim()) {
       setErr(`${label} is required`)
       return
     }
+    if (!(await confirm({ title, message: 'Save this outcome and mark it complete?', confirmLabel }))) return
     onConfirm(outcome.trim())
   }
 
@@ -68,6 +72,7 @@ export default function OutcomeDialog({
             {label} <span className="text-accent">*</span>
           </label>
           <TextArea
+            maxLength={FIELD_LIMITS.activityNotesOutcome}
             id="outcome-dialog-field"
             rows={3}
             value={outcome}

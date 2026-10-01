@@ -79,11 +79,11 @@ function MeetingDetailPanel({
       {/* Left: Meeting details */}
       <div className="flex-1 min-w-56 space-y-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider mb-1 text-[10px] text-ink-faint">Location / Link</p>
+          <p className="text-xs font-bold tracking-wider mb-1 text-[10px] text-ink-faint">Location / Link</p>
           <p className="text-xs text-ink-soft">{meeting.location || '—'}</p>
         </div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider mb-1.5 text-[10px] text-ink-faint">Participants</p>
+          <p className="text-xs font-bold tracking-wider mb-1.5 text-[10px] text-ink-faint">Participants</p>
           <div className="flex flex-wrap gap-1.5">
             {meeting.participants.length > 0
               ? meeting.participants.map((p) => (
@@ -96,7 +96,7 @@ function MeetingDetailPanel({
         </div>
         {meeting.notes && (
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider mb-1 text-[10px] text-ink-faint">Notes / Agenda</p>
+            <p className="text-xs font-bold tracking-wider mb-1 text-[10px] text-ink-faint">Notes / Agenda</p>
             <p className="text-xs leading-relaxed text-ink-soft">{meeting.notes}</p>
           </div>
         )}
@@ -114,7 +114,7 @@ function MeetingDetailPanel({
       <div className="flex-1 min-w-56">
         {meeting.status === 'Completed' && meeting.outcome ? (
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider mb-1.5 text-[10px] text-success">Outcome / Result</p>
+            <p className="text-xs font-bold tracking-wider mb-1.5 text-[10px] text-success">Outcome / Result</p>
             <p className="text-xs leading-relaxed mb-3 text-success">{meeting.outcome}</p>
             <button onClick={() => onFollowUp(meeting)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-white transition-colors"
@@ -293,7 +293,7 @@ export default function MeetingsPage({ onViewLead, onToast }: MeetingsPageProps)
               {loading && <SkeletonTableRows cols={11} rows={5} />}
               {!loading && meetings.length === 0 && (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={11} className="table-empty-td">
                     <EmptyState
                       icon={EmptyIcons.meetings}
                       title="No meetings scheduled"
@@ -305,7 +305,7 @@ export default function MeetingsPage({ onViewLead, onToast }: MeetingsPageProps)
               )}
               {!loading && meetings.length > 0 && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={11} className="table-empty-td">
                     <NoResults onClear={() => { setSearch(''); setModeFilter('All'); setStatusFilter('All'); setDateFilter(''); }} />
                   </td>
                 </tr>

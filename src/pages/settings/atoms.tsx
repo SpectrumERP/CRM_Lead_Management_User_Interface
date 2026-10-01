@@ -88,11 +88,11 @@ export function FilterBar({ search, onSearch, statusFilter, onStatus, onClear }:
 export function Th({ children, right, narrow }: { children: ReactNode; right?: boolean; narrow?: boolean }) {
   return (
     <th
-      className="px-4 py-2.5 text-left font-bold uppercase tracking-wider"
+      className="px-4 py-2.5 text-left font-bold"
       style={{
-        fontSize: 10.5,
+        fontSize: 12,
         color: '#94a3b8',
-        letterSpacing: '0.08em',
+        letterSpacing: 0,
         textAlign: right ? 'right' : 'left',
         width: narrow ? '1%' : undefined,
         whiteSpace: narrow ? 'nowrap' : undefined,

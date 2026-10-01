@@ -1,0 +1,172 @@
+{
+  "success": true,
+  "message": "",
+  "data": {
+    "opportunityStages": [
+      {
+        "opportunityStageNo": 1,
+        "code": "OS0001",
+        "opportunityStageName": "Qualification",
+        "sequence": 1,
+        "weightage": "20",
+        "colorCoding": null
+      },
+      {
+        "opportunityStageNo": 2,
+        "code": "OS0002",
+        "opportunityStageName": "Proposal",
+        "sequence": 2,
+        "weightage": "40",
+        "colorCoding": null
+      },
+      {
+        "opportunityStageNo": 3,
+        "code": "OS0003",
+        "opportunityStageName": "Negotiation",
+        "sequence": 3,
+        "weightage": "60",
+        "colorCoding": null
+      },
+      {
+        "opportunityStageNo": 4,
+        "code": "OS0004",
+        "opportunityStageName": "Commitment",
+        "sequence": 4,
+        "weightage": "80",
+        "colorCoding": null
+      },
+      {
+        "opportunityStageNo": 5,
+        "code": "OS0005",
+        "opportunityStageName": "Closed Won",
+        "sequence": 5,
+        "weightage": "100",
+        "colorCoding": null
+      },
+      {
+        "opportunityStageNo": 6,
+        "code": "OS0006",
+        "opportunityStageName": "Closed Lost",
+        "sequence": 6,
+        "weightage": "0",
+        "colorCoding": null
+      }
+    ],
+    "opportunityStatuses": [
+      {
+        "opportunityStatusNo": 1,
+        "code": "OST001",
+        "opportunityStatusName": "Open"
+      },
+      {
+        "opportunityStatusNo": 2,
+        "code": "OST002",
+        "opportunityStatusName": "On Hold"
+      },
+      {
+        "opportunityStatusNo": 3,
+        "code": "OST003",
+        "opportunityStatusName": "Won"
+      },
+      {
+        "opportunityStatusNo": 4,
+        "code": "OST004",
+        "opportunityStatusName": "Lost"
+      }
+    ],
+    "currencies": [
+      {
+        "currencyNo": 1,
+        "currencyCode": "INR",
+        "currencyName": "Indian Rupee",
+        "symbol": "₹"
+      },
+      {
+        "currencyNo": 2,
+        "currencyCode": "USD",
+        "currencyName": "US Dollar",
+        "symbol": "$"
+      },
+      {
+        "currencyNo": 3,
+        "currencyCode": "EUR",
+        "currencyName": "Euro",
+        "symbol": "€"
+      },
+      {
+        "currencyNo": 4,
+        "currencyCode": "GBP",
+        "currencyName": "Pound Sterling",
+        "symbol": "£"
+      },
+      {
+        "currencyNo": 5,
+        "currencyCode": "AED",
+        "currencyName": "UAE Dirham",
+        "symbol": "د.إ"
+      }
+    ],
+    "activityStatuses": [
+      {
+        "statusNo": 1,
+        "statusName": "Open"
+      },
+      {
+        "statusNo": 2,
+        "statusName": "Closed"
+      }
+    ],
+    "products": [
+      {
+        "crmProductNo": 7,
+        "productName": "CRM",
+        "code": "PM0007"
+      },
+      {
+        "crmProductNo": 5,
+        "productName": "ERO 1",
+        "code": "PM0005"
+      },
+      {
+        "crmProductNo": 6,
+        "productName": "ERO 10",
+        "code": "PM0006"
+      },
+      {
+        "crmProductNo": 1,
+        "productName": "P1",
+        "code": "PM0001"
+      },
+      {
+        "crmProductNo": 2,
+        "productName": "P2",
+        "code": "PM0002"
+      },
+      {
+        "crmProductNo": 3,
+        "productName": "P3",
+        "code": "PM0003"
+      },
+      {
+        "crmProductNo": 4,
+        "productName": "P4",
+        "code": "PM0004"
+      }
+    ],
+    "salesOrganizations": [
+      {
+        "salesOrganizationNo": 1,
+        "salesOrganizationName": "Domestic Sales",
+        "code": "SO0001"
+      },
+      {
+        "salesOrganizationNo": 2,
+        "salesOrganizationName": "Export Sales",
+        "code": "SO0002"
+      }
+    ]
+  },
+  "error": null,
+  "errors": [],
+  "traceId": "00-7c1e5a9d2f4b48b1a6e0d3c2b1a09f87-3b2a1c0d9e8f7a6b-01"
+}

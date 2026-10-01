@@ -7,7 +7,7 @@
  */
 import { getAuthToken, clearAuth } from './authStore'
 import { spectrumOrigin } from './config'
-import { asTransportError, errorFromResponse, isApiError, type ApiError } from './errors'
+import { asTransportError, errorFromResponse, isApiError, serverErrorMessage, type ApiError } from './errors'
 
 export type HttpVerb = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -20,6 +20,8 @@ export interface HttpRequestConfig {
   /** Skip the Authorization header (login, public endpoints). */
   skipAuth?: boolean
   signal?: AbortSignal
+  /** `blob` for file downloads; default parses JSON (falling back to text). */
+  responseType?: 'json' | 'blob'
 }
 
 export interface HttpResponse<T> {
@@ -33,7 +35,7 @@ type RequestInterceptor = (config: HttpRequestConfig) => HttpRequestConfig | Pro
 type ResponseInterceptor = (response: HttpResponse<unknown>) => HttpResponse<unknown> | Promise<HttpResponse<unknown>>
 type ErrorInterceptor = (error: ApiError, config: HttpRequestConfig) => unknown
 
-type RequestOptions = Partial<Pick<HttpRequestConfig, 'headers' | 'skipAuth' | 'signal'>>
+type RequestOptions = Partial<Pick<HttpRequestConfig, 'headers' | 'skipAuth' | 'signal' | 'responseType'>>
 
 const requestInterceptors: RequestInterceptor[] = []
 const responseInterceptors: { onFulfilled?: ResponseInterceptor; onRejected?: ErrorInterceptor }[] = []
@@ -65,13 +67,14 @@ async function send<T>(initial: HttpRequestConfig): Promise<HttpResponse<T>> {
       const raw = await fetch(`${spectrumOrigin()}${config.url}`, {
         method: config.method,
         headers: config.headers,
-        body: config.body === undefined ? undefined : JSON.stringify(config.body),
+        // FormData goes as-is so the browser sets the multipart boundary.
+        body: config.body === undefined ? undefined : config.body instanceof FormData ? config.body : JSON.stringify(config.body),
         signal: config.signal,
       })
-      const data = await parseBody(raw)
+      const data = config.responseType === 'blob' && raw.ok ? await raw.blob() : await parseBody(raw)
       if (!raw.ok) {
-        const message = typeof data === 'object' && data ? (data as { message?: string }).message : undefined
-        errorFromResponse(raw.status, { message })
+        // The server's own text (e.g. "The length of 'Product Name' must be 50 characters or fewer…").
+        errorFromResponse(raw.status, { message: serverErrorMessage(data) })
       }
       response = { data, status: raw.status, headers: raw.headers, config }
     } catch (error) {
@@ -98,8 +101,8 @@ async function send<T>(initial: HttpRequestConfig): Promise<HttpResponse<T>> {
 
 function build(method: HttpVerb, url: string, body: unknown, options: RequestOptions = {}): HttpRequestConfig {
   const headers: Record<string, string> = { Accept: 'application/json', ...options.headers }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
-  return { method, url, headers, body, skipAuth: options.skipAuth, signal: options.signal }
+  if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json'
+  return { method, url, headers, body, skipAuth: options.skipAuth, signal: options.signal, responseType: options.responseType }
 }
 
 export const http = {
@@ -135,6 +138,10 @@ export const http = {
   },
   async delete<T>(url: string, options?: RequestOptions): Promise<T> {
     return (await send<T>(build('DELETE', url, undefined, options))).data
+  },
+  /** GET a file (with the auth header) as a Blob. */
+  async getBlob(url: string, options?: RequestOptions): Promise<Blob> {
+    return (await send<Blob>(build('GET', url, undefined, { ...options, responseType: 'blob', headers: { Accept: '*/*', ...options?.headers } }))).data
   },
 }
 
