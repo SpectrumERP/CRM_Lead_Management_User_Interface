@@ -2,6 +2,8 @@
 
 /* Explicit scan — required when this CSS is loaded from Spectrum ERP Vite */
 @source "./**/*.{js,jsx,ts,tsx}";
+/* Task Management (./task-management) is a separate app with its own Tailwind 3 build. */
+@source not "../task-management";
 
 @theme {
   --color-canvas: #f2f5fb;

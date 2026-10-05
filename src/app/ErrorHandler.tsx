@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { resolveError } from '../api/errorPolicy'
-import { useAuth } from '../auth/AuthContext'
+import { notifySessionExpired } from '../api/sessionExpiry'
 import { useToast } from '../contexts/ToastContext'
 import { paths } from './paths'
 
@@ -16,7 +16,6 @@ interface ErrorHandlerApi {
 const ErrorHandlerContext = createContext<ErrorHandlerApi | null>(null)
 
 export function ErrorHandlerProvider({ children }: { children: ReactNode }) {
-  const { logout } = useAuth()
   const { addToast } = useToast()
   const navigate = useNavigate()
 
@@ -25,9 +24,8 @@ export function ErrorHandlerProvider({ children }: { children: ReactNode }) {
       const action = resolveError(error)
       switch (action.type) {
         case 'sign_in':
-          logout()
-          addToast('error', action.title, action.message)
-          navigate(paths.login, { replace: true })
+          // Session gone: the "session expired" alert signs the user out (see sessionExpiry).
+          notifySessionExpired('rejected')
           return 'handled'
         case 'forbidden':
           addToast('error', action.title, action.message)
@@ -47,7 +45,7 @@ export function ErrorHandlerProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [addToast, logout, navigate],
+    [addToast, navigate],
   )
 
   const run = useCallback(

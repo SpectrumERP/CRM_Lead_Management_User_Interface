@@ -4,11 +4,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-all.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "dev:task": "npm --prefix task-management run dev -- --base /task/ --port 5174 --strictPort",
+    "build:task": "node scripts/build-task.mjs",
+    "build:all": "npm run build && npm run build:task",
+    "setup:task": "npm --prefix task-management install",
+    "dev:crm": "vite"
   },
   "dependencies": {
     "react": "^19.0.0",
