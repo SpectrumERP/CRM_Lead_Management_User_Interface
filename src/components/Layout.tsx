@@ -38,18 +38,18 @@ interface LayoutProps {
 
 const navItems = [
   // Only Leads and Opportunities are shown for now — the other menus are kept here, commented out.
-  // {
-  //   id: 'dashboard' as Page,
-  //   label: 'Dashboard',
-  //   icon: (
-  //     <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-  //       <rect x="3" y="3" width="7" height="7" rx="1.5" />
-  //       <rect x="14" y="3" width="7" height="7" rx="1.5" />
-  //       <rect x="3" y="14" width="7" height="7" rx="1.5" />
-  //       <rect x="14" y="14" width="7" height="7" rx="1.5" />
-  //     </svg>
-  //   ),
-  // },
+  {
+    id: 'dashboard' as Page,
+    label: 'Dashboard',
+    icon: (
+      <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </svg>
+    ),
+  },
   // {
   //   id: 'business-entities' as Page,
   //   label: 'Business Entities',
@@ -167,7 +167,7 @@ function SidebarNavButton({
       aria-label={label}
     >
       <span
-        className={`relative grid h-7 w-7 shrink-0 place-items-center rounded-md ${active ? 'bg-primary text-white' : 'bg-white/5'}`}
+        className={`relative grid h-7 w-7 shrink-0 place-items-center rounded-md ${active ? 'bg-[#C4161C] text-white' : 'bg-white/15'}`}
         aria-hidden
       >
         {icon}
@@ -234,7 +234,7 @@ function AppSidebar({
         </div>
 
         {admin && (
-          <div className={collapsed ? 'mt-3' : 'mt-4'}>
+          <div className={collapsed ? 'mt-3' : 'mt-4 border-t border-white/10 pt-3'}>
             {!collapsed ? (
               <p className="px-2 pb-1.5 text-[10px] font-bold tracking-[0.14em] text-white/40">
                 Admin
@@ -488,7 +488,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
     <div className="flex h-dvh overflow-hidden bg-canvas">
       {/* ── Desktop sidebar ── */}
       <aside
-        className={`hidden h-full flex-shrink-0 flex-col overflow-hidden border-r border-white/10 bg-ink transition-[width] duration-200 ease-out lg:flex ${
+        className={`hidden h-full flex-shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[#1E56A0] transition-[width] duration-200 ease-out lg:flex ${
           sidebarCollapsed ? 'w-[4.25rem]' : 'w-56'
         }`}
       >
@@ -512,7 +512,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
       )}
       <aside
         id="mobile-sidebar"
-        className={`fixed inset-y-0 left-0 z-[70] flex w-56 flex-col overflow-hidden bg-ink transition-transform duration-200 ease-out lg:hidden ${navOpen ? 'translate-x-0 shadow-overlay' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-[70] flex w-56 flex-col overflow-hidden bg-[#1E56A0] transition-transform duration-200 ease-out lg:hidden ${navOpen ? 'translate-x-0 shadow-overlay' : '-translate-x-full'}`}
         aria-hidden={!navOpen}
       >
         <AppSidebar

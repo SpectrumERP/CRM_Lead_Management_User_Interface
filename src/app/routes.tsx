@@ -33,12 +33,14 @@ const Forbidden = lazy(() => import('../pages/Forbidden'))
 
 function DashboardPage() {
   const navigate = useNavigate()
+  const { addToast } = useToast()
   return (
     <Dashboard
-      onNavigateLeads={() => navigate(paths.leads)}
-      onNavigateActivities={() => navigate(paths.activities)}
-      onNavigateMeetings={() => navigate(paths.meetings)}
-      onNavigateBusinessEntities={() => navigate(paths.entities)}
+      onOpenLead={(id) => navigate(paths.lead(id))}
+      onOpenOpportunity={(id) => navigate(paths.opportunity(id))}
+      onLeadStage={(stage) => navigate(`${paths.leads}?${new URLSearchParams({ stage, status: 'Open' })}`)}
+      onOpportunityStage={(stage) => navigate(`${paths.opportunities}?${new URLSearchParams({ stage })}`)}
+      onToast={addToast}
     />
   )
 }
@@ -372,9 +374,7 @@ export function AppRouter() {
       <Route path="login" element={<Login />} />
       <Route element={<AuthGuard />}>
         <Route element={<AppShell />}>
-          {/* Home is the Leads list for now (Dashboard hidden). */}
-          {/* <Route index element={<DashboardPage />} /> */}
-          <Route index element={<Navigate to={paths.leads} replace />} />
+          <Route index element={<DashboardPage />} />
           <Route path="entities" element={<EntitiesListPage />} />
           <Route path="entities/new" element={<CreateEntityPage />} />
           <Route path="entities/:id" element={<EntityDetailPage />} />

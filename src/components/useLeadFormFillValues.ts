@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toApiError } from '../api/errors'
 import { getLeadFillValues, type LeadFormFillValues } from '../api/leadFormFillValues'
 import { useSpectrumCompany } from '../auth/useSpectrumCompany'
@@ -13,6 +13,7 @@ export function useLeadFormFillValues() {
   const headOfficeNo = company.enabled ? company.headOfficeNo : null
   const [values, setValues] = useState<LeadFormFillValues | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     if (!headOfficeNo) {
@@ -33,7 +34,9 @@ export function useLeadFormFillValues() {
     return () => {
       cancelled = true
     }
-  }, [headOfficeNo])
+  }, [headOfficeNo, attempt])
 
-  return { values, error, remote: headOfficeNo !== null }
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+
+  return { values, error, retry, remote: headOfficeNo !== null }
 }

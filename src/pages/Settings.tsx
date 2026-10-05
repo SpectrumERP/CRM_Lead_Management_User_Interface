@@ -6,6 +6,7 @@ import { masterApis } from '../api/masters';
 import { useSpectrumCompany } from '../auth/useSpectrumCompany';
 import { C } from './settings/atoms';
 import ApiMasterSection from './settings/ApiMasterSection';
+import DashboardSettingsSection from './settings/DashboardSettingsSection';
 import { useApiMaster } from './settings/useApiMaster';
 
 interface Props {
@@ -27,6 +28,7 @@ const SETTING_TABS = [
   { id: 'oppStatuses', group: 'opportunity', label: 'Opportunity Statuses', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /> },
   { id: 'products', group: 'opportunity', label: 'Products', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
   { id: 'activityTypes', group: 'general', label: 'Activity Types', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /> },
+  { id: 'dashboard', group: 'general', label: 'Dashboard', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h6v6H4zM14 5h6v4h-6zM14 13h6v6h-6zM4 15h6v4H4z" /> },
 ] as const;
 
 const TAB_GROUPS: { id: TabGroup; label: string }[] = [
@@ -60,7 +62,10 @@ export default function Settings({ onToast }: Props) {
     oppStatuses: oppStatusesApi.rows.length,
     products: productsApi.rows.length,
     activityTypes: activityTypesApi.rows.length,
+    dashboard: 0,
   };
+  /** Tabs that are settings, not master lists — no count badge. */
+  const noCount: SettingTab[] = ['dashboard'];
 
   return (
     <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col lg:flex-row" style={{ background: C.bg }}>
@@ -96,7 +101,7 @@ export default function Settings({ onToast }: Props) {
                   }}>
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{tab.icon}</svg>
                   <span className="flex-1">{tab.label}</span>
-                  <CountBadge value={counts[tab.id]} tone={activeTab === tab.id ? 'primary' : 'muted'} />
+                  {noCount.includes(tab.id) ? null : <CountBadge value={counts[tab.id]} tone={activeTab === tab.id ? 'primary' : 'muted'} />}
                 </button>
               ))}
             </div>
@@ -169,6 +174,7 @@ export default function Settings({ onToast }: Props) {
               <ApiMasterSection api={masterApis.leadActivityTypes} state={activityTypesApi} title="Activity Types"
                 subtitle="Types of sales activities that can be logged" noun="Activity Type" namePlaceholder="e.g. Demo Call" onToast={onToast} />
             )}
+            {activeTab === 'dashboard' && <DashboardSettingsSection onToast={onToast} />}
           </>
         )}
       </div>

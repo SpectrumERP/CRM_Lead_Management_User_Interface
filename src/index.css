@@ -4,19 +4,19 @@
 @source "./**/*.{js,jsx,ts,tsx}";
 
 @theme {
-  --color-canvas: #f2f5fb;
+  --color-canvas: #F4F6FA;
   --color-surface: #ffffff;
-  --color-surface-muted: #f8faff;
-  --color-surface-hover: #f0f4fb;
+  --color-surface-muted: #F8FAFC;
+  --color-surface-hover: #F1F5F9;
   --color-ink: #0c1a3a;
   --color-ink-soft: #4a5d82;
   --color-ink-muted: #7a8494;
   --color-ink-faint: #94a3b8;
-  --color-line: #dce4f2;
-  --color-line-subtle: #edf1f9;
-  --color-line-strong: #c2d3f5;
-  --color-primary: #2955a3;
-  --color-primary-hover: #1e3f87;
+  --color-line: #E2E8F0;
+  --color-line-subtle: #EEF2F6;
+  --color-line-strong: #CBD5E1;
+  --color-primary: #1E56A0;
+  --color-primary-hover: #17457F;
   --color-primary-soft: #eef3fc;
   --color-accent: #c41e1e;
   --color-accent-soft: #fff0f0;
@@ -42,7 +42,7 @@
   --color-fi-red-light: #fff0f0;
   --color-fi-gray: #7a8494;
   --color-primary-light: #eef3fc;
-  --color-border: #dce4f2;
+  --color-border: #E2E8F0;
   --color-muted: #64748b;
 
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -171,7 +171,7 @@ body.nav-lock {
   border-radius: var(--radius-control);
   font-size: 0.8125rem;
   font-weight: 500;
-  color: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  color: color-mix(in srgb, var(--color-surface) 88%, transparent);
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
   text-decoration: none;
@@ -1437,4 +1437,40 @@ input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* Dashboard tables: first and last columns stay in view while the middle scrolls (as on the Leads list). */
+.crm-table .sticky-col-start,
+.crm-table .sticky-col-last {
+  position: sticky;
+  z-index: 3;
+  background: var(--color-surface);
+}
+.crm-table .sticky-col-start {
+  left: 0;
+  box-shadow: 4px 0 10px -4px rgba(12, 26, 58, 0.14);
+}
+.crm-table .sticky-col-last {
+  right: 0;
+  box-shadow: -4px 0 10px -4px rgba(12, 26, 58, 0.14);
+}
+.crm-table thead .sticky-col-start,
+.crm-table thead .sticky-col-last {
+  z-index: 6;
+  background: var(--color-surface-hover);
+}
+.crm-table tr:hover .sticky-col-start,
+.crm-table tr:hover .sticky-col-last {
+  background: var(--color-surface-hover);
+}
+
+/*
+ * Pinned-column shadows show only while columns scroll under them (every table).
+ * src/utils/tableScrollEdges.ts sets is-scrolled-start / is-scrolled-end on each .table-scroll.
+ */
+.table-scroll:not(.is-scrolled-start) .crm-table :is(.sticky-col-check, .sticky-col-name, .sticky-col-id, .sticky-col-after-id, .sticky-col-start) {
+  box-shadow: none;
+}
+.table-scroll:not(.is-scrolled-end) .crm-table :is(.sticky-col-end, .sticky-col-last) {
+  box-shadow: none;
 }

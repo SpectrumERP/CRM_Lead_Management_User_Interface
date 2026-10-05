@@ -1,4 +1,6 @@
+import { nextSort } from '../ui';
 import { useState, useMemo, useDeferredValue, useEffect, memo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../components/Pagination';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ActivityDrawer from '../components/ActivityDrawer';
@@ -19,7 +21,7 @@ import { useLeadFormFillValues } from '../components/useLeadFormFillValues';
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
 import { prefetchPage } from '../app/prefetch';
 import { SecondaryContactsMore } from '../components/SecondaryContactsMore';
-import { Button, IconTooltip, PageHeader, PageLoader, Select } from '../ui';
+import { Button, IconTooltip, PageHeader, PageLoader, Select, SortChevrons } from '../ui';
 import { findContactForLead, LeadPrimaryContactCard } from '../components/PersonContactCard';
 import { matchesAny } from '../utils/text';
 import { stopBubbleProps } from '../utils/events';
@@ -139,8 +141,10 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
-  const [stageFilter, setStageFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  // Dashboard pipeline links open the list as `?stage=…&status=…`.
+  const [searchParams] = useSearchParams();
+  const [stageFilter, setStageFilter] = useState(() => searchParams.get('stage') ?? '');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') ?? '');
   const [sourceFilter, setSourceFilter] = useState('');
   const [sortField, setSortField] = useState<keyof Lead | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -241,8 +245,9 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
   }
 
   function toggleSort(field: keyof Lead) {
-    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortField(field); setSortDir('asc'); }
+    const next = nextSort({ field: sortField, dir: sortDir }, field, { field: '', dir: 'asc' });
+    setSortField(next.field);
+    setSortDir(next.dir);
   }
 
   function toggleSelect(id: string) {
@@ -261,8 +266,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
   }
 
   function SortIcon({ field }: { field: keyof Lead }) {
-    if (sortField !== field) return <span className="ml-0.5 text-ink-faint">↕</span>;
-    return <span className="ml-0.5 text-primary">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+    return <SortChevrons active={sortField === field} dir={sortDir} />;
   }
 
   // Per currency — a $ lead is not added into the ₹ total.
@@ -436,10 +440,10 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                             />
                           </span>
                         ) : (
-                          <>
+                          <span className="flex items-center justify-between gap-2">
                             {column.label}
                             {field && <SortIcon field={field} />}
-                          </>
+                          </span>
                         )}
                       </th>
                     )

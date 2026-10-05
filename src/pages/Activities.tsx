@@ -206,8 +206,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                 <th
                   style={{ minWidth: 140, cursor: 'pointer' }}
                   onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')}>
-                  Schedule Date
-                  <SortChevrons active dir={sortDir} />
+                  <span className="flex items-center justify-between gap-2">Schedule Date <SortChevrons active dir={sortDir} /></span>
                 </th>
                 <th style={{ minWidth: 120 }}>Reminder</th>
                 <th style={{ minWidth: 100 }}>Status</th>

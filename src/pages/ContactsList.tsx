@@ -1,9 +1,10 @@
+import { nextSort } from '../ui';
 import { useState } from 'react';
 import { Contact, contactStatusMeta, initialsAvatar, avatarGradient, DEPARTMENTS } from '../data/contacts';
 import { SkeletonTableRows, EmptyState, NoResults, EmptyIcons } from '../components/CRMStates';
 import { api } from '../api/crm';
 import { useApiQuery } from '../api/useApiQuery';
-import { Button, compareAlpha, IconTooltip, PageHeader, sortAlpha, StatPill, StatPillRow } from '../ui';
+import { Button, compareAlpha, IconTooltip, PageHeader, SortChevrons, sortAlpha, StatPill, StatPillRow } from '../ui';
 import { FilterSearch, FilterSelect, InlineFilterRow } from '../components/InlineFilterRow';
 import { matchesAny } from '../utils/text';
 import { stopPropagation } from '../utils/events';
@@ -33,8 +34,9 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
   function toggleSort(field: SortField) {
-    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortField(field); setSortDir('asc'); }
+    const next = nextSort({ field: sortField, dir: sortDir }, field, { field: 'name', dir: 'asc' });
+    setSortField(next.field);
+    setSortDir(next.dir);
   }
 
   const filtered = contacts.filter((c) => {
@@ -58,16 +60,7 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
   const entities = new Set(contacts.map((c) => c.businessEntityId)).size;
 
   function SortIcon({ field }: { field: SortField }) {
-    if (sortField !== field) return (
-      <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className='ml-1 text-line-strong'>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-      </svg>
-    );
-    return (
-      <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className='ml-1 text-primary'>
-        <path strokeLinecap="round" strokeLinejoin="round" d={sortDir === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
-      </svg>
-    );
+    return <SortChevrons active={sortField === field} dir={sortDir} />;
   }
 
   return (
@@ -161,12 +154,12 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
             <thead>
               <tr>
                 <th>
-                  <button className="flex items-center" onClick={() => toggleSort('name')}>
+                  <button className="flex w-full items-center justify-between gap-2" onClick={() => toggleSort('name')}>
                     Contact Name <SortIcon field="name" />
                   </button>
                 </th>
                 <th>
-                  <button className="flex items-center" onClick={() => toggleSort('businessEntityName')}>
+                  <button className="flex w-full items-center justify-between gap-2" onClick={() => toggleSort('businessEntityName')}>
                     Business Entity <SortIcon field="businessEntityName" />
                   </button>
                 </th>
@@ -178,7 +171,7 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
                 <th>Primary</th>
                 <th>Status</th>
                 <th>
-                  <button className="flex items-center" onClick={() => toggleSort('createdDate')}>
+                  <button className="flex w-full items-center justify-between gap-2" onClick={() => toggleSort('createdDate')}>
                     Last Activity <SortIcon field="createdDate" />
                   </button>
                 </th>

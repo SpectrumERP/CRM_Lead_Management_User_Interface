@@ -52,7 +52,8 @@ export interface CrmStore {
   addNote: (note: CrmNote) => void
   addEmail: (email: CrmEmail) => void
   addDocument: (doc: CRMDocument) => void
-  patchActivity: (id: string, patch: Partial<Activity>) => void
+  /** Resolves true once saved (server records: after the API call and reload); false when it failed. */
+  patchActivity: (id: string, patch: Partial<Activity>) => Promise<boolean>
   /** Resolves true once deleted (server records: after the API call and reload). */
   removeActivity: (id: string) => Promise<boolean>
   removeNote: (id: string) => Promise<boolean>
@@ -209,15 +210,15 @@ export function useCrmActions() {
       },
       patchActivity: (id: string, patch: Partial<Activity>) => {
         const current = api.crm.getState().activities.find((item) => item.id === id)
+        const saved = (save: Promise<void>) => runAsync(() => save.then(() => true)).then((ok) => ok === true)
         if (current?.opportunityId && opportunityNoFromId(current.opportunityId)) {
-          void runAsync(() => saveServerOpportunityActivity({ ...current, ...patch, id: current.id }))
-          return
+          return saved(saveServerOpportunityActivity({ ...current, ...patch, id: current.id }))
         }
         if (current && isServerLeadId(current.leadId)) {
-          void runAsync(() => saveServerLeadActivity({ ...current, ...patch, id: current.id }))
-          return
+          return saved(saveServerLeadActivity({ ...current, ...patch, id: current.id }))
         }
         run(() => RAW_ACTIONS.patchActivity(id, patch))
+        return Promise.resolve(true)
       },
       removeActivity: async (id: string) => {
         const current = api.crm.getState().activities.find((item) => item.id === id)

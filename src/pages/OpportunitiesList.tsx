@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/crm'
 import { useApiQuery } from '../api/useApiQuery'
 import { bySequence } from '../api/fillValues'
@@ -36,7 +37,9 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
   const [confirmDelete, setConfirmDelete] = useState<Opportunity | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [activityOpp, setActivityOpp] = useState<Opportunity | null>(null)
-  const [stageFilter, setStageFilter] = useState<string[]>([])
+  // Dashboard pipeline links open the list as `?stage=…`.
+  const [searchParams] = useSearchParams()
+  const [stageFilter, setStageFilter] = useState<string[]>(() => searchParams.getAll('stage'))
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   // Show / hide grid columns (Actions header menu); remembered in this browser.

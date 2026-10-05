@@ -1,351 +1,426 @@
-import { useMemo } from 'react'
-import { formatMoneyTotals, leadStagePalette } from '../data/leads'
-import { api } from '../api/crm'
-import { useApiQuery } from '../api/useApiQuery'
-import { SkeletonStatCards, SkeletonPipelineRows, SkeletonActivityList } from '../components/CRMStates'
-import { Button, Card, PageHeader, type StatTone } from '../ui'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import ActivityDrawer from '../components/ActivityDrawer'
+import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
+import { SkeletonStatCards } from '../components/CRMStates'
+import type { ToastType } from '../components/Toast'
+import { useLeadFormFillValues } from '../components/useLeadFormFillValues'
+import { useOpportunityFillValues } from '../components/useOpportunityFillValues'
+import { useServerLeadSync, useServerOpportunitySync } from '../components/useServerLeadSync'
+import { loadDashboardActivities, resetDashboardActivities } from '../api/dashboardActivities'
+import { stageWeight } from '../api/opportunityFormFillValues'
+import { useCrmActions, useCrmSelector } from '../contexts/CrmStoreContext'
+import type { Activity } from '../data/activities'
+import {
+  closuresThisMonth,
+  currentMonthRange,
+  groupActivities,
+  isOpenStatus,
+  isPendingActivity,
+  lastSixMonthsSales,
+  leadPipeline,
+  leadsRequiringAttention,
+  opportunitiesRequiringAttention,
+  opportunityPipeline,
+  type StageMaster,
+} from '../data/dashboard'
+import { useStagnantDays } from '../data/dashboardSettings'
+import { formatMoneyTotals } from '../data/leads'
+import { Button, PageHeader } from '../ui'
+import { formatDate, toIsoDate } from '../utils/dateFormat'
+import { LeadsAttentionTable, OpportunitiesAttentionTable } from './dashboard/Attention'
+import { ClosureThisMonthTable } from './dashboard/ClosureThisMonth'
+import { LastSixMonthsTable } from './dashboard/LastSixMonths'
+import { OpenActivitiesTable } from './dashboard/OpenActivities'
+import { LeadPipelineTable, OpportunityPipelineTable } from './dashboard/Pipelines'
+import { Section } from './dashboard/parts'
+
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+/** A valid `#hex` colour from the server, else undefined. */
+function hexColor(value: string | null | undefined) {
+  const color = value?.trim()
+  return color && HEX.test(color) ? color : undefined
+}
+
+/** Stage name (any case) → its server colour. */
+function colorLookup(stages: readonly StageMaster[]) {
+  const map = new Map(stages.filter((s) => s.color).map((s) => [s.name.trim().toLowerCase(), s.color!]))
+  return (stage: string) => map.get(stage.trim().toLowerCase())
+}
 
 interface DashboardProps {
-  onNavigateLeads?: () => void
-  onNavigateActivities?: () => void
-  onNavigateMeetings?: () => void
-  onNavigateBusinessEntities?: () => void
+  onOpenLead: (id: string) => void
+  onOpenOpportunity: (id: string) => void
+  /** Lead list filtered to open leads in this stage. */
+  onLeadStage: (stage: string) => void
+  /** Opportunity list filtered to this stage. */
+  onOpportunityStage: (stage: string) => void
+  onToast?: (type: ToastType, title: string, message?: string) => void
 }
 
-type DashTone = StatTone
+/** Activities of these records are loaded for the dashboard (the server has no all-activities list). */
+function useDashboardActivities(ids: readonly string[], ready: boolean) {
+  const key = ids.join(',')
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(0)
+  const [attempt, setAttempt] = useState(0)
 
-const TONE_TEXT: Record<DashTone, string> = {
-  primary: 'text-primary',
-  success: 'text-success',
-  warning: 'text-warning',
-  accent: 'text-accent',
-  purple: 'text-purple',
-  muted: 'text-ink-muted',
-  ink: 'text-ink',
-}
-
-const TONE_SOFT: Record<DashTone, string> = {
-  primary: 'bg-primary-soft',
-  success: 'bg-success-soft',
-  warning: 'bg-warning-soft',
-  accent: 'bg-accent-soft',
-  purple: 'bg-purple-soft',
-  muted: 'bg-surface-hover',
-  ink: 'bg-surface-hover',
-}
-
-const TONE_BORDER_HOVER: Record<DashTone, string> = {
-  primary: 'hover:border-primary hover:bg-primary-soft',
-  success: 'hover:border-success hover:bg-success-soft',
-  warning: 'hover:border-warning hover:bg-warning-soft',
-  accent: 'hover:border-accent hover:bg-accent-soft',
-  purple: 'hover:border-purple hover:bg-purple-soft',
-  muted: 'hover:border-line hover:bg-surface-hover',
-  ink: 'hover:border-ink hover:bg-surface-hover',
-}
-
-const TONE_AVATAR: Record<DashTone, string> = {
-  primary: 'bg-primary',
-  success: 'bg-success-strong',
-  warning: 'bg-warning',
-  accent: 'bg-accent',
-  purple: 'bg-purple',
-  muted: 'bg-ink-muted',
-  ink: 'bg-ink',
-}
-
-const recentActivity: Array<{ time: string; action: string; lead: string; by: string; tone: DashTone }> = [
-  { time: '2h ago', action: 'Lead qualified', lead: 'TCS – ERP Suite', by: 'Priya Mehta', tone: 'primary' },
-  { time: '4h ago', action: 'Follow-up scheduled', lead: 'Reliance Jio – BSS/OSS', by: 'Vikram Nair', tone: 'success' },
-  { time: 'Yesterday', action: 'Requirement doc shared', lead: 'Sun Pharma – QMS', by: 'Priya Mehta', tone: 'warning' },
-  { time: 'Yesterday', action: 'Lead created', lead: 'Godrej – HRMS', by: 'Arjun Patel', tone: 'primary' },
-  { time: '2d ago', action: 'Demo call booked', lead: 'HDFC Bank – Core Banking', by: 'Meena Iyer', tone: 'accent' },
-]
-
-const topSalespeople: Array<{ name: string; leads: number; value: string; initials: string; tone: DashTone }> = [
-  { name: 'Meena Iyer', leads: 48, value: '₹62.0 M', initials: 'MI', tone: 'accent' },
-  { name: 'Vikram Nair', leads: 41, value: '₹51.0 M', initials: 'VN', tone: 'primary' },
-  { name: 'Priya Mehta', leads: 38, value: '₹47.0 M', initials: 'PM', tone: 'success' },
-  { name: 'Arjun Patel', leads: 29, value: '₹24.0 M', initials: 'AP', tone: 'purple' },
-]
-
-const STAGE_ORDER = [
-  'New',
-  'Contacted',
-  'Requirement Identified',
-  'Under Qualification',
-  'Qualified',
-  'Converted to Opportunity',
-] as const
-
-export default function Dashboard({
-  onNavigateLeads,
-  onNavigateActivities,
-  onNavigateMeetings,
-  onNavigateBusinessEntities,
-}: DashboardProps) {
-  const { data: snapshot, loading } = useApiQuery(() => api.crm.snapshot(), [])
-  const leads = snapshot?.leads ?? []
-  const activities = snapshot?.activities ?? []
-  const meetings = snapshot?.meetings ?? []
-  const contacts = snapshot?.contacts ?? []
-  const entities = snapshot?.entities ?? []
-
-  const metrics = useMemo(() => {
-    const totalLeads = leads.length
-    const openLeads = leads.filter((l) => l.leadStatus === 'Open').length
-    const qualified = leads.filter((l) => l.leadStage === 'Qualified').length
-    const converted = leads.filter((l) => l.leadStatus === 'Converted').length
-    // Per currency — amounts in different currencies are not added together.
-    const money = (list: typeof leads) => list.map((l) => ({ value: l.opportunityValue, currency: l.valueCurrency }))
-    const pipelineValue = formatMoneyTotals(money(leads))
-    const avgDeal = formatMoneyTotals(money(leads), { average: true })
-    const pendingActivities = activities.filter((a) => a.status === 'Pending').length
-    const upcomingMeetings = meetings.filter((m) => m.status === 'Scheduled').length
-    const stageData = STAGE_ORDER.map((stage) => ({
-      stage,
-      count: leads.filter((l) => l.leadStage === stage).length,
-      color: leadStagePalette(stage).text,
-      value: formatMoneyTotals(money(leads.filter((l) => l.leadStage === stage))),
-    }))
-    const pipelineTotal = stageData.reduce((s, d) => s + d.count, 0)
-    return {
-      totalLeads,
-      openLeads,
-      qualified,
-      converted,
-      pipelineValue,
-      avgDeal,
-      pendingActivities,
-      upcomingMeetings,
-      stageData,
-      pipelineTotal,
+  useEffect(() => {
+    if (!ready) return
+    let cancelled = false
+    setLoading(true)
+    loadDashboardActivities(key ? key.split(',') : [])
+      .then((n) => {
+        if (!cancelled) setFailed(n)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-  }, [leads, activities, meetings])
+  }, [key, ready, attempt])
 
-  const {
-    totalLeads,
-    openLeads,
-    qualified,
-    converted,
-    pipelineValue,
-    avgDeal,
-    pendingActivities,
-    upcomingMeetings,
-    stageData,
-    pipelineTotal,
-  } = metrics
+  const retry = useCallback(() => {
+    resetDashboardActivities()
+    setAttempt((n) => n + 1)
+  }, [])
 
-  const stats: Array<{
-    label: string
-    value: string
-    sub: string
-    nav?: () => void
-    tone: DashTone
-  }> = [
-    { label: 'Total Leads', value: String(totalLeads), sub: `${openLeads} open`, nav: onNavigateLeads, tone: 'primary' },
-    { label: 'Qualified', value: String(qualified), sub: `of ${totalLeads} total`, nav: onNavigateLeads, tone: 'success' },
+  return { loading: !ready || loading, failed, retry }
+}
+
+export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, onOpportunityStage, onToast }: DashboardProps) {
+  const leadSync = useServerLeadSync()
+  const oppSync = useServerOpportunitySync()
+  const leadFillQuery = useLeadFormFillValues()
+  const oppFillQuery = useOpportunityFillValues()
+  const leadFill = leadFillQuery.values
+  const oppFill = oppFillQuery.values
+  const { patchActivity } = useCrmActions()
+
+  // Server records only, as on the Leads / Opportunities lists.
+  const allLeads = useCrmSelector((s) => s.leads)
+  const allOpportunities = useCrmSelector((s) => s.opportunities)
+  const allActivities = useCrmSelector((s) => s.activities)
+  const leads = useMemo(() => allLeads.filter((l) => l.spectrum), [allLeads])
+  const opportunities = useMemo(() => allOpportunities.filter((o) => o.spectrum), [allOpportunities])
+
+  // Fixed for this visit; a new month is picked up the next time the dashboard opens.
+  const [today] = useState(() => new Date())
+  const todayIso = toIsoDate(today)
+  const month = currentMonthRange(today)
+
+  const [editing, setEditing] = useState<Activity | null>(null)
+  // Opened from Expected Closure's pending list: only Notes / Outcome and Status are editable.
+  const [notesOnly, setNotesOnly] = useState(false)
+
+  // Stage order, weightage and colours come from the server masters (fill-values) only.
+  const leadStages = useMemo<StageMaster[]>(
+    () =>
+      (leadFill?.leadStages ?? []).map((s) => ({ name: s.leadStageName, sequence: s.sequence, color: hexColor(s.colorCode) })),
+    [leadFill],
+  )
+  const opportunityStages = useMemo<StageMaster[]>(
+    () =>
+      (oppFill?.opportunityStages ?? []).map((s) => ({
+        name: s.opportunityStageName,
+        sequence: s.sequence,
+        weight: stageWeight(s),
+        color: hexColor(s.colorCoding),
+      })),
+    [oppFill],
+  )
+  // Open activities follow the stage sequence of their lead / opportunity (then activity date).
+  const activitySequence = useMemo(() => {
+    const seq = (stages: readonly StageMaster[]) => new Map(stages.map((s) => [s.name.trim().toLowerCase(), s.sequence]))
+    const leadSeq = seq(leadStages)
+    const oppSeq = seq(opportunityStages)
+    const leadStage = new Map(leads.map((l) => [l.id, l.leadStage]))
+    const oppStage = new Map(opportunities.map((o) => [o.id, o.dealStage]))
+    return (a: Activity) =>
+      a.opportunityId
+        ? oppSeq.get((oppStage.get(a.opportunityId) ?? '').trim().toLowerCase())
+        : leadSeq.get((leadStage.get(a.leadId) ?? '').trim().toLowerCase())
+  }, [leadStages, opportunityStages, leads, opportunities])
+  const leadStageColor = useMemo(() => colorLookup(leadStages), [leadStages])
+  const opportunityStageColor = useMemo(() => colorLookup(opportunityStages), [opportunityStages])
+  // Loading until the masters arrive (or fail); errors from the list sync or the masters.
+  const leadMastersLoading = leadFillQuery.remote && !leadFill && !leadFillQuery.error
+  const oppMastersLoading = oppFillQuery.remote && !oppFill && !oppFillQuery.error
+  const leadError = leadSync.error || leadFillQuery.error
+  const oppError = oppSync.error || oppFillQuery.error
+  function retryLeads() {
+    if (leadSync.error) void leadSync.retry()
+    if (leadFillQuery.error) leadFillQuery.retry()
+  }
+  function retryOpportunities() {
+    if (oppSync.error) void oppSync.retry()
+    if (oppFillQuery.error) oppFillQuery.retry()
+  }
+
+  const openLeadIds = useMemo(() => leads.filter((l) => isOpenStatus(l.leadStatus)).map((l) => l.id), [leads])
+  const openOpportunityIds = useMemo(
+    () => opportunities.filter((o) => isOpenStatus(o.status)).map((o) => o.id),
+    [opportunities],
+  )
+  const syncing = leadSync.loading || oppSync.loading
+  const activityLoad = useDashboardActivities([...openLeadIds, ...openOpportunityIds], !syncing)
+
+  const serverActivities = useMemo(() => {
+    const leadIds = new Set(leads.map((l) => l.id))
+    const oppIds = new Set(opportunities.map((o) => o.id))
+    return allActivities.filter((a) => (a.opportunityId ? oppIds.has(a.opportunityId) : leadIds.has(a.leadId)))
+  }, [allActivities, leads, opportunities])
+  const grouped = useMemo(() => groupActivities(serverActivities), [serverActivities])
+  const stagnantDays = useStagnantDays()
+
+  // Only open records: a converted lead's activities are copied to its opportunity by the server,
+  // so counting the lead's copy too would list the same activity twice.
+  const openActivities = useMemo(() => {
+    const open = new Set([...openLeadIds, ...openOpportunityIds])
+    return serverActivities.filter((a) => isPendingActivity(a) && open.has(a.opportunityId || a.leadId))
+  }, [serverActivities, openLeadIds, openOpportunityIds])
+  const overdueCount = openActivities.filter((a) => a.scheduleDate && a.scheduleDate < todayIso).length
+  const leadRows = useMemo(() => leadPipeline(leads, leadStages), [leads, leadStages])
+  const opportunityRows = useMemo(() => opportunityPipeline(opportunities, opportunityStages), [opportunities, opportunityStages])
+  const leadAttention = useMemo(
+    () => leadsRequiringAttention(leads, grouped.byLead, today, stagnantDays),
+    [leads, grouped, today, stagnantDays],
+  )
+  const opportunityAttention = useMemo(
+    () => opportunitiesRequiringAttention(opportunities, grouped.byOpportunity, today, stagnantDays),
+    [opportunities, grouped, today, stagnantDays],
+  )
+  const closures = useMemo(
+    () => closuresThisMonth(opportunities, grouped.byOpportunity, today),
+    [opportunities, grouped, today],
+  )
+  const months = useMemo(() => lastSixMonthsSales(opportunities, today), [opportunities, today])
+
+  const openLeadCount = leadRows.reduce((s, r) => s + r.count, 0)
+  const openOpportunityCount = opportunityRows.reduce((s, r) => s + r.count, 0)
+
+  const summary = [
     {
-      label: 'Converted',
-      value: String(converted),
-      sub: `${Math.round((converted / (totalLeads || 1)) * 100)}% conversion`,
-      nav: onNavigateLeads,
-      tone: 'accent',
+      label: 'Open Activities',
+      value: String(openActivities.length),
+      sub: overdueCount ? `${overdueCount} overdue` : 'none overdue',
+      alert: overdueCount > 0,
+      target: 'dash-activities',
+      loading: activityLoad.loading,
     },
-    { label: 'Activities Pending', value: String(pendingActivities), sub: 'awaiting action', nav: onNavigateActivities, tone: 'warning' },
-    { label: 'Upcoming Meetings', value: String(upcomingMeetings), sub: 'scheduled', nav: onNavigateMeetings, tone: 'purple' },
     {
-      label: 'Business Entities',
-      value: String(entities.length),
-      sub: `${contacts.length} contacts`,
-      nav: onNavigateBusinessEntities,
-      tone: 'ink',
+      label: 'Need Attention',
+      value: String(leadAttention.length + opportunityAttention.length),
+      sub: `${leadAttention.length} leads · ${opportunityAttention.length} opps`,
+      alert: leadAttention.length + opportunityAttention.length > 0,
+      target: 'dash-attention',
+      loading: activityLoad.loading,
+    },
+    { label: 'Open Leads', value: String(openLeadCount), sub: 'in pipeline', target: 'dash-pipeline', loading: leadSync.loading || leadMastersLoading },
+    {
+      label: 'Open Opportunities',
+      value: String(openOpportunityCount),
+      sub: `Weighted ${formatMoneyTotals(opportunityRows.flatMap((r) => r.weighted))}`,
+      target: 'dash-pipeline',
+      loading: oppSync.loading || oppMastersLoading,
+    },
+    {
+      label: 'Closing This Month',
+      value: String(closures.length),
+      sub: closures.length
+        ? formatMoneyTotals(closures.map((r) => ({ value: r.opportunity.dealValue, currency: r.opportunity.valueCurrency })))
+        : 'no closures due',
+      target: 'dash-closure',
+      loading: oppSync.loading,
     },
   ]
 
-  const quickLinks = [
-    { label: 'All Leads', desc: `${totalLeads} total leads`, icon: '⚡', tone: 'primary' as const, action: onNavigateLeads },
-    { label: 'Activities', desc: `${pendingActivities} pending`, icon: '✓', tone: 'warning' as const, action: onNavigateActivities },
-    { label: 'Meetings', desc: `${upcomingMeetings} upcoming`, icon: '📅', tone: 'purple' as const, action: onNavigateMeetings },
-    { label: 'Business Entities', desc: `${entities.length} entities`, icon: '🏢', tone: 'success' as const, action: onNavigateBusinessEntities },
-  ]
+  function scrollTo(id: string) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function retryAll() {
+    retryLeads()
+    retryOpportunities()
+    activityLoad.retry()
+  }
 
   return (
-    <div className="page-gutter space-y-5 py-4">
-      <PageHeader
-        title="Sales Dashboard"
-        subtitle="Phase 1 Lead Management · FY 2024–25"
-        actions={
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-success-line bg-success-soft px-3 py-1 text-xs font-semibold text-success">
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-success" aria-hidden="true" />
-            Live · Updated just now
-          </span>
-        }
-      />
+    <div className="page-gutter space-y-4 py-4">
+      <PageHeader title="Sales Dashboard" subtitle={`Today: ${formatDate(today)}`} />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        {loading ? (
-          <SkeletonStatCards count={6} />
+      <SpectrumRequiredNotice what="Dashboard figures" />
+
+      {activityLoad.failed > 0 && !activityLoad.loading ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warning-line bg-warning-soft px-4 py-2.5 text-xs text-ink" role="status">
+          <span>
+            Activities could not be loaded for {activityLoad.failed} record{activityLoad.failed === 1 ? '' : 's'}; activity figures may be
+            incomplete.
+          </span>
+          <Button variant="secondary" onClick={activityLoad.retry}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
+      {/* Key numbers */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {summary.every((s) => s.loading) ? (
+          <SkeletonStatCards count={5} />
         ) : (
-          stats.map((s) => (
+          summary.map((s) => (
             <button
               key={s.label}
               type="button"
-              onClick={s.nav}
-              className={`min-w-0 rounded-xl border border-line bg-surface p-4 text-left shadow-card transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${TONE_BORDER_HOVER[s.tone]}`}
+              onClick={() => scrollTo(s.target)}
+              className="min-w-0 rounded-xl border border-line bg-surface p-4 text-left shadow-card transition-colors hover:border-primary hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              <p className="mb-1 text-xs font-semibold tracking-wide text-ink-muted">{s.label}</p>
-              <p className={`font-display text-2xl font-bold ${TONE_TEXT[s.tone]}`}>{s.value}</p>
-              <p className="mt-0.5 text-xs text-ink-faint">{s.sub}</p>
+              <p className="mb-1 text-xs font-semibold text-ink-muted">{s.label}</p>
+              {s.loading ? (
+                <div className="skeleton my-1.5" style={{ height: 22, width: '40%' }} />
+              ) : (
+                <p className={`font-display text-2xl font-bold tabular-nums ${s.alert ? 'text-accent' : 'text-ink'}`}>{s.value}</p>
+              )}
+              <p className="mt-0.5 truncate text-xs text-ink-faint" title={s.sub}>
+                {s.loading ? ' ' : s.sub}
+              </p>
             </button>
           ))
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-ink to-primary px-4 py-4 shadow-[0_4px_20px_rgba(41,85,163,0.25)] lg:px-5">
-        <div>
-          <p className="mb-1 text-xs font-bold tracking-widest text-surface/50">Total Pipeline Value</p>
-          <p className="font-display text-3xl font-bold text-surface">{pipelineValue}</p>
-          <p className="mt-1 text-xs text-surface/50">Avg. deal size: {avgDeal}</p>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          className="!border-surface/20 !bg-surface/10 !text-surface hover:!bg-surface/20"
-          onClick={onNavigateLeads}
+      {/* 1. Open activities */}
+      <div id="dash-activities" className="scroll-mt-4">
+        <Section
+          id="dash-activities-title"
+          title="Open Activities"
+          subtitle="Pending activities on your leads and opportunities, in stage sequence, then by date. Click a row to update it."
+          loading={activityLoad.loading}
+          error={leadSync.error || oppSync.error}
+          onRetry={retryAll}
+          skeletonRows={5}
         >
-          View All Leads
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </Button>
+          <OpenActivitiesTable
+            activities={openActivities}
+            todayIso={todayIso}
+            sequenceOf={activitySequence}
+            onOpenActivity={(a) => {
+              setEditing(a)
+              setNotesOnly(false)
+            }}
+            onOpenLead={onOpenLead}
+            onOpenOpportunity={onOpenOpportunity}
+          />
+        </Section>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-sm font-bold text-ink">Pipeline by Stage</h2>
-            <button
-              type="button"
-              onClick={onNavigateLeads}
-              className="text-xs font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
-              View Leads →
-            </button>
-          </div>
-          <div className="space-y-2.5">
-            {loading ? (
-              <SkeletonPipelineRows count={6} />
-            ) : (
-              stageData.map((d) => (
-                <div key={d.stage} className="flex min-w-0 items-center gap-2 sm:gap-3">
-                  <span className="w-[88px] flex-shrink-0 truncate text-xs font-medium text-ink-soft lg:w-[130px]" title={d.stage}>
-                    {d.stage}
-                  </span>
-                  <div className="h-6 min-w-0 flex-1 overflow-hidden rounded-lg bg-surface-hover">
-                    <div
-                      className="flex h-full items-center rounded-lg px-2.5 transition-[width] duration-500 ease-out"
-                      style={{
-                        width:
-                          pipelineTotal > 0
-                            ? `${Math.max((d.count / pipelineTotal) * 100, d.count > 0 ? 8 : 0)}%`
-                            : '0%',
-                        background: `linear-gradient(90deg, ${d.color}cc, ${d.color})`,
-                        minWidth: d.count > 0 ? 32 : 0,
-                      }}
-                    >
-                      {d.count > 0 ? <span className="text-xs font-bold text-surface">{d.count}</span> : null}
-                    </div>
-                  </div>
-                  <div className="w-[72px] flex-shrink-0 lg:w-[100px]">
-                    <span className="block truncate text-xs font-bold" style={{ color: d.color }} title={d.value}>
-                      {d.value}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-
-        <div className="flex flex-col gap-4">
-          <Card className="flex-1 p-5">
-            <h2 className="mb-3 font-display text-sm font-bold text-ink">Top Salespeople</h2>
-            <div className="space-y-2.5">
-              {topSalespeople.map((r, i) => (
-                <div key={r.name} className="flex items-center gap-2.5">
-                  <span className="w-4 text-xs font-bold text-line-strong">{i + 1}</span>
-                  <div
-                    className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-surface ${TONE_AVATAR[r.tone]}`}
-                  >
-                    {r.initials}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-ink">{r.name}</p>
-                    <p className="text-xs text-ink-faint">{r.leads} leads</p>
-                  </div>
-                  <span className="text-xs font-bold text-primary">{r.value}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="flex-1 p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-sm font-bold text-ink">Recent Activity</h2>
-              <button
-                type="button"
-                onClick={onNavigateActivities}
-                className="text-xs font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
-                View all →
-              </button>
-            </div>
-            <div className="space-y-2.5">
-              {loading ? (
-                <SkeletonActivityList count={5} />
-              ) : (
-                recentActivity.map((a) => (
-                  <div key={`${a.action}-${a.time}`} className="flex gap-2.5">
-                    <div className="flex-shrink-0 pt-1">
-                      <div className={`mt-0.5 h-2 w-2 rounded-full ${TONE_AVATAR[a.tone]}`} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-ink">{a.action}</p>
-                      <p className="truncate text-xs text-ink-soft">{a.lead}</p>
-                      <p className="text-xs text-ink-faint">
-                        {a.by} · {a.time}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
+      {/* 2. Pipelines */}
+      <div id="dash-pipeline" className="grid scroll-mt-4 grid-cols-1 gap-4 xl:grid-cols-2">
+        <Section
+          id="dash-lead-pipeline"
+          title="Lead Pipeline"
+          subtitle="Open leads by stage (On Hold, Cold and closed leads excluded). Click a stage to see its leads."
+          loading={leadSync.loading || leadMastersLoading}
+          error={leadError}
+          onRetry={retryLeads}
+          skeletonRows={6}
+        >
+          <LeadPipelineTable rows={leadRows} onStage={onLeadStage} />
+        </Section>
+        <Section
+          id="dash-opp-pipeline"
+          title="Opportunity Pipeline"
+          subtitle="Open opportunities by stage. Weighted value = value × stage weightage."
+          loading={oppSync.loading || oppMastersLoading}
+          error={oppError}
+          onRetry={retryOpportunities}
+          skeletonRows={6}
+        >
+          <OpportunityPipelineTable rows={opportunityRows} onStage={onOpportunityStage} />
+        </Section>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {quickLinks.map((q) => (
-          <button
-            key={q.label}
-            type="button"
-            onClick={q.action}
-            className={`flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${TONE_BORDER_HOVER[q.tone]}`}
-          >
-            <div
-              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-lg ${TONE_SOFT[q.tone]}`}
-              aria-hidden="true"
-            >
-              {q.icon}
-            </div>
-            <div>
-              <p className="text-sm font-bold text-ink">{q.label}</p>
-              <p className="text-xs text-ink-muted">{q.desc}</p>
-            </div>
-          </button>
-        ))}
+      {/* 3. Attention */}
+      <div id="dash-attention" className="scroll-mt-4 space-y-4">
+        <Section
+          id="dash-lead-attention"
+          title="Leads Requiring Attention"
+          subtitle={`Open leads with no activity, an overdue activity, or no change for over ${stagnantDays} days.`}
+          loading={leadSync.loading || activityLoad.loading}
+          error={leadError}
+          onRetry={retryAll}
+        >
+          <LeadsAttentionTable rows={leadAttention} stagnantDays={stagnantDays} todayIso={todayIso} stageColor={leadStageColor} onOpenLead={onOpenLead} />
+        </Section>
+        <Section
+          id="dash-opp-attention"
+          title="Opportunities Requiring Attention"
+          subtitle={`Open opportunities with no activity, an overdue activity, or no change for over ${stagnantDays} days.`}
+          loading={oppSync.loading || oppMastersLoading || activityLoad.loading}
+          error={oppError}
+          onRetry={retryAll}
+        >
+          <OpportunitiesAttentionTable
+            rows={opportunityAttention}
+            stagnantDays={stagnantDays}
+            todayIso={todayIso}
+            stageColor={opportunityStageColor}
+            onOpenOpportunity={onOpenOpportunity}
+          />
+        </Section>
       </div>
+
+      {/* 4. Expected closure this month */}
+      <div id="dash-closure" className="scroll-mt-4">
+        <Section
+          id="dash-closure-title"
+          title="Expected Closure This Month"
+          subtitle={`Open opportunities expected to close ${formatDate(month.from)} – ${formatDate(month.to)}.`}
+          loading={oppSync.loading || activityLoad.loading}
+          error={oppError}
+          onRetry={retryAll}
+        >
+          <ClosureThisMonthTable
+            rows={closures}
+            todayIso={todayIso}
+            onOpenOpportunity={onOpenOpportunity}
+            onOpenActivity={(a) => {
+              setEditing(a)
+              setNotesOnly(true)
+            }}
+          />
+        </Section>
+      </div>
+
+      {/* 5. Last six months */}
+      <Section
+        id="dash-six-months"
+        title="Last 6 Months Sales"
+        subtitle="Won / lost months use the date the opportunity was last updated."
+        loading={oppSync.loading}
+        error={oppSync.error}
+        onRetry={() => void oppSync.retry()}
+        skeletonRows={5}
+      >
+        <LastSixMonthsTable months={months} />
+      </Section>
+
+      {editing ? (
+        <ActivityDrawer
+          editing={editing}
+          notesOnly={notesOnly}
+          onClose={() => setEditing(null)}
+          onSave={(a) => {
+            // Server leads / opportunities → save-activity-detail, then the record reloads.
+            // Success is shown only once the server confirms; a failure shows its own error.
+            void patchActivity(a.id, { ...a, opportunityId: editing.opportunityId }).then((ok) => {
+              if (ok) onToast?.('success', 'Activity Updated', `"${a.subject}" has been updated.`)
+            })
+            setEditing(null)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

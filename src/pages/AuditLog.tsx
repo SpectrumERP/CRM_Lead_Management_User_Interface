@@ -6,7 +6,7 @@ import {
 } from '../data/auditLog';
 import { useCrmSelector } from '../contexts/CrmStoreContext';
 import Pagination from '../components/Pagination';
-import { Select, sortAlpha } from '../ui';
+import { Select, SortChevrons, sortAlpha } from '../ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -144,6 +144,7 @@ function DetailDrawer({
         className="crm-sheet fixed right-0 top-0 h-full z-50 flex flex-col overflow-hidden"
         style={{
           width: 480,
+          maxWidth: '100vw',
           background: '#fff',
           borderLeft: '1px solid #dce4f2',
           boxShadow: '-8px 0 40px rgba(12,26,58,0.12)',
@@ -606,17 +607,12 @@ export default function AuditLog({
                     <tr style={{ borderBottom: '1px solid #dce4f2' }}>
                       <Th>
                         <button
-                          className="flex items-center gap-1 transition-colors"
+                          className="flex w-full items-center justify-between gap-2 transition-colors"
                           style={{ color: '#9aaccc' }}
                           onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')}
                         >
                           Date & Time
-                          <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            {sortDir === 'desc'
-                              ? <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                              : <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                            }
-                          </svg>
+                          <SortChevrons active dir={sortDir} />
                         </button>
                       </Th>
                       <Th>User</Th>

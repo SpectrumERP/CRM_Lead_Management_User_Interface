@@ -4,9 +4,9 @@ React + Vite + Tailwind CSS CRM for Force Intellect lead management.
 
 ## Scripts
 
-- `npm run dev` — Vite on port 5173
+- `npm run dev` — Vite on port 5175
 - `npm run build` — production build
-- `npm run preview` — serve `dist/` on port 5173
+- `npm run preview` — serve `dist/` on port 5175
 - `npm run test` — vitest
 
 ## Project Structure

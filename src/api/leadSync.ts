@@ -479,6 +479,9 @@ export async function saveServerLeadActivity(activity: Activity): Promise<void> 
   const leadNo = leadNoFromId(activity.leadId)
   if (!leadNo) fail('VALIDATION', 'This activity is not on a server lead.')
   assertLeadUnlocked(activity.leadId)
+  // An update needs the server's activity number; a bad one would reach the server as null.
+  const detailNo = childNo(activity.id, 'SA')
+  if (detailNo !== undefined && !(detailNo > 0)) fail('VALIDATION', 'This activity has no server activity number; reload the lead and try again.')
   const fill = await leadFill()
   const typeNo = fill.leadActivityTypes.find((t) => normType(t.leadActivityTypeName) === normType(activity.type))?.leadActivityTypeNo
   if (!typeNo) fail('VALIDATION', `Activity type "${activity.type}" is not set up on the server.`)
@@ -489,7 +492,7 @@ export async function saveServerLeadActivity(activity: Activity): Promise<void> 
   if (activity.assignedTo && !assignToLoginNo) fail('VALIDATION', `"${activity.assignedTo}" was not found among server users.`)
   await saveLeadActivity({
     leadNo,
-    leadActivityDetailNo: childNo(activity.id, 'SA'),
+    leadActivityDetailNo: detailNo,
     activityTypeNo: typeNo,
     subject: activity.subject.trim() || undefined,
     dueDate: localDateTimeToIso(activity.scheduleDate, activity.scheduleTime),

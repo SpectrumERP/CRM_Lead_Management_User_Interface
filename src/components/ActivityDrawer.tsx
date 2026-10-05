@@ -13,13 +13,16 @@ import { useApiQuery } from '../api/useApiQuery'
 import {
   Button,
   ChoiceField,
+  DetailField,
   FormGrid,
+  SelectField,
   SearchSelectField,
   TextAreaField,
   TextField,
 } from '../ui'
 import { UserSelectField } from './UserSelect'
 import { FIELD_LIMITS } from '../constants/fieldLimits'
+import { formatDate } from '../utils/dateFormat'
 import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 
 interface ActivityDrawerProps {
@@ -31,12 +34,14 @@ interface ActivityDrawerProps {
   onSave: (a: Activity) => void
   /** Render the form inside a parent card instead of a side sheet. */
   inline?: boolean
+  /** Editing: show the details read-only; only Notes / Outcome and Status can change. */
+  notesOnly?: boolean
 }
 
 type LeadOption = { id: string; name: string; contact: string }
 
 
-export default function ActivityDrawer({ preselectedLead, followUpFrom, editing, onClose, onSave, inline = false }: ActivityDrawerProps) {
+export default function ActivityDrawer({ preselectedLead, followUpFrom, editing, onClose, onSave, inline = false, notesOnly = false }: ActivityDrawerProps) {
   const confirm = useConfirm()
   // Server activity types and server leads only (what the save APIs accept).
   const { values: fill } = useLeadFormFillValues()
@@ -147,6 +152,16 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
   const fields = (
     <div className={inline ? 'space-y-4' : 'min-h-0 flex-1 space-y-4 overflow-y-auto p-5'}>
       <FormGrid>
+        {notesOnly ? (
+          <div className="grid grid-cols-2 gap-4 rounded-lg border border-line bg-surface-muted p-4 lg:col-span-2">
+            <DetailField label="TYPE" value={type} />
+            <DetailField label="DUE DATE" value={formatDate(dueDate)} />
+            <DetailField label="SUBJECT" value={subject} className="col-span-2" />
+            <DetailField label="LEAD" value={lead?.name} className="col-span-2" />
+            <DetailField label="ASSIGNED TO" value={assignedTo} />
+          </div>
+        ) : (
+          <>
         <SearchSelectField
           fieldClassName="lg:col-span-2"
           label="Type"
@@ -224,6 +239,9 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
           }}
         />
 
+          </>
+        )}
+
         <TextAreaField
           fieldClassName="lg:col-span-2"
           label="Notes / Outcome"
@@ -234,6 +252,25 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
           placeholder="Notes, discussion, or outcome…"
         />
 
+        {notesOnly ? (
+          <SelectField
+            label="Status"
+            options={statusOptions}
+            preserveOrder
+            value={formStatus}
+            onValueChange={(raw) => {
+              const value = raw as typeof formStatus
+              setFormStatus(value)
+              clearErr('remark')
+              if (value !== 'Closed') {
+                setClosureDate('')
+                clearErr('closureDate')
+                return
+              }
+              setClosureDate((current) => current || new Date().toISOString().slice(0, 10))
+            }}
+          />
+        ) : (
         <ChoiceField
           label="Status"
           name="activity-form-status"
@@ -251,6 +288,7 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
             setClosureDate((current) => current || new Date().toISOString().slice(0, 10))
           }}
         />
+        )}
 
         {isCompleted ? (
           <TextAreaField

@@ -279,7 +279,7 @@ export default function MeetingsPage({ onViewLead, onToast }: MeetingsPageProps)
                 <th style={{ minWidth: 130 }}>Contact Person</th>
                 <th style={{ minWidth: 160, cursor: 'pointer' }}
                   onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')}>
-                  Date & Time <SortChevrons active dir={sortDir} />
+                  <span className="flex items-center justify-between gap-2">Date & Time <SortChevrons active dir={sortDir} /></span>
                 </th>
                 <th style={{ minWidth: 110 }}>Mode</th>
                 <th style={{ minWidth: 160 }}>Location</th>

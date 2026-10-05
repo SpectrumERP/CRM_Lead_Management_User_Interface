@@ -272,8 +272,8 @@ export default function SearchResults({
           </div>
 
           {/* Re-search bar */}
-          <form onSubmit={handleSearch} className="flex items-center gap-2 ml-auto">
-            <div className="relative">
+          <form onSubmit={handleSearch} className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+            <div className="relative min-w-0 flex-1 sm:flex-none">
               <svg
                 className="absolute left-3 top-1/2 -translate-y-1/2"
                 width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -285,8 +285,8 @@ export default function SearchResults({
               <input
                 value={localQuery}
                 onChange={(e) => setLocalQuery(e.target.value)}
-                className="form-input pl-9 text-sm"
-                style={{ width: 280 }}
+                className="form-input w-full text-sm sm:w-[280px]"
+                style={{ paddingLeft: '2.25rem' }}
                 placeholder="Refine your search…"
               />
               {localQuery && (

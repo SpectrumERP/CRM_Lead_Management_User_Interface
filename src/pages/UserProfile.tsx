@@ -409,7 +409,7 @@ export default function UserProfile({ onToast, onNavigateNotifications }: Props)
   function PhotoSection() {
     return (
       <SectionCard title="Profile Photo" subtitle="A photo helps your team recognise you">
-        <div className="flex items-start gap-6">
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:gap-6">
           {/* Avatar */}
           <div className="flex-shrink-0">
             {photoUrl ? (
@@ -425,7 +425,7 @@ export default function UserProfile({ onToast, onNavigateNotifications }: Props)
           </div>
 
           {/* Controls */}
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold mb-1" style={{ color: '#0c1a3a' }}>{fullName}</p>
             <p className="text-xs mb-4" style={{ color: '#7a8494' }}>
               Recommended: square image, at least 200×200 px, JPG or PNG, max 5 MB.
@@ -602,7 +602,7 @@ export default function UserProfile({ onToast, onNavigateNotifications }: Props)
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex w-full flex-shrink-0 flex-wrap items-center gap-2 sm:w-auto">
             {editing ? (
               <>
                 <button onClick={cancelEdit}
@@ -649,21 +649,21 @@ export default function UserProfile({ onToast, onNavigateNotifications }: Props)
       </div>
 
       {/* ── Body ── */}
-      <div className="flex min-h-0 flex-1">
-        {/* Left nav */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        {/* Left nav — horizontal tab strip below md */}
         <aside
-          className="flex w-56 flex-shrink-0 flex-col self-stretch py-5 px-3"
-          style={{ background: '#fff', borderRight: '1px solid #dce4f2' }}
+          className="flex flex-shrink-0 flex-col border-b border-[#dce4f2] px-3 py-3 md:w-56 md:self-stretch md:border-b-0 md:border-r md:py-5"
+          style={{ background: '#fff' }}
         >
-          <p className="mb-3 px-3 text-xs font-bold tracking-widest" style={{ color: '#9aaccc', letterSpacing: '0.08em', fontSize: 10 }}>
+          <p className="mb-3 hidden px-3 text-xs md:block font-bold tracking-widest" style={{ color: '#9aaccc', letterSpacing: '0.08em', fontSize: 10 }}>
             PROFILE SECTIONS
           </p>
-          <nav className="min-h-0 flex-1 space-y-0.5">
+          <nav className="-mx-1 flex min-h-0 flex-1 gap-1 overflow-x-auto px-1 md:mx-0 md:block md:space-y-0.5 md:overflow-visible md:px-0">
             {SECTIONS.map((s) => (
               <button
                 key={s.id}
                 onClick={() => setActiveSection(s.id)}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition-colors"
+                className="flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition-colors md:w-full"
                 style={
                   activeSection === s.id
                     ? { background: '#eef2fb', color: '#2955a3' }
@@ -679,7 +679,7 @@ export default function UserProfile({ onToast, onNavigateNotifications }: Props)
           </nav>
 
           {editing && (
-            <div className="mx-3 mt-4 rounded-lg p-3" style={{ background: '#fff8e1', border: '1px solid #fde68a' }}>
+            <div className="mx-1 mt-3 rounded-lg p-3 md:mx-3 md:mt-4" style={{ background: '#fff8e1', border: '1px solid #fde68a' }}>
               <p className="text-xs font-semibold" style={{ color: '#b45309' }}>Editing mode</p>
               <p className="mt-0.5 text-xs" style={{ color: '#d97706' }}>
                 Navigate sections and save when done.
@@ -689,7 +689,7 @@ export default function UserProfile({ onToast, onNavigateNotifications }: Props)
         </aside>
 
         {/* Main content */}
-        <main className="page-gutter min-h-0 flex-1 overflow-y-auto py-6">
+        <main className="page-gutter min-h-0 min-w-0 flex-1 overflow-y-auto py-4 md:py-6">
           {sectionContent[activeSection]}
         </main>
       </div>

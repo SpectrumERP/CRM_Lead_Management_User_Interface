@@ -1,3 +1,4 @@
+import { nextSort } from '../ui';
 import { useState } from 'react';
 import {
   BusinessEntity, EntityType, EntityStatus,
@@ -54,8 +55,9 @@ export default function BusinessEntitiesList({ onCreate, onView, onEdit }: Props
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function toggleSort(field: 'name' | 'createdDate') {
-    if (sortField === field) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDir('asc'); }
+    const next = nextSort({ field: sortField, dir: sortDir }, field, { field: 'name', dir: 'asc' });
+    setSortField(next.field);
+    setSortDir(next.dir);
   }
 
   const filtered = entities
@@ -198,7 +200,7 @@ export default function BusinessEntitiesList({ onCreate, onView, onEdit }: Props
                   style={{ cursor: 'pointer' }}
                   onClick={() => toggleSort('name')}
                 >
-                  Business Entity Name <SortChevrons active={sortField === 'name'} dir={sortDir} />
+                  <span className="flex items-center justify-between gap-2">Business Entity Name <SortChevrons active={sortField === 'name'} dir={sortDir} /></span>
                 </th>
                 <th style={{ minWidth: 110 }}>Entity Type</th>
                 <th style={{ minWidth: 140 }}>City / State</th>
@@ -207,7 +209,7 @@ export default function BusinessEntitiesList({ onCreate, onView, onEdit }: Props
                 <th style={{ minWidth: 100 }}>Status</th>
                 <th style={{ minWidth: 150 }}>Primary Contact</th>
                 <th style={{ minWidth: 90, cursor: 'pointer' }} onClick={() => toggleSort('createdDate')}>
-                  Active Leads <SortChevrons active={sortField === 'createdDate'} dir={sortDir} />
+                  <span className="flex items-center justify-between gap-2">Active Leads <SortChevrons active={sortField === 'createdDate'} dir={sortDir} /></span>
                 </th>
                 <th style={{ minWidth: 120 }}>Last Activity</th>
                 <th className="sticky-col-end">Actions</th>

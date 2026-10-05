@@ -29,3 +29,4 @@ export {
 } from './RowIconButton'
 export { DetailField, type DetailFieldProps } from './DetailField'
 export * from './forms'
+export { nextSort, type SortDir, type SortState } from './sortCycle'
