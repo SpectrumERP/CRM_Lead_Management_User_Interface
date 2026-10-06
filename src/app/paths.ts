@@ -47,6 +47,20 @@ function stripBase(pathname: string) {
   return pathname
 }
 
+/**
+ * Task Management is a separate app on the same origin under /task (not a CRM route), so it is
+ * opened with a full page load. It shares the CRM sign-in: its login sends users here with
+ * `?next=/task/...` to come back after signing in.
+ */
+export const taskAppUrl = `${import.meta.env.BASE_URL.replace(/\/+$/, '')}/task/`
+
+/** A `next` value that is a path inside the Task app (never another site), else null. */
+export function taskAppReturnPath(next: string | null | undefined): string | null {
+  if (!next || /[\\]|\/\/|^[a-z][a-z0-9+.-]*:/i.test(next)) return null
+  const root = taskAppUrl.replace(/\/$/, '')
+  return next === root || next.startsWith(taskAppUrl) ? next : null
+}
+
 export const paths = {
   dashboard: withBase('/'),
   entities: withBase('/entities'),

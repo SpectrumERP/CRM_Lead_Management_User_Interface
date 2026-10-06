@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { paths } from '../app/paths'
+import { paths, taskAppReturnPath } from '../app/paths'
 import { isEmail } from '../api/sanitize'
 import { getErrorTitle, PAGE_COPY } from '../constants/messages'
 import ToastContainer, { type ToastMessage } from '../components/Toast'
@@ -13,17 +13,25 @@ export default function Login() {
   const location = useLocation()
   // After login: back to the page that asked for it, else the Leads list (Dashboard hidden for now).
   const from = (location.state as { from?: string } | null)?.from || paths.leads
+  // Task Management (/task) shares this sign-in and sends users here with ?next=/task/... to return to.
+  const taskReturn = taskAppReturnPath(new URLSearchParams(location.search).get('next'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [notice, setNotice] = useState<ToastMessage | null>(null)
   const [pending, setPending] = useState(false)
   const copy = PAGE_COPY.login
 
+  // Already signed in: Task Management only needed the shared session — go straight back.
+  useEffect(() => {
+    if (ready && user && taskReturn) window.location.replace(taskReturn)
+  }, [ready, user, taskReturn])
+
   if (!ready) return <FullPageSpinner label="Checking session" />
   // When hosted in Spectrum ERP, use the shared Spectrum login page only
   if (import.meta.env.VITE_CRM_ROUTE_BASE) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
+  if (user && taskReturn) return <FullPageSpinner label="Opening Tasks" />
   if (user) return <Navigate to={from} replace />
 
   function showError(title: string, message: string) {
@@ -60,6 +68,10 @@ export default function Login() {
     setPending(false)
     if (!result.ok) {
       showError(getErrorTitle('INVALID_CREDENTIALS'), result.message)
+      return
+    }
+    if (taskReturn) {
+      window.location.assign(taskReturn)
       return
     }
     navigate(from, { replace: true })

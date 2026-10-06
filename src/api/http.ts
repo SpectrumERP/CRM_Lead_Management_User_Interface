@@ -5,9 +5,11 @@
  *   http.interceptors.request.use((config) => ({ ...config, headers: { ...config.headers, 'X-Foo': '1' } }))
  *   http.interceptors.response.use((response) => response, (error) => { throw error })
  */
-import { getAuthToken, clearAuth } from './authStore'
+import { getAuthToken } from './authStore'
+import { getSessionSync } from './session'
+import { isSessionEnded, notifySessionExpired } from './sessionExpiry'
 import { spectrumOrigin } from './config'
-import { asTransportError, errorFromResponse, isApiError, serverErrorMessage, type ApiError } from './errors'
+import { asTransportError, errorFromResponse, isApiError, serverErrorMessage, unauthenticated, type ApiError } from './errors'
 
 export type HttpVerb = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -145,16 +147,31 @@ export const http = {
   },
 }
 
-/** Default: attach the JWT from the encrypted auth cookie. */
+/** A Spectrum login is active (its token may have just been dropped as expired). */
+function hasSpectrumSession() {
+  return getSessionSync()?.id.startsWith('SPX-') === true
+}
+
+/**
+ * Default: attach the JWT from the encrypted auth cookie. An expired token is never sent: the
+ * session ends (alert + sign-out) and the request fails as UNAUTHENTICATED.
+ */
 http.interceptors.request.use(async (config) => {
   if (config.skipAuth) return config
   const token = await getAuthToken()
-  if (!token) return config
+  if (!token) {
+    // A signed-in Spectrum user without a live token: it expired (the cookie lives exactly as long).
+    if (hasSpectrumSession() && !isSessionEnded()) {
+      notifySessionExpired('expired')
+      unauthenticated()
+    }
+    return config
+  }
   return { ...config, headers: { ...config.headers, Authorization: `Bearer ${token}` } }
 })
 
-/** Default: a rejected token is dead — drop it so the next login starts clean. */
+/** Default: a 401 means the server no longer accepts the token — end the session (alert + sign-out). */
 http.interceptors.response.use(undefined, (error, config) => {
-  if (error.status === 401 && !config.skipAuth) clearAuth()
+  if (error.status === 401 && !config.skipAuth) notifySessionExpired('rejected')
   throw error
 })
