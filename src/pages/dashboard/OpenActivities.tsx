@@ -1,38 +1,48 @@
 import { useMemo } from 'react'
-import type { Activity } from '../../data/activities'
+import { isoDay, type DashboardOpenActivity } from '../../api/dashboard'
 import { formatDate } from '../../utils/dateFormat'
 import { DashboardTable, type DashboardColumn } from './DashboardTable'
 import { DueDate, Pill, RecordLink, SectionEmpty } from './parts'
 
 interface OpenActivitiesProps {
-  activities: readonly Activity[]
+  activities: readonly DashboardOpenActivity[]
   todayIso: string
-  /** Master sequence of the activity's lead / opportunity stage (default order). */
-  sequenceOf: (activity: Activity) => number | undefined
-  onOpenActivity: (activity: Activity) => void
-  onOpenLead: (id: string) => void
-  onOpenOpportunity: (id: string) => void
+  onOpenActivity: (activity: DashboardOpenActivity) => void
+  onOpenLead: (leadNo: number) => void
+  onOpenOpportunity: (opportunityNo: number) => void
 }
 
-const isOpportunity = (a: Activity) => Boolean(a.opportunityId)
+export const isOpportunityActivity = (a: DashboardOpenActivity) =>
+  Boolean(a.opportunityNo) || (a.recordType ?? '').toLowerCase().startsWith('opp')
 
-export function OpenActivitiesTable({ activities, todayIso, sequenceOf, onOpenActivity, onOpenLead, onOpenOpportunity }: OpenActivitiesProps) {
-  const columns = useMemo<DashboardColumn<Activity>[]>(
+const recordName = (a: DashboardOpenActivity) => a.recordName || a.recordCode || '—'
+
+/** Server overdue flag; falls back to the due date. */
+const overdue = (a: DashboardOpenActivity, todayIso: string) => a.isOverdue || (!!a.dueDate && isoDay(a.dueDate) < todayIso)
+
+export function OpenActivitiesTable({ activities, todayIso, onOpenActivity, onOpenLead, onOpenOpportunity }: OpenActivitiesProps) {
+  const columns = useMemo<DashboardColumn<DashboardOpenActivity>[]>(
     () => [
       {
         key: 'date',
         label: 'Activity Date',
-        render: (a) => <DueDate date={a.scheduleDate} todayIso={todayIso} />,
-        sortValue: (a) => a.scheduleDate,
+        render: (a) => <DueDate date={a.dueDate} todayIso={todayIso} overdue={overdue(a, todayIso)} />,
+        sortValue: (a) => a.dueDate,
         // Both the shown date (03 Oct 2026) and the ISO one match.
-        searchText: (a) => (a.scheduleDate ? `${formatDate(a.scheduleDate)} ${a.scheduleDate}` : ''),
+        searchText: (a) => (a.dueDate ? `${formatDate(a.dueDate)} ${isoDay(a.dueDate)}` : ''),
       },
-      { key: 'type', label: 'Activity Type', render: (a) => a.type, sortValue: (a) => a.type, searchText: (a) => a.type },
+      {
+        key: 'type',
+        label: 'Activity Type',
+        render: (a) => a.activityType?.activityTypeName || '—',
+        sortValue: (a) => a.activityType?.activityTypeName,
+        searchText: (a) => a.activityType?.activityTypeName,
+      },
       {
         key: 'subject',
         label: 'Subject',
         render: (a) => (
-          <span className="block max-w-[18rem] truncate" title={a.subject}>
+          <span className="block max-w-[18rem] truncate" title={a.subject ?? undefined}>
             {a.subject || '—'}
           </span>
         ),
@@ -42,31 +52,41 @@ export function OpenActivitiesTable({ activities, todayIso, sequenceOf, onOpenAc
       {
         key: 'record',
         label: 'Lead/ Opportunity Name',
-        render: (a) => (
-          <span className="inline-flex items-center gap-1.5">
-            <Pill className={isOpportunity(a) ? 'bg-teal-soft text-teal' : 'bg-primary-soft text-primary'}>
-              {isOpportunity(a) ? 'Opp' : 'Lead'}
-            </Pill>
-            <RecordLink
-              label={a.leadName}
-              onClick={() => (isOpportunity(a) ? onOpenOpportunity(a.opportunityId!) : onOpenLead(a.leadId))}
-            />
-          </span>
-        ),
-        sortValue: (a) => a.leadName,
-        searchText: (a) => a.leadName,
+        render: (a) => {
+          const opp = isOpportunityActivity(a)
+          const no = opp ? a.opportunityNo : a.leadNo
+          return (
+            <span className="inline-flex items-center gap-1.5">
+              <Pill className={opp ? 'bg-teal-soft text-teal' : 'bg-primary-soft text-primary'}>{opp ? 'Opp' : 'Lead'}</Pill>
+              {no ? (
+                <RecordLink label={recordName(a)} onClick={() => (opp ? onOpenOpportunity(no) : onOpenLead(no))} />
+              ) : (
+                <span>{recordName(a)}</span>
+              )}
+            </span>
+          )
+        },
+        sortValue: recordName,
+        searchText: (a) => `${recordName(a)} ${a.recordCode ?? ''}`,
+      },
+      {
+        key: 'assigned',
+        label: 'Assigned To',
+        render: (a) => a.assignTo?.printingName || '—',
+        sortValue: (a) => a.assignTo?.printingName,
+        searchText: (a) => a.assignTo?.printingName,
       },
       {
         key: 'status',
         label: 'Status',
         render: (a) =>
-          a.scheduleDate && a.scheduleDate < todayIso ? (
+          overdue(a, todayIso) ? (
             <Pill className="bg-accent-soft text-accent">Overdue</Pill>
           ) : (
-            <Pill className="bg-primary-soft text-primary">Open</Pill>
+            <Pill className="bg-primary-soft text-primary">{a.status?.statusName || 'Open'}</Pill>
           ),
-        sortValue: (a) => (a.scheduleDate && a.scheduleDate < todayIso ? 'Overdue' : 'Open'),
-        searchText: (a) => (a.scheduleDate && a.scheduleDate < todayIso ? 'Overdue Open' : 'Open'),
+        sortValue: (a) => (overdue(a, todayIso) ? 'Overdue' : a.status?.statusName || 'Open'),
+        searchText: (a) => (overdue(a, todayIso) ? 'Overdue Open' : a.status?.statusName || 'Open'),
       },
     ],
     [todayIso, onOpenLead, onOpenOpportunity],
@@ -77,14 +97,16 @@ export function OpenActivitiesTable({ activities, todayIso, sequenceOf, onOpenAc
       label="Open activities"
       rows={activities}
       columns={columns}
-      rowKey={(a) => a.id}
+      rowKey={(a) => `${isOpportunityActivity(a) ? 'O' : 'L'}-${a.activityDetailNo}`}
+      // Stage sequence of the lead / opportunity, then due date.
       defaultOrder={(a, b) =>
-        (sequenceOf(a) ?? Infinity) - (sequenceOf(b) ?? Infinity) || a.scheduleDate.localeCompare(b.scheduleDate)
+        (a.recordStage?.sequence ?? Infinity) - (b.recordStage?.sequence ?? Infinity) ||
+        (a.dueDate || '9999').localeCompare(b.dueDate || '9999')
       }
       searchable
       searchPlaceholder="Search activities…"
       onRowClick={onOpenActivity}
-      rowLabel={(a) => `Open activity ${a.subject}`}
+      rowLabel={(a) => `Open activity ${a.subject ?? ''}`}
       empty={<SectionEmpty title="No activities found" subtitle="Open activities on your leads and opportunities show here." />}
     />
   )

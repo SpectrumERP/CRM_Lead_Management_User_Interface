@@ -8,6 +8,7 @@ import {
 import { compareAlpha, Button, IconTooltip, PageHeader, StatPill, StatPillRow, CountBadge } from '../ui';
 import { FilterSearch, FilterSelect, InlineFilterRow } from '../components/InlineFilterRow';
 import { EmptyState, NoResults } from '../components/CRMStates';
+import { formatDate } from '../utils/dateFormat';
 
 type Tab = 'all' | 'unread';
 type TimeBucket = 'today' | 'yesterday' | 'week' | 'earlier';
@@ -109,9 +110,7 @@ function fmtWhen(dateTime: string): string {
   const time = timePart.replace(/^0/, '') || '';
   if (offset <= 0) return time ? `Today · ${time}` : 'Today';
   if (offset === 1) return time ? `Yesterday · ${time}` : 'Yesterday';
-  const [, m, d] = datePart.split('-');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const label = `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]}`;
+  const label = formatDate(datePart);
   return time ? `${label} · ${time}` : label;
 }
 

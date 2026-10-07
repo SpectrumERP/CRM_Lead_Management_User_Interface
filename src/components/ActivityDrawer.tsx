@@ -15,7 +15,6 @@ import {
   ChoiceField,
   DetailField,
   FormGrid,
-  SelectField,
   SearchSelectField,
   TextAreaField,
   TextField,
@@ -252,25 +251,6 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
           placeholder="Notes, discussion, or outcome…"
         />
 
-        {notesOnly ? (
-          <SelectField
-            label="Status"
-            options={statusOptions}
-            preserveOrder
-            value={formStatus}
-            onValueChange={(raw) => {
-              const value = raw as typeof formStatus
-              setFormStatus(value)
-              clearErr('remark')
-              if (value !== 'Closed') {
-                setClosureDate('')
-                clearErr('closureDate')
-                return
-              }
-              setClosureDate((current) => current || new Date().toISOString().slice(0, 10))
-            }}
-          />
-        ) : (
         <ChoiceField
           label="Status"
           name="activity-form-status"
@@ -288,7 +268,6 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
             setClosureDate((current) => current || new Date().toISOString().slice(0, 10))
           }}
         />
-        )}
 
         {isCompleted ? (
           <TextAreaField

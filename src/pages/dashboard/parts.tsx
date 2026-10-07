@@ -77,18 +77,31 @@ const REASON_CLASS: Record<AttentionReason, string> = {
   'Not Started': 'border-warning-line bg-warning-soft text-warning',
   Stagnant: 'border-purple-line bg-purple-soft text-purple',
 }
+const OTHER_REASON_CLASS = 'border-line bg-surface-hover text-ink-soft'
+
+/** Server reason text ("Activity Overdue", "NotStarted", "stagnant" …) → a known reason, else the text itself. */
+export function normalizeReason(reason: string): AttentionReason | string {
+  const key = reason.replace(/[\s_-]+/g, '').toLowerCase()
+  if (key.includes('overdue')) return 'Activity Overdue'
+  if (key.includes('notstarted') || key.includes('noactivity')) return 'Not Started'
+  if (key.includes('stagnant')) return 'Stagnant'
+  return reason
+}
+
+const isKnown = (reason: string): reason is AttentionReason => reason in REASON_CLASS
 
 /** Wording from the workbook: leads say "Stagnant Lead", opportunities "Stagnant". */
-export function reasonLabel(reason: AttentionReason, record: 'lead' | 'opportunity') {
+export function reasonLabel(reason: string, record: 'lead' | 'opportunity') {
   return reason === 'Stagnant' && record === 'lead' ? 'Stagnant Lead' : reason
 }
 
 /** Same colours for a reason in the Lead and Opportunity sections. */
-export function ReasonBadges({ reasons, record = 'opportunity' }: { reasons: readonly AttentionReason[]; record?: 'lead' | 'opportunity' }) {
+export function ReasonBadges({ reasons, record = 'opportunity' }: { reasons: readonly string[]; record?: 'lead' | 'opportunity' }) {
+  if (reasons.length === 0) return <span className="text-ink-faint">—</span>
   return (
     <span className="inline-flex flex-wrap gap-1">
       {reasons.map((r) => (
-        <span key={r} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${REASON_CLASS[r]}`}>
+        <span key={r} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${isKnown(r) ? REASON_CLASS[r] : OTHER_REASON_CLASS}`}>
           {reasonLabel(r, record)}
         </span>
       ))}
@@ -99,8 +112,8 @@ export function ReasonBadges({ reasons, record = 'opportunity' }: { reasons: rea
 /** Overdue first, then not started, then stagnant — the order rows are highlighted by. */
 export const REASON_RANK: Record<AttentionReason, number> = { 'Activity Overdue': 0, 'Not Started': 1, Stagnant: 2 }
 
-export function reasonSortValue(reasons: readonly AttentionReason[]) {
-  return Math.min(...reasons.map((r) => REASON_RANK[r]))
+export function reasonSortValue(reasons: readonly string[]) {
+  return reasons.length ? Math.min(...reasons.map((r) => (isKnown(r) ? REASON_RANK[r] : 3))) : 4
 }
 
 export function Pill({ className, children }: { className: string; children: ReactNode }) {
@@ -124,10 +137,10 @@ export function RecordLink({ label, onClick }: { label: string; onClick: () => v
   )
 }
 
-/** Date of a pending activity, red when it is past. */
-export function DueDate({ date, todayIso }: { date?: string; todayIso: string }) {
+/** Date of a pending activity, red when it is past (or when the server marks it overdue). */
+export function DueDate({ date, todayIso, overdue: flagged }: { date?: string | null; todayIso: string; overdue?: boolean }) {
   if (!date) return <span className="text-ink-faint">—</span>
-  const overdue = date < todayIso
+  const overdue = flagged ?? date.slice(0, 10) < todayIso
   return <span className={overdue ? 'font-semibold text-accent' : undefined}>{formatDate(date)}</span>
 }
 

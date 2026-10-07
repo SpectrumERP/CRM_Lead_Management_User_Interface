@@ -544,6 +544,17 @@ export function replaceServerOpportunityActivities(opportunityId: string, activi
   })
 }
 
+/** Replace a server opportunity's internal notes (`SON-…`) with the ones from its load-data. */
+export function replaceServerOpportunityNotes(opportunityId: string, notes: CrmNote[]) {
+  setState({
+    ...state,
+    notes: [
+      ...notes.map(sanitizeNote),
+      ...state.notes.filter((item) => !(item.relatedLeadId === opportunityId && item.id.startsWith('SON-'))),
+    ],
+  })
+}
+
 /** Remove an opportunity locally after the server has deleted it. */
 export function dropServerOpportunity(id: string) {
   if (!state.opportunities.some((item) => item.id === id)) return

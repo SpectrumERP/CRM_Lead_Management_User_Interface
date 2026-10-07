@@ -21,6 +21,8 @@ import ProductPicker, { useProductCatalog } from '../components/ProductPicker'
 import { productsFromText, productsToText, type Product } from '../data/products'
 import { FIELD_LIMITS } from '../constants/fieldLimits'
 import AttachmentsField from '../components/AttachmentsField'
+import { RecordNotesPanel } from '../components/LeadNotes'
+import { useOptionalToast } from '../contexts/ToastContext'
 import { useSpectrumCompany } from '../auth/useSpectrumCompany'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
 import { formatDate } from '../utils/dateFormat'
@@ -89,6 +91,11 @@ const SECTION_ICONS = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   ),
+  notes: (
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  ),
   documents: (
     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -97,6 +104,7 @@ const SECTION_ICONS = {
 } as const
 
 export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpportunityProps) {
+  const { addToast } = useOptionalToast()
   const { patchOpportunity } = useCrmActions()
   const confirm = useConfirm()
   const [name, setName] = useState(existing.name)
@@ -355,6 +363,11 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
                 disabled
               />
             </FormGrid>
+          </Section>
+
+          {/* The opportunity's saved notes, added and deleted straight away (as on the opportunity view). */}
+          <Section title="Internal Notes / Observations" icon={SECTION_ICONS.notes}>
+            <RecordNotesPanel recordId={existing.id} recordName={existing.name} noun="opportunity" onToast={addToast} />
           </Section>
 
           <Section title="Documents / Attachments" icon={SECTION_ICONS.documents}>

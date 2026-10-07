@@ -12,17 +12,22 @@ import { opportunityNoFromId, refreshServerOpportunity } from '../api/opportunit
 import { bySequence } from '../api/fillValues'
 import { useOpportunityFillValues } from '../components/useOpportunityFillValues'
 import { stageBadgeStyle, useOpportunityStageColors, withAlpha } from '../components/useOpportunityStageColors'
-import { Button, Card, ChoiceGroup, IconTooltip, Spinner } from '../ui'
+import { Button, Card, ChoiceGroup, CountBadge, IconTooltip, Spinner } from '../ui'
 import type { ToastType } from '../components/Toast'
 import ActivityDrawer from '../components/ActivityDrawer'
 import { PagedTimeline } from '../components/RecordTimeline'
 import { EmptyIcons, EmptyState } from '../components/CRMStates'
+import { RecordNotesPanel } from '../components/LeadNotes'
 import {
   OpportunityIdentityEdit,
   OpportunitySummaryEdit,
   type OppFieldKey,
 } from '../components/OpportunityInlineEdit'
 import { formatDateTime, type Activity } from '../data/activities'
+
+/** Same tabs as the lead view (its Emails tab is hidden there too). */
+const DETAIL_TABS = ['Internal Notes / Observations', 'Timeline'] as const
+type DetailTab = (typeof DETAIL_TABS)[number]
 
 interface OpportunityDetailProps {
   opportunityId: string
@@ -285,6 +290,7 @@ export default function OpportunityDetail({
     state.opportunities.find((item) => item.id === opportunityId && item.spectrum),
   ) as Opportunity | undefined
   const activities = useCrmSelector((state) => state.activities)
+  const noteCount = useCrmSelector((state) => state.notes.filter((item) => item.relatedLeadId === opportunityId).length)
   // Server opportunity → the stage track follows the server's stages (fill values, by sequence).
   const { values: oppFill } = useOpportunityFillValues()
   const stageColor = useOpportunityStageColors()
@@ -313,6 +319,7 @@ export default function OpportunityDetail({
   const [showActivity, setShowActivity] = useState(false)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [editingField, setEditingField] = useState<OppFieldKey | null>(null)
+  const [activeTab, setActiveTab] = useState<DetailTab>(DETAIL_TABS[0])
 
   const relatedActivities = useMemo(() => {
     if (!opportunity) return []
@@ -566,25 +573,51 @@ export default function OpportunityDetail({
             )}
           </div>
         </Card>
+      </div>
 
-        {/* Timeline — GET /api/crm/opportunities/timeline/{opportunityNo}, paged on scroll */}
-        <Card className="overflow-hidden p-0">
-          <div className="border-b border-line px-4 py-3">
-            <h2 className="text-sm font-bold text-ink">Timeline</h2>
+      {/* ── Tabs bar — Lead Detail style ─────────────────────────────────────── */}
+      <div className="shrink-0 border-y border-line bg-surface">
+        <div className="page-gutter">
+          <div className="flex min-w-0 items-center overflow-x-auto" role="tablist" aria-label="Opportunity detail sections">
+            {DETAIL_TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+                className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+                  activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink-soft'
+                }`}
+              >
+                {tab}
+                {tab === 'Internal Notes / Observations' && noteCount > 0 && (
+                  <CountBadge value={noteCount} size="sm" tone="warning-soft" className="ml-1.5" />
+                )}
+              </button>
+            ))}
           </div>
-          <div className="p-4">
-            {opportunity.spectrum ? (
-              <PagedTimeline
-                record="opportunity"
-                recordNo={opportunity.spectrum.opportunityNo}
-                refreshKey={`${relatedActivities.length}:${opportunity.dealStage}:${opportunity.status}:${opportunity.audit?.modifiedAt ?? ''}`}
-                emptySubtitle="Timeline entries will appear as this opportunity progresses through stages."
-              />
-            ) : (
-              <p className="text-xs text-ink-faint">The timeline is available for opportunities saved on the server.</p>
-            )}
-          </div>
-        </Card>
+        </div>
+      </div>
+
+      {/* ── Tab content ─────────────────────────────────────────────────────── */}
+      <div className="page-gutter py-4">
+        {activeTab === 'Internal Notes / Observations' && (
+          // Saved through the opportunity notes API (save-notes-detail / delete-notes-detail).
+          <RecordNotesPanel recordId={opportunity.id} recordName={opportunity.name} noun="opportunity" onToast={onToast} />
+        )}
+        {activeTab === 'Timeline' &&
+          (opportunity.spectrum ? (
+            // GET /api/crm/opportunities/timeline/{opportunityNo}, paged on scroll.
+            <PagedTimeline
+              record="opportunity"
+              recordNo={opportunity.spectrum.opportunityNo}
+              refreshKey={`${relatedActivities.length}:${noteCount}:${opportunity.dealStage}:${opportunity.status}:${opportunity.audit?.modifiedAt ?? ''}`}
+              emptySubtitle="Timeline entries will appear as this opportunity progresses through stages."
+            />
+          ) : (
+            <p className="text-xs text-ink-faint">The timeline is available for opportunities saved on the server.</p>
+          ))}
       </div>
 
       {editingActivity ? (

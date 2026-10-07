@@ -19,6 +19,7 @@ vi.mock('./db', () => ({
   getState: () => ({ ...store, notes: [], activities: [] }),
   upsertServerOpportunities: vi.fn((items: { id: string }[]) => { store.opportunities = items }),
   replaceServerOpportunityActivities: vi.fn(),
+  replaceServerOpportunityNotes: vi.fn(),
   dropServerOpportunity: vi.fn(),
   upsertServerLeads: vi.fn((items: { id: string }[]) => { store.leads = items }),
   replaceServerLeadChildren: vi.fn(),
@@ -27,7 +28,7 @@ vi.mock('./db', () => ({
 
 const db = await import('./db')
 const { getLeadFillValues } = await import('./leadFormFillValues')
-const { refreshServerOpportunity, saveServerOpportunityActivity } = await import('./opportunitySync')
+const { deleteServerOpportunityNote, refreshServerOpportunity, saveServerOpportunityActivity, saveServerOpportunityNote } = await import('./opportunitySync')
 const { refreshServerLead } = await import('./leadSync')
 
 function jsonResponse(body: unknown) {
@@ -50,6 +51,14 @@ const detail = {
       status: { statusNo: 1, statusName: 'Open' },
     },
   ],
+  notes: [
+    {
+      opportunityNotesDetailNo: 9,
+      originatedBy: 'Vikram Nair',
+      notesDate: '2026-10-05T10:30:00',
+      notesDiscussion: 'Client asked for revised pricing',
+    },
+  ],
 }
 
 describe('opportunity view and activities', () => {
@@ -59,6 +68,7 @@ describe('opportunity view and activities', () => {
     fetchMock.mockReset()
     vi.mocked(getLeadFillValues).mockClear()
     vi.mocked(db.replaceServerOpportunityActivities).mockClear()
+    vi.mocked(db.replaceServerOpportunityNotes).mockClear()
     vi.stubGlobal('fetch', fetchMock)
   })
 
@@ -102,5 +112,35 @@ describe('opportunity view and activities', () => {
       assignedToNo: 12,
       statusNo: 1,
     })
+  })
+
+  it('loads the opportunity internal notes from load-data', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ success: true, message: '', data: detail }))
+    await refreshServerOpportunity(27)
+    const [id, notes] = vi.mocked(db.replaceServerOpportunityNotes).mock.calls[0]!
+    expect(id).toBe('SO-0027')
+    expect(notes).toEqual([
+      expect.objectContaining({ id: 'SON-9', relatedLeadId: 'SO-0027', by: 'Vikram Nair', text: 'Client asked for revised pricing', date: '05-10-2026 10:30' }),
+    ])
+  })
+
+  it('adds, updates and deletes an opportunity note through the opportunity notes API', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      jsonResponse(/notes-detail/.test(new URL(url).pathname) ? { success: true, message: '', data: true } : { success: true, message: '', data: detail }),
+    )
+    const note = { id: 'N-1', title: 'Internal note', text: ' Follow up next week ', relatedLeadId: 'SO-0027', relatedLeadName: '', date: '06-10-2026 09:15', by: 'Vikram Nair' }
+    await saveServerOpportunityNote(note)
+    await saveServerOpportunityNote({ ...note, id: 'SON-9' })
+    await deleteServerOpportunityNote({ id: 'SON-9', relatedLeadId: 'SO-0027' })
+    const saves = fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/api/crm/opportunities/save-notes-detail')
+    expect(JSON.parse(String(saves[0]![1].body))).toEqual({
+      opportunityNo: 27,
+      originatedBy: 'Vikram Nair',
+      notesDate: new Date('2026-10-06T09:15:00').toISOString(),
+      notesDiscussion: 'Follow up next week',
+    })
+    expect(JSON.parse(String(saves[1]![1].body))).toMatchObject({ opportunityNo: 27, opportunityNotesDetailNo: 9 })
+    const del = fetchMock.mock.calls.find(([url]) => new URL(String(url)).pathname === '/api/crm/opportunities/delete-notes-detail')!
+    expect(new URL(String(del[0])).search).toBe('?opportunityNotesDetailNos=9')
   })
 })

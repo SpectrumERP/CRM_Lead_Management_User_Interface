@@ -52,8 +52,20 @@ export const spectrumEndpoints = {
     delete: '/api/crm/opportunities/delete',
     saveActivity: '/api/crm/opportunities/save-activity-detail',
     deleteActivities: '/api/crm/opportunities/delete-activity-detail',
+    saveNote: '/api/crm/opportunities/save-notes-detail',
+    deleteNotes: '/api/crm/opportunities/delete-notes-detail',
     /** `${timeline}/{opportunityNo}` — paged (see timeline.ts). */
     timeline: '/api/crm/opportunities/timeline',
+  },
+  /** Sales dashboard figures, all GET with `CompanyNo` (see dashboard.ts). */
+  dashboard: {
+    openActivities: '/api/crm/dashboard/open-activities',
+    leadPipeline: '/api/crm/dashboard/lead-pipeline',
+    opportunityPipeline: '/api/crm/dashboard/opportunity-pipeline',
+    leadsAttention: '/api/crm/dashboard/leads-attention',
+    opportunitiesAttention: '/api/crm/dashboard/opportunities-attention',
+    expectedClosures: '/api/crm/dashboard/expected-closures',
+    monthlySalesSummary: '/api/crm/dashboard/monthly-sales-summary',
   },
 }
 

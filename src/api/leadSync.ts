@@ -71,7 +71,7 @@ export function dateOnly(iso?: string | null) {
 }
 
 /** `dd-mm-yyyy HH:MM`, the format in-app notes use. */
-function noteStamp(iso?: string | null) {
+export function noteStamp(iso?: string | null) {
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
@@ -416,7 +416,7 @@ export function localDateTimeToIso(date: string, time = '') {
 }
 
 /** In-app note stamps: `dd-mm-yyyy HH:MM`, `YYYY-MM-DDTHH:MM` or anything Date can read. */
-function noteDateToIso(value: string) {
+export function noteDateToIso(value: string) {
   const m = /^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}:\d{2}))?/.exec(value.trim())
   if (m) return localDateTimeToIso(`${m[3]}-${m[2]}-${m[1]}`, m[4] ?? '')
   const d = new Date(value)

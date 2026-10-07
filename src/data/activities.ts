@@ -48,6 +48,8 @@ export interface Activity {
   hasAttachment: boolean;
   attachmentName?: string;
   parentActivityId?: string; // for follow-ups
+  /** Server activity number to save with (expected-closures `lastActivity.activityDetailNo`); wins over the one in `id`. */
+  serverDetailNo?: number;
 }
 
 export const ACTIVITY_TYPES: ActivityType[] = [
