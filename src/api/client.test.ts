@@ -49,7 +49,7 @@ describe('api access', () => {
       companyName: 'Endpoint Co',
       contactPerson: 'A',
       email: 'a@test.com',
-      phone: '1',
+      phone: '9876543210',
       leadSource: 'Website',
       leadStage: 'New',
       leadStatus: 'Open',

@@ -114,6 +114,19 @@ describe('opportunity view and activities', () => {
     })
   })
 
+  it('updates against the dashboard lastActivity number (serverDetailNo) and the row opportunityNo', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      jsonResponse(new URL(url).pathname.endsWith('save-activity-detail') ? { success: true, message: '', data: true } : { success: true, message: '', data: detail }),
+    )
+    await saveServerOpportunityActivity({
+      id: 'SOA-4', serverDetailNo: 31, type: 'Phone Call', subject: 'Pricing call', leadId: 'SL-0013', opportunityId: 'SO-0027', leadName: '', contactPerson: '',
+      assignedTo: 'Vikram Nair', scheduleDate: '2026-10-05', scheduleTime: '', reminder: 'None', notes: '', status: 'Pending',
+      outcome: '', completeDate: '', completeTime: '', hasAttachment: false,
+    })
+    const call = fetchMock.mock.calls.find(([url]) => new URL(String(url)).pathname === '/api/crm/opportunities/save-activity-detail')!
+    expect(JSON.parse(String(call[1].body))).toMatchObject({ opportunityNo: 27, opportunityActivityDetailNo: 31 })
+  })
+
   it('loads the opportunity internal notes from load-data', async () => {
     fetchMock.mockImplementation(async () => jsonResponse({ success: true, message: '', data: detail }))
     await refreshServerOpportunity(27)
