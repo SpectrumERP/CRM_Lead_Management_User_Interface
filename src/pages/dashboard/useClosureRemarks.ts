@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import type { DashboardExpectedClosure } from '../../api/dashboard'
-import { leadNoFromId, noteDateToIso, refreshServerLead } from '../../api/leadSync'
-import { refreshServerOpportunity, serverOpportunityId } from '../../api/opportunitySync'
+import { noteDateToIso } from '../../api/leadSync'
+import { serverOpportunityId } from '../../api/opportunitySync'
 import { useCrmSelector } from '../../contexts/CrmStoreContext'
 
 export interface ClosureRemark {
@@ -15,31 +15,12 @@ export interface ClosureRemark {
 
 /**
  * Remark column of "Expected closure this month": the newest internal note (by note date) of each
- * opportunity — its own notes plus those of the lead it was converted from. Loads each opportunity and
- * its lead once (load-data) so their notes reach the store; a `latestNote` from the dashboard API counts too.
+ * opportunity — the dashboard API's `latestNote`, plus any notes already in the store. Nothing is loaded on
+ * page load: load-data runs only when an activity is opened, and its notes then count here too.
  */
 export function useClosureRemarks(rows: readonly DashboardExpectedClosure[]): Map<number, ClosureRemark> {
   const opportunities = useCrmSelector((state) => state.opportunities)
   const notes = useCrmSelector((state) => state.notes)
-
-  const rowKey = rows.map((r) => r.opportunityNo).join(',')
-  useEffect(() => {
-    let cancelled = false
-    // Opportunities converted from the same lead load that lead once.
-    const leadsAsked = new Set<number>()
-    for (const no of rowKey ? rowKey.split(',').map(Number) : []) {
-      refreshServerOpportunity(no)
-        .then((opportunity) => {
-          const leadNo = opportunity.leadId ? leadNoFromId(opportunity.leadId) : null
-          if (cancelled || !leadNo || leadsAsked.has(leadNo)) return
-          leadsAsked.add(leadNo)
-          return refreshServerLead(leadNo)
-        })
-        // A remark is extra information: a record that fails to load just shows none.
-        .catch(() => undefined)
-    }
-    return () => { cancelled = true }
-  }, [rowKey])
 
   return useMemo(() => {
     const result = new Map<number, ClosureRemark>()

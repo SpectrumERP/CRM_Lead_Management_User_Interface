@@ -180,6 +180,7 @@ export function opportunityActivities(detail: OpportunityDetail, item: Opportuni
     const status = activityStatusFromServer(a.status?.statusName)
     return {
       id: `SOA-${a.opportunityActivityDetailNo}`,
+      serverDetailNo: a.opportunityActivityDetailNo,
       type: activityType(a.activityType?.activityTypeName),
       subject: a.subject ?? '',
       leadId: item.leadId ?? '',
@@ -242,12 +243,12 @@ export function refreshServerOpportunity(opportunityNo: number): Promise<Opportu
  * Activity type numbers come from the lead fill values (the opportunity ones carry no types).
  */
 export async function saveServerOpportunityActivity(activity: Activity): Promise<void> {
+  console.log('activity',activity)
   const opportunityNo = activity.opportunityId ? opportunityNoFromId(activity.opportunityId) : null
   if (!opportunityNo) fail('VALIDATION', 'This activity is not on a server opportunity.')
   // An update needs the server's activity number; a bad one would reach the server as null.
-  if (activity.serverDetailNo === 0) fail('VALIDATION', 'This opportunity has no last activity (lastActivity.activityDetailNo) in expected closures.')
-  const detailNo = activity.serverDetailNo ?? (activity.id.startsWith('SOA-') ? Number(activity.id.slice(4)) : undefined)
-  if (detailNo !== undefined && !(detailNo > 0)) fail('VALIDATION', 'This activity has no server activity number; reload the opportunity and try again.')
+  const opportunityActivityDetailNo = activity.serverDetailNo ?? (activity.id.startsWith('SOA-') ? Number(activity.id.slice(4)) : undefined)
+  // if (opportunityActivityDetailNo !== undefined && !(opportunityActivityDetailNo > 0)) fail('VALIDATION', 'This activity has no server activity number; reload the opportunity and try again.')
   const { company, fill } = await context()
   const leadFill = await getLeadFillValues(company.headOfficeNo)
   const typeNo = leadFill.leadActivityTypes.find((t) => normType(t.leadActivityTypeName) === normType(activity.type))?.leadActivityTypeNo
@@ -259,7 +260,7 @@ export async function saveServerOpportunityActivity(activity: Activity): Promise
   if (!assignedToNo) fail('VALIDATION', `"${activity.assignedTo}" was not found among server users.`)
   await saveOpportunityActivity({
     opportunityNo,
-    opportunityActivityDetailNo: detailNo,
+    opportunityActivityDetailNo,
     activityTypeNo: typeNo,
     subject: activity.subject.trim() || undefined,
     dueDate: localDateTimeToIso(activity.scheduleDate, activity.scheduleTime),

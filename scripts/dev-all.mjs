@@ -12,8 +12,12 @@ import { loadEnv } from 'vite'
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const root = resolve(import.meta.dirname, '..')
 
+// No task app in this checkout: run the CRM alone.
+const hasTaskApp = existsSync(resolve(root, 'task-management/package.json'))
+if (!hasTaskApp) console.log('Task Management not found (task-management/package.json) — running the CRM only.')
+
 // First run: install the task app's own dependencies.
-if (!existsSync(resolve(root, 'task-management/node_modules'))) {
+if (hasTaskApp && !existsSync(resolve(root, 'task-management/node_modules'))) {
   console.log('Installing Task Management dependencies…')
   const install = spawnSync(npm, ['--prefix', 'task-management', 'install'], { cwd: root, stdio: 'inherit' })
   if (install.status !== 0) process.exit(install.status ?? 1)
@@ -24,7 +28,7 @@ const secret = loadEnv('development', root, 'VITE_').VITE_COOKIE_SECRET
 const taskEnv = secret ? { ...process.env, VITE_CRM_COOKIE_SECRET: secret } : process.env
 
 const children = [
-  spawn(npm, ['run', 'dev:task'], { cwd: root, stdio: 'inherit', env: taskEnv }),
+  ...(hasTaskApp ? [spawn(npm, ['run', 'dev:task'], { cwd: root, stdio: 'inherit', env: taskEnv })] : []),
   spawn(npm, ['run', 'dev:crm'], { cwd: root, stdio: 'inherit' }),
 ]
 

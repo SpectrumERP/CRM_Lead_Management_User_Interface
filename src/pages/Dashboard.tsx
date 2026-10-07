@@ -131,21 +131,32 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
       const opp = isOpportunityActivity(row)
       const recordNo = opp ? row.opportunityNo : row.leadNo
       if (!recordNo) return
-      const id = opp ? `SOA-${row.activityDetailNo}` : `SA-${row.activityDetailNo}`
+      // Opportunity: its `opportunityActivityDetailNo` — the number the save sends.
+      const id = opp ? `SOA-${row.opportunityActivityDetailNo ?? row.activityDetailNo}` : `SA-${row.activityDetailNo}`
       setOpening(id)
       try {
         if (opp) await refreshServerOpportunity(recordNo)
         else await refreshServerLead(recordNo)
-        const activity = api.crm.getState().activities.find((a) => a.id === id)
+        const oppId = serverOpportunityId(recordNo)
+        // Opportunity: only this opportunity's activities (its load-data) — a same-numbered activity of
+        // another opportunity already in the store would save against the wrong record ("ActivityNo not found").
+        const candidates = opp ? api.crm.getState().activities.filter((a) => a.opportunityId === oppId) : api.crm.getState().activities
+        const detailOf = (a: Activity) => a.serverDetailNo ?? Number(a.id.replace(/^SOA-/, ''))
+        // Expected closures: the form takes the lastActivity's data and number — only when that number is one
+        // of this opportunity's activities; otherwise the clicked activity saves with its own number.
+        const owned = opp && detailNo !== undefined && detailNo > 0 ? candidates.find((a) => detailOf(a) === detailNo) : undefined
+        const ownsDetailNo = owned !== undefined
+        const activity = candidates.find((a) => a.id === id) ?? owned
         if (activity) {
           setNotesOnly(remarkOnly)
-          // Expected closures: the form takes the lastActivity's data and number (0 when there is none — the save then refuses).
           const last = row.lastActivity
+          // Opportunity: save against the row's `opportunityNo`.
+          const withOpp = opp ? { ...activity, opportunityId: oppId } : activity
           setEditing(
-            detailNo === undefined
-              ? activity
+            !ownsDetailNo
+              ? withOpp
               : {
-                  ...activity,
+                  ...withOpp,
                   serverDetailNo: detailNo,
                   ...(last
                     ? {
@@ -387,7 +398,7 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
             activities={activities.data?.rows ?? []}
             todayIso={todayIso}
             onOpenOpportunity={openOpportunity}
-            onOpenActivity={(a) => void openActivity(a, true, a.lastActivity?.activityDetailNo ?? 0)}
+            onOpenActivity={(a) => void openActivity(a, true, a.lastActivity ? a.lastActivity.activityDetailNo ?? 0 : a.opportunityActivityDetailNo ?? undefined)}
           />
         </Section>
       </div>

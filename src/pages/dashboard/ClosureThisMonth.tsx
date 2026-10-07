@@ -24,8 +24,8 @@ interface ClosureProps {
   todayIso: string
   onOpenOpportunity: (opportunityNo: number) => void
   /**
-   * Open one pending activity to add its remark / change its status. The activity carries the
-   * expected-closures row's `lastActivity`, whose `activityDetailNo` the save sends.
+   * Open one pending activity to add its remark / change its status. The save sends the activity's
+   * own `activityDetailNo`, or its `lastActivity`'s when opened from the last-activity card.
    */
   onOpenActivity: (activity: ClosurePendingActivity) => void
 }
@@ -111,37 +111,31 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
     return map
   }, [activities])
 
-  /**
-   * The `lastActivity` sent when a row has none of its own: the first one in the expected-closures
-   * response (it may belong to another opportunity — by request).
-   */
-  const fallbackLast = useMemo(() => rows.find((r) => r.lastActivity?.activityDetailNo)?.lastActivity ?? null, [rows])
-
   /** Pending activities open as a list in a drawer; a row there opens that activity's form. */
   const showPending = useCallback(
     (row: DashboardExpectedClosure) => {
       const list = sortByDue(pendingByOpportunity.get(row.opportunityNo) ?? [])
-      // TEMP debug: expected-closures row and its lastActivity.
-      console.log('[expected-closures] row', row)
-      console.table(rows.map((r) => ({ opportunityNo: r.opportunityNo, name: r.opportunityName, lastActivityNo: r.lastActivity?.activityDetailNo ?? null, lastActivity: JSON.stringify(r.lastActivity ?? null) })))
-      console.log('[expected-closures] lastActivity (own → fallback)', row.lastActivity ?? fallbackLast)
-      console.log('[open-activities] pending for this opportunity', list)
-      // Not in the open-activities feed — fall back to the opportunity, where all its activities are.
+      console.table(row.opportunityNo)
       if (!list.length) onOpenOpportunity(row.opportunityNo)
       else setPendingFor({ row, list })
     },
-    [pendingByOpportunity, onOpenOpportunity, fallbackLast, rows],
+    [pendingByOpportunity, onOpenOpportunity],
   )
-  /** Pass the clicked activity on with a `lastActivity` object from expected-closures. */
+  /**
+   * Pass the clicked activity on. From the last-activity card it carries the expected-closures
+   * `lastActivity` (whose number the save sends); from the list it saves with its own `activityDetailNo`.
+   */
   const openWithLast = useCallback(
-    (row: DashboardExpectedClosure, clicked: DashboardOpenActivity) => {
-      const activity: ClosurePendingActivity = { ...clicked, lastActivity: row.lastActivity ?? fallbackLast }
+    (row: DashboardExpectedClosure, clicked: DashboardOpenActivity, useLast = false) => {
+      // Always the expected-closures row's `opportunityNo` — the one the save sends.
+      const base: ClosurePendingActivity = { ...clicked, opportunityNo: row.opportunityNo }
+      const activity: ClosurePendingActivity = useLast ? { ...base, lastActivity: row.lastActivity } : base
       // TEMP debug: the object passed on click.
       console.log('[expected-closures] click → activity with lastActivity', activity)
       setPendingFor(null)
       onOpenActivity(activity)
     },
-    [onOpenActivity, fallbackLast],
+    [onOpenActivity],
   )
   const columns = useMemo<DashboardColumn<DashboardExpectedClosure>[]>(
     () => [
@@ -275,8 +269,8 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
           onClose={() => setPendingFor(null)}
         >
           <LastActivityCard
-            last={pendingFor.row.lastActivity ?? fallbackLast}
-            onOpen={() => openWithLast(pendingFor.row, pendingFor.list[0])}
+            last={pendingFor.row.lastActivity}
+            onOpen={() => openWithLast(pendingFor.row, pendingFor.list[0], true)}
           />
           <p className="mt-4 mb-2 text-xs font-semibold text-ink-muted">Pending activities</p>
           <div className="overflow-x-auto rounded-lg border border-line bg-surface">

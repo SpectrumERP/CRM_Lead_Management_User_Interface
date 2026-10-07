@@ -58,6 +58,8 @@ export interface DashboardOpenActivity {
   /** `Lead` or `Opportunity`. */
   recordType?: string | null
   activityDetailNo: number
+  /** The opportunity activity's own number — what `save-activity-detail` takes. */
+  opportunityActivityDetailNo?: number | null
   leadNo?: number | null
   opportunityNo?: number | null
   recordCode?: string | null

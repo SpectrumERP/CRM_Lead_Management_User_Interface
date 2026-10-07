@@ -67,7 +67,17 @@ export function personName(user?: ServerUserRef | null) {
 }
 
 export function dateOnly(iso?: string | null) {
-  return iso ? iso.slice(0, 10) : ''
+  if (!iso) return ''
+  // A UTC stamp (`2026-09-30T18:30:00Z` = 1 Oct in IST) is the local day; slicing it would move the date a day
+  // back on every load and save.
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso.slice(10))) {
+    const d = new Date(iso)
+    if (!Number.isNaN(d.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    }
+  }
+  return iso.slice(0, 10)
 }
 
 /** `dd-mm-yyyy HH:MM`, the format in-app notes use. */
