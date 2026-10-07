@@ -3,12 +3,22 @@
  * Values are JSON → encrypted → base64url, split across chunks when they exceed the per-cookie limit.
  * The key ships in the bundle, so this hides data from casual inspection; it is not a substitute
  * for server-set httpOnly cookies.
+ *
+ * Web Crypto exists only in secure contexts (HTTPS, localhost). On a plain-HTTP host (e.g. a LAN IP)
+ * values are stored as `p.` + base64url JSON instead — encoded, not encrypted. Serve over HTTPS to keep
+ * the encryption. Task Management's `src/lib/crmSso.ts` reads both formats; keep the two in step.
  */
 
 const DEFAULT_SECRET = 'fi-crm-cookie-v1'
 const KEY_SALT = 'fi-crm-cookie-salt'
 const CHUNK_CHARS = 3500
 const MAX_CHUNKS = 10
+/** Marks a value stored without encryption (no Web Crypto). base64url never contains '.'. */
+const PLAIN_PREFIX = 'p.'
+
+function canEncrypt(): boolean {
+  return typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
+}
 
 let keyPromise: Promise<CryptoKey> | null = null
 
@@ -48,6 +58,7 @@ function fromBase64Url(value: string): Uint8Array {
 }
 
 async function encrypt(value: unknown): Promise<string> {
+  if (!canEncrypt()) return PLAIN_PREFIX + toBase64Url(new TextEncoder().encode(JSON.stringify(value)))
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const plain = new TextEncoder().encode(JSON.stringify(value))
   const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await cryptoKey(), plain))
@@ -58,6 +69,9 @@ async function encrypt(value: unknown): Promise<string> {
 }
 
 async function decrypt<T>(value: string): Promise<T> {
+  if (value.startsWith(PLAIN_PREFIX)) {
+    return JSON.parse(new TextDecoder().decode(fromBase64Url(value.slice(PLAIN_PREFIX.length)))) as T
+  }
   const packed = fromBase64Url(value)
   const iv = packed.slice(0, 12)
   const cipher = packed.slice(12)
