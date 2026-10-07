@@ -7,10 +7,11 @@ import { EmptyState, EmptyIcons } from "./CRMStates"
 import type { ToastType } from "./Toast"
 import { sameList, useCrmActions, useCrmSelector, type CrmNote } from "../contexts/CrmStoreContext"
 import { saveConfirm, useConfirm } from "../contexts/ConfirmContext"
-import { formatDateParts } from "../utils/dateFormat"
+import { formatDateParts, toIsoDate } from "../utils/dateFormat"
+import { useAuth } from "../auth/AuthContext"
 
 /**
- * Lead internal notes (list + add form), shared by the lead view and the lead form in edit mode.
+ * Internal notes (list + add form), shared by the lead / opportunity views and their edit forms.
  */
 
 export type LeadNote = { id: string; text: string; date: string; time: string; by: string }
@@ -142,6 +143,16 @@ export function InternalNotesTab({
   editing?: boolean
 }) {
   const [openId, setOpenId] = useState<string | null>(null)
+  const userName = useAuth().user?.name ?? ""
+
+  // A new note starts with today's date, and Created By is the logged-in user.
+  useEffect(() => {
+    if (!adding) return
+    const patch: Partial<{ dateTime: string; createdBy: string }> = {}
+    if (!draft.dateTime.trim()) patch.dateTime = toIsoDate(new Date())
+    if (!draft.createdBy.trim() && userName) patch.createdBy = userName
+    if (Object.keys(patch).length) onDraft(patch)
+  }, [adding, draft.dateTime, draft.createdBy, userName, onDraft])
 
   useEffect(() => {
     setOpenId((prev) => (prev && notes.some((item) => item.id === prev) ? prev : null))
@@ -155,13 +166,13 @@ export function InternalNotesTab({
         </p>
         {readOnly ? null : (
           <Button variant="solid" className="!px-3 !py-1.5 text-xs" onClick={onStartAdd}>
-            Add Internal Note
+            Add Internal Note / Observation
           </Button>
         )}
       </div>
       {adding && !readOnly && (
         <div className="mb-3 space-y-3 rounded-xl border border-warning-line bg-warning-soft p-4">
-          {editing ? <p className="text-xs font-bold text-ink">Edit Internal Note</p> : null}
+          {editing ? <p className="text-xs font-bold text-ink">Edit Internal Note / Observation</p> : null}
           <FormGrid cols={2}>
             <TextField
               label="Date"
@@ -175,10 +186,10 @@ export function InternalNotesTab({
               label="Created By"
               maxLength={FIELD_LIMITS.noteOriginatedBy}
               required
+              disabled
               error={errors.createdBy}
               value={draft.createdBy}
               placeholder="Created by"
-              onValueChange={(v) => onDraft({ createdBy: v })}
             />
           </FormGrid>
           <TextAreaField
@@ -200,12 +211,12 @@ export function InternalNotesTab({
       {notes.length === 0 && !adding ? (
         <EmptyState
           icon={EmptyIcons.notes}
-          title="No internal notes yet"
+          title="No internal notes / observations yet"
           subtitle="Record date, author and discussion so the team has one internal thread."
-          action={readOnly ? undefined : { label: "Add Internal Note", onClick: onStartAdd }}
+          action={readOnly ? undefined : { label: "Add Internal Note / Observation", onClick: onStartAdd }}
         />
       ) : notes.length > 0 ? (
-        <ul className="overflow-hidden rounded-xl border border-line bg-surface" aria-label="Internal notes">
+        <ul className="overflow-hidden rounded-xl border border-line bg-surface" aria-label="Internal notes / observations">
           {notes.map((note) => (
             <NoteCard
               key={note.id}
@@ -263,9 +274,26 @@ export interface LeadNotesPanelProps {
  * are saved straight away — server leads through `save-notes-detail` / `delete-notes-detail`.
  */
 export function LeadNotesPanel({ lead, onToast }: LeadNotesPanelProps) {
+  return <RecordNotesPanel recordId={lead.id} recordName={lead.companyName} noun="lead" onToast={onToast} />
+}
+
+export interface RecordNotesPanelProps {
+  /** Lead (`SL-…`) or opportunity (`SO-…`) id; notes are stored against it as `relatedLeadId`. */
+  recordId: string
+  recordName: string
+  /** Used in the toasts ("saved on this lead"). */
+  noun: "lead" | "opportunity"
+  onToast?: (type: ToastType, title: string, message?: string) => void
+}
+
+/**
+ * Internal notes of one lead or opportunity (list + add / edit / delete), saved straight away —
+ * server records through their `save-notes-detail` / `delete-notes-detail`.
+ */
+export function RecordNotesPanel({ recordId, recordName, noun, onToast }: RecordNotesPanelProps) {
   const { addNote, patchNote, removeNote } = useCrmActions()
   const confirm = useConfirm()
-  const stored = useCrmSelector((state) => state.notes.filter((n) => n.relatedLeadId === lead.id), sameList)
+  const stored = useCrmSelector((state) => state.notes.filter((n) => n.relatedLeadId === recordId), sameList)
   // Shown until the server reload brings the saved note (which then replaces it).
   const [pending, setPending] = useState<LeadNote[]>([])
   const [adding, setAdding] = useState(false)
@@ -293,21 +321,21 @@ export function LeadNotesPanel({ lead, onToast }: LeadNotesPanelProps) {
     if (!(await confirm(saveConfirm("Note", Boolean(editingId))))) return
     const { date, time } = splitDateTime(dateTime)
     if (editingId) {
-      // Server notes → save-notes-detail with their number, then the lead reloads.
+      // Server notes → save-notes-detail with their number, then the lead / opportunity reloads.
       patchNote(editingId, { text, by, date: `${date} ${time}`.trim() })
       setDraft(EMPTY_DRAFT)
       setErrors({})
       setAdding(false)
       setEditingId(null)
-      onToast?.("success", "Internal Note Updated", "The discussion has been updated.")
+      onToast?.("success", "Internal Note / Observation Updated", "The discussion has been updated.")
       return
     }
     const created: CrmNote = {
       id: `N-${Date.now()}`,
       title: "Internal note",
       text,
-      relatedLeadId: lead.id,
-      relatedLeadName: lead.companyName,
+      relatedLeadId: recordId,
+      relatedLeadName: recordName,
       date: `${date} ${time}`.trim(),
       by,
     }
@@ -316,7 +344,7 @@ export function LeadNotesPanel({ lead, onToast }: LeadNotesPanelProps) {
     setDraft(EMPTY_DRAFT)
     setErrors({})
     setAdding(false)
-    onToast?.("success", "Internal Note Added", "The discussion has been saved on this lead.")
+    onToast?.("success", "Internal Note / Observation Added", `The discussion has been saved on this ${noun}.`)
   }
 
   function edit(note: LeadNote) {

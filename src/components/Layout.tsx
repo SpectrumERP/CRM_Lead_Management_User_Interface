@@ -10,6 +10,9 @@ import { isAdmin } from '../auth/users';
 import { getErrorTitle } from '../constants/messages';
 import { IconTooltip, CountBadge } from '../ui';
 
+/** Header global search is temporarily hidden. Flip to `true` to restore. */
+const SHOW_HEADER_SEARCH = false;
+
 /** Copilot / Edge style: rounded frame with left panel strip. */
 function SidebarToggleIcon({ size = 16 }: { size?: number }) {
   return (
@@ -470,19 +473,13 @@ export default function Layout({ children, detailName }: LayoutProps) {
   };
   const leaf = nestedLeaf[currentPage];
   const sectionPage = (activePage || currentPage) as Page;
-  const crumbs: { label: string; to?: string }[] =
-    currentPage === 'dashboard'
-      ? [{ label: 'CRM' }]
-      : leaf
-        ? [
-            { label: 'CRM', to: paths.dashboard },
-            { label: pageLabel[sectionPage], to: navPaths[sectionPage as keyof typeof navPaths] ?? paths.dashboard },
-            { label: leaf },
-          ]
-        : [
-            { label: 'CRM', to: paths.dashboard },
-            { label: pageLabel[currentPage] },
-          ];
+  const crumbs: { label: string; to?: string }[] = leaf
+    ? [
+        { label: 'CRM', to: paths.dashboard },
+        { label: pageLabel[sectionPage], to: navPaths[sectionPage as keyof typeof navPaths] ?? paths.dashboard },
+        { label: leaf },
+      ]
+    : [];
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas">
@@ -576,7 +573,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
           <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0 pointer-events-auto">
             <QuickCreateMenu />
 
-            {searchCallbacks && (
+            {SHOW_HEADER_SEARCH && searchCallbacks && (
               <IconTooltip label="Search">
               <button
                 type="button"
@@ -595,7 +592,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
             )}
 
             {/* Global Search */}
-            {searchCallbacks ? (
+            {!SHOW_HEADER_SEARCH ? null : searchCallbacks ? (
               <div className="hidden lg:block">
                 <GlobalSearchBar
                   onViewLead={searchCallbacks.onViewLead}
@@ -699,7 +696,9 @@ export default function Layout({ children, detailName }: LayoutProps) {
           </div>
           </div>
 
-          {/* Breadcrumb — second header line */}
+          {/* Breadcrumb — second header line, only on nested pages (detail / create / edit).
+              Top-level pages skip it: the sidebar highlight and page title already say where you are. */}
+          {crumbs.length > 0 && (
           <nav
             className="page-gutter flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-line-subtle py-2 text-xs text-ink-muted"
             aria-label="Breadcrumb"
@@ -719,9 +718,10 @@ export default function Layout({ children, detailName }: LayoutProps) {
               );
             })}
           </nav>
+          )}
         </header>
 
-        {mobileSearchOpen && searchCallbacks && (
+        {SHOW_HEADER_SEARCH && mobileSearchOpen && searchCallbacks && (
           <div className="page-gutter flex-shrink-0 border-b border-line bg-surface py-2 pointer-events-auto lg:hidden">
             <GlobalSearchBar
               fullWidth

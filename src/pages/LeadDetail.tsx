@@ -1953,7 +1953,7 @@ function EmailsTab({
 // ─── Main component ───────────────────────────────────────────────────────────
 const ALL_TABS = [
   "Emails",
-  "Internal Notes",
+  "Internal Notes / Observations",
   "Timeline",
 ] as const
 type Tab = (typeof ALL_TABS)[number]
@@ -2243,7 +2243,7 @@ export default function LeadDetail({
       setNoteErrors({})
       setAddingNote(false)
       setEditingNoteId(null)
-      onToast?.("success", "Internal Note Updated", "The discussion has been updated.")
+      onToast?.("success", "Internal Note / Observation Updated", "The discussion has been updated.")
       return
     }
     const created = {
@@ -2269,7 +2269,7 @@ export default function LeadDetail({
     setNoteDraft(EMPTY_NOTE_DRAFT)
     setNoteErrors({})
     setAddingNote(false)
-    onToast?.("success", "Internal Note Added", "The discussion has been saved on this lead.")
+    onToast?.("success", "Internal Note / Observation Added", "The discussion has been saved on this lead.")
   }
 
   async function saveEmail() {
@@ -2531,7 +2531,7 @@ export default function LeadDetail({
                 {tab === "Emails" && emails.length > 0 && (
                   <CountBadge value={emails.length} size="sm" tone="primary-soft" className="ml-1.5" />
                 )}
-                {tab === "Internal Notes" && notes.length > 0 && (
+                {tab === "Internal Notes / Observations" && notes.length > 0 && (
                   <CountBadge value={notes.length} size="sm" tone="warning-soft" className="ml-1.5" />
                 )}
               </button>
@@ -2577,7 +2577,7 @@ export default function LeadDetail({
               onSave={saveEmail}
             />
           )}
-          {!loading && activeTab === "Internal Notes" && (
+          {!loading && activeTab === "Internal Notes / Observations" && (
             <InternalNotesTab
               readOnly={locked}
               notes={notes}

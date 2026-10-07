@@ -1,56 +1,169 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import {
+  toMoney,
+  type DashboardExpectedClosure,
+  type DashboardExpectedClosuresTotals,
+  type DashboardOpenActivity,
+} from '../../api/dashboard'
 import OverlayShell from '../../components/OverlayShell'
-import type { Activity } from '../../data/activities'
 import { formatMoney, formatMoneyTotals } from '../../data/leads'
-import type { ClosureRow } from '../../data/dashboard'
-import { formatDate } from '../../utils/dateFormat'
 import { SortChevrons } from '../../ui'
+import { formatDate } from '../../utils/dateFormat'
 import { DashboardTable, type DashboardColumn } from './DashboardTable'
 import { DueDate, RecordLink, SectionEmpty } from './parts'
+import { useClosureRemarks } from './useClosureRemarks'
+
+/** A pending activity with its expected-closures row's `lastActivity` object attached. */
+export type ClosurePendingActivity = DashboardOpenActivity & { lastActivity?: DashboardExpectedClosure['lastActivity'] }
 
 interface ClosureProps {
-  rows: ClosureRow[]
+  rows: readonly DashboardExpectedClosure[]
+  totals: DashboardExpectedClosuresTotals | null
+  /** The dashboard's open-activities feed; each row's pending activities are picked from it. */
+  activities: readonly DashboardOpenActivity[]
   todayIso: string
-  onOpenOpportunity: (id: string) => void
-  onOpenActivity: (activity: Activity) => void
+  onOpenOpportunity: (opportunityNo: number) => void
+  /**
+   * Open one pending activity to add its remark / change its status. The activity carries the
+   * expected-closures row's `lastActivity`, whose `activityDetailNo` the save sends.
+   */
+  onOpenActivity: (activity: ClosurePendingActivity) => void
 }
 
 /** Earliest due first; undated activities last. */
-function sortByDue(list: Activity[]) {
-  return [...list].sort((a, b) => (a.scheduleDate || '9999').localeCompare(b.scheduleDate || '9999'))
+function sortByDue(list: readonly DashboardOpenActivity[]) {
+  return [...list].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))
 }
 
-/** "Overdue · 4 days" from ISO dates (YYYY-MM-DD). */
-function overdueLabel(due: string, todayIso: string) {
-  const days = Math.round((Date.parse(todayIso.slice(0, 10)) - Date.parse(due.slice(0, 10))) / 86_400_000)
-  return days > 0 ? `Overdue · ${days} ${days === 1 ? 'day' : 'days'}` : 'Overdue'
+const activityLabel = (a: DashboardOpenActivity) => a.subject || a.activityType?.activityTypeName || `Activity ${a.activityDetailNo}`
+
+const currencyOf = (r: DashboardExpectedClosure) => r.currency?.currencyCode || undefined
+const nameOf = (r: DashboardExpectedClosure) => r.opportunityName || r.code || `Opportunity ${r.opportunityNo}`
+
+/** Pending activity count, red with the overdue count when any are past due. Click to view them. */
+function PendingCell({ row, onClick }: { row: DashboardExpectedClosure; onClick: () => void }) {
+  const count = row.pendingActivityCount
+  if (!count) return <span className="text-ink-faint">None</span>
+  const overdue = row.overdueActivityCount
+  const noun = count === 1 ? 'activity' : 'activities'
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      className={`inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-semibold transition hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+        overdue ? 'border-accent/30 bg-accent-soft text-accent' : 'border-primary/20 bg-primary-soft text-primary'
+      }`}
+      title={`View ${count} pending ${noun}${overdue ? `, ${overdue} overdue` : ''}`}
+      aria-label={`View ${count} pending ${noun}${overdue ? `, ${overdue} overdue` : ''} for ${nameOf(row)}`}
+    >
+      {overdue ? `${overdue} overdue` : 'Pending'}
+      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">{count}</span>
+    </button>
+  )
 }
 
-export function ClosureThisMonthTable({ rows, todayIso, onOpenOpportunity, onOpenActivity }: ClosureProps) {
-  const [pendingFor, setPendingFor] = useState<ClosureRow | null>(null)
+/** The row's `lastActivity` from expected-closures — the number every save from this drawer uses. */
+function LastActivityCard({ last, onOpen }: { last: DashboardExpectedClosure['lastActivity']; onOpen: () => void }) {
+  if (!last?.activityDetailNo) {
+    return (
+      <div className="rounded-lg border border-dashed border-line bg-surface px-3 py-2.5 text-xs text-ink-muted">
+        Expected closures sent no last activity.
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2.5 text-left transition-colors hover:border-primary hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      aria-label={`Open last activity ${last.subject || last.activityDetailNo}`}
+    >
+      <span className="min-w-0">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Last activity · No. {last.activityDetailNo}</span>
+        <span className="block truncate text-sm font-semibold text-primary" title={last.subject ?? undefined}>
+          {last.subject || '—'}
+        </span>
+      </span>
+      <span className="shrink-0 text-right text-xs text-ink-muted">
+        <span className="block">{last.activityTypeName || '—'}</span>
+        <span className="block">{formatDate(last.activityDate)}</span>
+      </span>
+    </button>
+  )
+}
+
+export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOpenOpportunity, onOpenActivity }: ClosureProps) {
+  const remarks = useClosureRemarks(rows)
+  const [pendingFor, setPendingFor] = useState<{ row: DashboardExpectedClosure; list: DashboardOpenActivity[] } | null>(null)
   const [dueDir, setDueDir] = useState<'asc' | 'desc'>('asc')
 
-  const columns = useMemo<DashboardColumn<ClosureRow>[]>(
+  const pendingByOpportunity = useMemo(() => {
+    const map = new Map<number, DashboardOpenActivity[]>()
+    for (const a of activities) {
+      if (a.opportunityNo == null) continue
+      const list = map.get(a.opportunityNo)
+      if (list) list.push(a)
+      else map.set(a.opportunityNo, [a])
+    }
+    return map
+  }, [activities])
+
+  /**
+   * The `lastActivity` sent when a row has none of its own: the first one in the expected-closures
+   * response (it may belong to another opportunity — by request).
+   */
+  const fallbackLast = useMemo(() => rows.find((r) => r.lastActivity?.activityDetailNo)?.lastActivity ?? null, [rows])
+
+  /** Pending activities open as a list in a drawer; a row there opens that activity's form. */
+  const showPending = useCallback(
+    (row: DashboardExpectedClosure) => {
+      const list = sortByDue(pendingByOpportunity.get(row.opportunityNo) ?? [])
+      // TEMP debug: expected-closures row and its lastActivity.
+      console.log('[expected-closures] row', row)
+      console.table(rows.map((r) => ({ opportunityNo: r.opportunityNo, name: r.opportunityName, lastActivityNo: r.lastActivity?.activityDetailNo ?? null, lastActivity: JSON.stringify(r.lastActivity ?? null) })))
+      console.log('[expected-closures] lastActivity (own → fallback)', row.lastActivity ?? fallbackLast)
+      console.log('[open-activities] pending for this opportunity', list)
+      // Not in the open-activities feed — fall back to the opportunity, where all its activities are.
+      if (!list.length) onOpenOpportunity(row.opportunityNo)
+      else setPendingFor({ row, list })
+    },
+    [pendingByOpportunity, onOpenOpportunity, fallbackLast, rows],
+  )
+  /** Pass the clicked activity on with a `lastActivity` object from expected-closures. */
+  const openWithLast = useCallback(
+    (row: DashboardExpectedClosure, clicked: DashboardOpenActivity) => {
+      const activity: ClosurePendingActivity = { ...clicked, lastActivity: row.lastActivity ?? fallbackLast }
+      // TEMP debug: the object passed on click.
+      console.log('[expected-closures] click → activity with lastActivity', activity)
+      setPendingFor(null)
+      onOpenActivity(activity)
+    },
+    [onOpenActivity, fallbackLast],
+  )
+  const columns = useMemo<DashboardColumn<DashboardExpectedClosure>[]>(
     () => [
       {
         key: 'name',
         label: 'Opportunity Name',
-        render: (r) => <RecordLink label={r.opportunity.name} onClick={() => onOpenOpportunity(r.opportunity.id)} />,
-        sortValue: (r) => r.opportunity.name,
-        searchText: (r) => r.opportunity.name,
+        render: (r) => <RecordLink label={nameOf(r)} onClick={() => onOpenOpportunity(r.opportunityNo)} />,
+        sortValue: nameOf,
+        searchText: (r) => `${nameOf(r)} ${r.code ?? ''}`,
       },
       {
         key: 'entity',
         label: 'Business Entity Name',
-        render: (r) => r.opportunity.companyName || '—',
-        sortValue: (r) => r.opportunity.companyName,
-        searchText: (r) => r.opportunity.companyName,
+        render: (r) => r.businessEntity?.businessEntityName || '—',
+        sortValue: (r) => r.businessEntity?.businessEntityName,
+        searchText: (r) => r.businessEntity?.businessEntityName,
       },
       {
         key: 'value',
         label: 'Opportunity Value',
-        render: (r) => formatMoney(r.opportunity.dealValue, r.opportunity.valueCurrency),
-        sortValue: (r) => r.opportunity.dealValue,
+        render: (r) => (r.opportunityValue == null ? '—' : formatMoney(r.opportunityValue, currencyOf(r))),
+        sortValue: (r) => r.opportunityValue,
         align: 'right',
       },
       {
@@ -58,81 +171,83 @@ export function ClosureThisMonthTable({ rows, todayIso, onOpenOpportunity, onOpe
         label: 'Stage',
         render: (r) => (
           <span>
-            {r.opportunity.dealStage || '—'} <span className="text-[11px] text-ink-muted">({r.opportunity.weightPercent}%)</span>
+            {r.opportunityStage?.opportunityStageName || '—'}
+            {r.opportunityStage?.weightage != null ? (
+              <span className="text-[11px] text-ink-muted"> ({r.opportunityStage.weightage}%)</span>
+            ) : null}
           </span>
         ),
-        sortValue: (r) => r.opportunity.weightPercent,
-        searchText: (r) => r.opportunity.dealStage,
+        sortValue: (r) => r.opportunityStage?.weightage,
+        searchText: (r) => r.opportunityStage?.opportunityStageName,
       },
       {
         key: 'weighted',
         label: 'Weighted Value',
-        render: (r) => formatMoney(r.weighted, r.opportunity.valueCurrency),
-        sortValue: (r) => r.weighted,
+        render: (r) => formatMoney(r.weightedValue, currencyOf(r)),
+        sortValue: (r) => r.weightedValue,
         align: 'right',
       },
       {
         key: 'closing',
         label: 'Expected Closure Date',
-        render: (r) => formatDate(r.opportunity.closingDate),
-        sortValue: (r) => r.opportunity.closingDate,
+        render: (r) => formatDate(r.expectedClosureDate),
+        sortValue: (r) => r.expectedClosureDate,
       },
       {
         key: 'last',
         label: 'Last Activity Name & Date',
-        render: (r) =>
-          r.last ? (
-            <span className="block max-w-[16rem] truncate" title={r.last.subject || r.last.type}>
-              {r.last.subject || r.last.type}, {formatDate(r.lastActivity)}
+        render: (r) => {
+          const last = r.lastActivity
+          const label = last?.subject || last?.activityTypeName
+          if (!last) return <span className="text-ink-faint">—</span>
+          return (
+            <span className="block max-w-[16rem] truncate" title={label ?? undefined}>
+              {label ? `${label}, ` : ''}
+              {formatDate(last.activityDate)}
             </span>
-          ) : (
-            formatDate(r.lastActivity)
-          ),
-        sortValue: (r) => r.lastActivity,
-        searchText: (r) => r.last?.subject,
+          )
+        },
+        sortValue: (r) => r.lastActivity?.activityDate,
+        searchText: (r) => r.lastActivity?.subject,
+      },
+      {
+        key: 'remark',
+        label: 'Remark',
+        // The newest internal note (by date) of the opportunity and the lead it came from.
+        render: (r) => {
+          const note = remarks.get(r.opportunityNo)
+          if (!note) return <span className="text-ink-faint">—</span>
+          return (
+            <span className="block max-w-[18rem]" title={note.text}>
+              <span className="line-clamp-2">{note.text}</span>
+              <span className="block text-[11px] text-ink-muted">
+                {formatDate(note.date)}
+                {note.by ? ` · ${note.by}` : ''}
+              </span>
+            </span>
+          )
+        },
+        sortValue: (r) => remarks.get(r.opportunityNo)?.date,
+        searchText: (r) => remarks.get(r.opportunityNo)?.text,
       },
       {
         key: 'pending',
         label: 'Pending Activity',
-        render: (r) => {
-          const pending = sortByDue(r.pending)
-          const next = pending[0]
-          if (!next) return <span className="text-ink-faint">None</span>
-          const count = pending.length
-          const noun = count === 1 ? 'activity' : 'activities'
-          const due = next.scheduleDate
-          const tone = !due ? 'text-ink-muted' : due < todayIso ? 'text-accent' : due === todayIso ? 'text-warning' : 'text-ink-muted'
-          const bg =
-            !due ? 'border-line bg-surface hover:bg-surface-hover'
-            : due < todayIso ? 'border-accent/30 bg-accent-soft hover:brightness-95'
-            : due === todayIso ? 'border-warning-line bg-warning-soft hover:brightness-95'
-            : 'border-primary/20 bg-primary-soft hover:brightness-95'
-          const dueLabel = !due ? 'No due date' : due < todayIso ? overdueLabel(due, todayIso) : due === todayIso ? 'Due today' : `Due ${formatDate(due)}`
-          return (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                setPendingFor(r)
-              }}
-              title={`View ${count} pending ${noun}`}
-              aria-label={`View ${count} pending ${noun} for ${r.opportunity.name}. Next: ${next.subject || next.type}, ${dueLabel}`}
-              className={`block max-w-64 cursor-pointer rounded-md border px-3 py-1.5 text-left transition ${bg} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}
-            >
-              <span className="flex items-center justify-between gap-2">
-                <span className={`text-xs font-semibold ${tone}`}>{dueLabel}</span>
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
-                  {count}
-                </span>
-              </span>
-            </button>
-          )
-        },
-        sortValue: (r) => sortByDue(r.pending)[0]?.scheduleDate ?? '9999',
+        render: (r) => <PendingCell row={r} onClick={() => showPending(r)} />,
+        sortValue: (r) => r.overdueActivityCount * 1000 + r.pendingActivityCount,
+        align: 'right',
       },
     ],
-    [onOpenOpportunity, onOpenActivity, todayIso],
+    [onOpenOpportunity, remarks, showPending],
   )
+
+  // Server totals; summed from the rows when the server sends none.
+  const total = totals?.opportunityValue?.length
+    ? toMoney(totals.opportunityValue)
+    : rows.map((r) => ({ value: r.opportunityValue ?? 0, currency: currencyOf(r) }))
+  const weighted = totals?.weightedValue?.length
+    ? toMoney(totals.weightedValue)
+    : rows.map((r) => ({ value: r.weightedValue, currency: currencyOf(r) }))
 
   return (
     <>
@@ -140,25 +255,30 @@ export function ClosureThisMonthTable({ rows, todayIso, onOpenOpportunity, onOpe
         label="Expected closure this month"
         rows={rows}
         columns={columns}
-        rowKey={(r) => r.opportunity.id}
+        rowKey={(r) => String(r.opportunityNo)}
         defaultSort={{ key: 'closing', dir: 'asc' }}
-        onRowClick={(r) => onOpenOpportunity(r.opportunity.id)}
-        rowLabel={(r) => `Open opportunity ${r.opportunity.name}`}
+        onRowClick={(r) => onOpenOpportunity(r.opportunityNo)}
+        rowLabel={(r) => `Open opportunity ${nameOf(r)}`}
         empty={<SectionEmpty title="No opportunities expected to close this month" />}
       />
       {rows.length ? (
         <p className="mt-3 text-xs text-ink-muted">
-          Total: <span className="font-bold text-ink">{formatMoneyTotals(rows.map((r) => ({ value: r.opportunity.dealValue, currency: r.opportunity.valueCurrency })))}</span>
-          {' · '}Weighted: <span className="font-bold text-ink">{formatMoneyTotals(rows.map((r) => ({ value: r.weighted, currency: r.opportunity.valueCurrency })))}</span>
+          Total: <span className="font-bold text-ink">{formatMoneyTotals(total)}</span>
+          {' · '}Weighted: <span className="font-bold text-ink">{formatMoneyTotals(weighted)}</span>
         </p>
       ) : null}
       {pendingFor ? (
         <OverlayShell
           title="Pending activities"
-          subtitle={pendingFor.opportunity.name}
+          subtitle={nameOf(pendingFor.row)}
           widthClass="w-[32rem]"
           onClose={() => setPendingFor(null)}
         >
+          <LastActivityCard
+            last={pendingFor.row.lastActivity ?? fallbackLast}
+            onOpen={() => openWithLast(pendingFor.row, pendingFor.list[0])}
+          />
+          <p className="mt-4 mb-2 text-xs font-semibold text-ink-muted">Pending activities</p>
           <div className="overflow-x-auto rounded-lg border border-line bg-surface">
             <table className="w-full text-left text-sm">
               <thead className="bg-surface-hover text-xs font-semibold text-ink-muted">
@@ -178,34 +298,33 @@ export function ClosureThisMonthTable({ rows, todayIso, onOpenOpportunity, onOpe
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {(dueDir === 'asc' ? sortByDue(pendingFor.pending) : sortByDue(pendingFor.pending).reverse()).map((a) => (
-                  <tr
-                    key={a.id}
-                    tabIndex={0}
-                    onClick={() => {
-                      setPendingFor(null)
-                      onOpenActivity(a)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setPendingFor(null)
-                        onOpenActivity(a)
-                      }
-                    }}
-                    aria-label={`Open activity ${a.subject || a.type}`}
-                    className="cursor-pointer hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-                  >
-                    <td className="max-w-48 truncate px-3 py-2.5 font-semibold text-primary" title={a.subject || a.type}>
-                      {a.subject || a.type}
-                    </td>
-                    <td className="px-3 py-2.5 text-ink-muted">{a.type || '—'}</td>
-                    <td className="px-3 py-2.5 text-ink-muted">{a.assignedTo || '—'}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-xs">
-                      <DueDate date={a.scheduleDate} todayIso={todayIso} />
-                    </td>
-                  </tr>
-                ))}
+                {(dueDir === 'asc' ? pendingFor.list : [...pendingFor.list].reverse()).map((a) => {
+                  const open = () => openWithLast(pendingFor.row, a)
+                  return (
+                    <tr
+                      key={a.activityDetailNo}
+                      tabIndex={0}
+                      onClick={open}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          open()
+                        }
+                      }}
+                      aria-label={`Open activity ${activityLabel(a)}`}
+                      className="cursor-pointer hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                    >
+                      <td className="max-w-48 truncate px-3 py-2.5 font-semibold text-primary" title={activityLabel(a)}>
+                        {activityLabel(a)}
+                      </td>
+                      <td className="px-3 py-2.5 text-ink-muted">{a.activityType?.activityTypeName || '—'}</td>
+                      <td className="px-3 py-2.5 text-ink-muted">{a.assignTo?.printingName || a.assignTo?.loginId || '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-xs">
+                        <DueDate date={a.dueDate} todayIso={todayIso} overdue={a.isOverdue} />
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

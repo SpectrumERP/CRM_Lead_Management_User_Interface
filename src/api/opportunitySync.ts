@@ -5,7 +5,14 @@
 import type { LeadCurrency } from '../data/leads'
 import { productsFromText, type Product } from '../data/products'
 import type { DealStage, Opportunity, OpportunityStatus } from '../data/opportunities'
-import { dropServerOpportunity, getState, replaceServerOpportunityActivities, upsertServerOpportunities } from './db'
+import type { CrmNote } from '../contexts/crmTypes'
+import {
+  dropServerOpportunity,
+  getState,
+  replaceServerOpportunityActivities,
+  replaceServerOpportunityNotes,
+  upsertServerOpportunities,
+} from './db'
 import { fail } from './errors'
 import { guessIsoCurrency } from './fillValues'
 import {
@@ -19,6 +26,8 @@ import {
   localDateTimeToIso,
   loginNoForName,
   normType,
+  noteDateToIso,
+  noteStamp,
   personName,
   productsFromRows,
   refreshServerLead,
@@ -31,9 +40,11 @@ import {
   buildOpportunitySaveBody,
   deleteOpportunity,
   deleteOpportunityActivities,
+  deleteOpportunityNotes,
   loadOpportunity,
   saveOpportunity,
   saveOpportunityActivity,
+  saveOpportunityNote,
   searchOpportunities,
   type OpportunityDetail,
   type OpportunityRow,
@@ -190,6 +201,19 @@ export function opportunityActivities(detail: OpportunityDetail, item: Opportuni
   })
 }
 
+/** The opportunity's internal notes (from its load-data) → app notes, keyed to the opportunity id. */
+export function opportunityNotes(detail: OpportunityDetail, item: Opportunity): CrmNote[] {
+  return (detail.notes ?? []).map((n) => ({
+    id: `SON-${n.opportunityNotesDetailNo}`,
+    title: 'Internal note',
+    text: n.notesDiscussion ?? '',
+    relatedLeadId: item.id,
+    relatedLeadName: item.name,
+    date: noteStamp(n.notesDate ?? n.createdDate),
+    by: n.originatedBy || personName(n.createdBy),
+  }))
+}
+
 const inFlightOpportunity = new Map<number, Promise<Opportunity>>()
 
 /**
@@ -206,6 +230,7 @@ export function refreshServerOpportunity(opportunityNo: number): Promise<Opportu
     upsertServerOpportunities([opportunityFromRow(detail, findOpportunity(id), fill)])
     const item = findOpportunity(id)!
     replaceServerOpportunityActivities(id, opportunityActivities(detail, item))
+    replaceServerOpportunityNotes(id, opportunityNotes(detail, item))
     return item
   })().finally(() => inFlightOpportunity.delete(opportunityNo))
   inFlightOpportunity.set(opportunityNo, next)
@@ -220,7 +245,8 @@ export async function saveServerOpportunityActivity(activity: Activity): Promise
   const opportunityNo = activity.opportunityId ? opportunityNoFromId(activity.opportunityId) : null
   if (!opportunityNo) fail('VALIDATION', 'This activity is not on a server opportunity.')
   // An update needs the server's activity number; a bad one would reach the server as null.
-  const detailNo = activity.id.startsWith('SOA-') ? Number(activity.id.slice(4)) : undefined
+  if (activity.serverDetailNo === 0) fail('VALIDATION', 'This opportunity has no last activity (lastActivity.activityDetailNo) in expected closures.')
+  const detailNo = activity.serverDetailNo ?? (activity.id.startsWith('SOA-') ? Number(activity.id.slice(4)) : undefined)
   if (detailNo !== undefined && !(detailNo > 0)) fail('VALIDATION', 'This activity has no server activity number; reload the opportunity and try again.')
   const { company, fill } = await context()
   const leadFill = await getLeadFillValues(company.headOfficeNo)
@@ -252,6 +278,29 @@ export async function deleteServerOpportunityActivity(activity: Pick<Activity, '
   const detailNo = activity.id.startsWith('SOA-') ? Number(activity.id.slice(4)) : undefined
   if (!opportunityNo || !detailNo) fail('VALIDATION', 'This activity is not saved on the server.')
   await deleteOpportunityActivities([detailNo])
+  await refreshServerOpportunity(opportunityNo)
+}
+
+/** Add (in-app id) or update (`SON-…` id) an internal note on a server opportunity, then reload it. */
+export async function saveServerOpportunityNote(note: CrmNote): Promise<void> {
+  const opportunityNo = opportunityNoFromId(note.relatedLeadId)
+  if (!opportunityNo) fail('VALIDATION', 'This note is not on a server opportunity.')
+  await saveOpportunityNote({
+    opportunityNo,
+    opportunityNotesDetailNo: note.id.startsWith('SON-') ? Number(note.id.slice(4)) : undefined,
+    originatedBy: note.by.trim() || undefined,
+    notesDate: noteDateToIso(note.date),
+    notesDiscussion: note.text.trim() || undefined,
+  })
+  await refreshServerOpportunity(opportunityNo)
+}
+
+/** Delete a server opportunity note (`SON-…` id) through `delete-notes-detail`, then reload it. */
+export async function deleteServerOpportunityNote(note: Pick<CrmNote, 'id' | 'relatedLeadId'>): Promise<void> {
+  const opportunityNo = opportunityNoFromId(note.relatedLeadId)
+  const detailNo = note.id.startsWith('SON-') ? Number(note.id.slice(4)) : undefined
+  if (!opportunityNo || !detailNo) fail('VALIDATION', 'This note is not saved on the server.')
+  await deleteOpportunityNotes([detailNo])
   await refreshServerOpportunity(opportunityNo)
 }
 

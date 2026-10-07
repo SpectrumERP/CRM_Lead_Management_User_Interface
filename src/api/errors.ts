@@ -210,10 +210,12 @@ export function serverErrorMessage(body: unknown): string | undefined {
 
 /** Parse `{ code, message }` from a JSON error body, else fall back to status. */
 export function errorFromResponse(status: number, body?: { code?: string; message?: string }): never {
+  // Field-level `errors` (validation) say more than the generic `message`.
+  const message = serverErrorMessage(body)
   if (body?.code && isApiErrorCode(body.code)) {
-    fail(body.code, body.message, status)
+    fail(body.code, message, status)
   }
-  throw fromHttpStatus(status, body?.message)
+  throw fromHttpStatus(status, message)
 }
 
 /** Fetch / abort / offline failures become NETWORK or TIMEOUT. */

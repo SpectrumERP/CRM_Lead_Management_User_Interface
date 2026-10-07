@@ -225,6 +225,25 @@ function typeLabel(entry: LeadTimelineEntry): string {
   return entry.title || entry.type.replace(/([a-z])([A-Z])/g, "$1 $2") || `Type ${entry.typeNo}`
 }
 
+const CREATED_TYPE = /created$/i
+const STATUS_OR_STAGE_TYPE = /(status|stage)$/i
+/** Status / stage entries within this long of the "… Created" entry were written by the create itself. */
+const CREATE_WINDOW_MS = 60_000
+
+/**
+ * Creating a lead / opportunity shows one entry (Lead Created / Opportunity Created): the status and
+ * stage entries the server writes with it are dropped; later status / stage changes stay.
+ */
+export function withoutCreateEntries(entries: readonly LeadTimelineEntry[]): LeadTimelineEntry[] {
+  const createdAt = entries.filter((e) => CREATED_TYPE.test(e.type)).map((e) => Date.parse(e.at)).filter(Number.isFinite)
+  if (!createdAt.length) return [...entries]
+  return entries.filter((e) => {
+    if (!STATUS_OR_STAGE_TYPE.test(e.type)) return true
+    const at = Date.parse(e.at)
+    return !Number.isFinite(at) || !createdAt.some((c) => Math.abs(at - c) <= CREATE_WINDOW_MS)
+  })
+}
+
 /**
  * Server timeline (GET …/timeline/{id}), paged: the first 20 entries, then the next page each time
  * the list is scrolled to its end, until the last page. Types seen so far can be filtered on
@@ -310,7 +329,9 @@ export function PagedTimeline({
     return () => observer.disconnect()
   }, [hasMore, loading, error, load, pageNo])
 
-  const rows = entries.map(serverTimelineEntry)
+  const shown = withoutCreateEntries(entries)
+  const hidden = entries.length - shown.length
+  const rows = shown.map(serverTimelineEntry)
   const typeOptions = [
     { value: "", label: "All types" },
     ...[...types.entries()].sort((a, b) => a[0] - b[0]).map(([no, label]) => ({ value: String(no), label })),
@@ -322,7 +343,7 @@ export function PagedTimeline({
         <p className="text-xs font-semibold text-ink-muted">
           {pageNo === 0 && loading
             ? "Loading timeline…"
-            : `${entries.length}${totalRecords > entries.length ? ` of ${totalRecords}` : ""} entr${(totalRecords || entries.length) === 1 ? "y" : "ies"}`}
+            : `${shown.length}${totalRecords - hidden > shown.length ? ` of ${totalRecords - hidden}` : ""} entr${(totalRecords - hidden || shown.length) === 1 ? "y" : "ies"}`}
         </p>
         {types.size > 1 || typeNo !== undefined ? (
           <div className="w-48">

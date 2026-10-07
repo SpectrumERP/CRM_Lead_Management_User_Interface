@@ -2,8 +2,8 @@
  * The one place that decides how dates and times look in the app. Every screen formats through these
  * helpers, so changing a setting below changes it everywhere:
  *
- *   date        01 Oct 2026
- *   date + time 01 Oct 2026, 14:05
+ *   date        01/Oct/2026   (DD/Mon/YYYY)
+ *   date + time 01/Oct/2026, 14:05
  *
  * Month names are fixed here (not taken from the browser locale, which varies — en-IN prints "Sept").
  * Values the parser cannot read (e.g. "Just now") are shown as they are.
@@ -27,7 +27,8 @@ const pad = (n: number) => String(n).padStart(2, '0')
 /**
  * Read any date the app stores or receives:
  * ISO with a zone (server), `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM` (local, from inputs),
- * `DD-MM-YYYY` / `DD-MM-YYYY HH:MM` (notes, emails), or text like "05 Sep 2024".
+ * `DD-MM-YYYY` / `DD-MM-YYYY HH:MM` (notes, emails), `DD/MM/YYYY`, `DD/Mon/YYYY` (the display format),
+ * or text like "05 Sep 2024".
  */
 export function parseDate(value: DateInput): Date | null {
   if (!value) return null
@@ -35,8 +36,13 @@ export function parseDate(value: DateInput): Date | null {
   const text = value.trim()
   let m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(text)
   if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] ?? 0), Number(m[5] ?? 0), Number(m[6] ?? 0))
-  m = /^(\d{2})-(\d{2})-(\d{4})(?:[T ](\d{2}):(\d{2}))?$/.exec(text)
+  m = /^(\d{2})[-/](\d{2})[-/](\d{4})(?:[T ,]+(\d{2}):(\d{2}))?$/.exec(text)
   if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4] ?? 0), Number(m[5] ?? 0))
+  m = /^(\d{1,2})\/([A-Za-z]{3})\/(\d{4})(?:[T ,]+(\d{2}):(\d{2}))?$/.exec(text)
+  if (m) {
+    const month = MONTHS.findIndex((name) => name.toLowerCase() === m![2].toLowerCase())
+    if (month >= 0) return new Date(Number(m[3]), month, Number(m[1]), Number(m[4] ?? 0), Number(m[5] ?? 0))
+  }
   const parsed = new Date(text)
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
@@ -48,7 +54,7 @@ function hasTimePart(value: DateInput): boolean {
 }
 
 function dateText(d: Date): string {
-  return `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+  return `${pad(d.getDate())}/${MONTHS[d.getMonth()]}/${d.getFullYear()}`
 }
 
 function timeText(d: Date): string {
@@ -57,7 +63,7 @@ function timeText(d: Date): string {
   return `${pad(h)}:${pad(d.getMinutes())} ${d.getHours() < 12 ? 'AM' : 'PM'}`
 }
 
-/** `01 Oct 2026`. */
+/** `01/Oct/2026`. */
 export function formatDate(value: DateInput, empty = EMPTY_DATE): string {
   if (!value) return empty
   const d = parseDate(value)
@@ -75,7 +81,7 @@ export function formatTime(value: DateInput, empty = ''): string {
   return d ? timeText(d) : String(value)
 }
 
-/** `01 Oct 2026, 14:05`. */
+/** `01/Oct/2026, 14:05`. */
 export function formatDateTime(value: DateInput, empty = EMPTY_DATE): string {
   if (!value) return empty
   const d = parseDate(value)
@@ -99,7 +105,7 @@ export function joinDateTime(date: string, time?: string | null): string {
   return time ? `${date}${DATE_TIME_SEPARATOR}${time}` : date
 }
 
-/** `01 Oct 2026, 10:00 – 11:30` (meetings). */
+/** `01/Oct/2026, 10:00 – 11:30` (meetings). */
 export function formatTimeRange(date: string, start?: string | null, end?: string | null, empty = EMPTY_DATE): string {
   if (!date) return empty
   if (!start) return formatDate(date, empty)

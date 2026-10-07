@@ -22,8 +22,10 @@ import {
   convertServerLead,
   deleteServerOpportunity,
   deleteServerOpportunityActivity,
+  deleteServerOpportunityNote,
   opportunityNoFromId,
   saveServerOpportunityActivity,
+  saveServerOpportunityNote,
   updateServerOpportunity,
 } from '../api/opportunitySync'
 import type { CrmDb } from '../api/crm'
@@ -196,6 +198,11 @@ export function useCrmActions() {
         run(() => RAW_ACTIONS.addMeeting(meeting))
       },
       addNote: (note: CrmNote) => {
+        // Server opportunity → /api/crm/opportunities/save-notes-detail.
+        if (opportunityNoFromId(note.relatedLeadId)) {
+          void runAsync(() => saveServerOpportunityNote(note))
+          return
+        }
         if (isServerLeadId(note.relatedLeadId)) {
           void runAsync(() => saveServerLeadNote(note))
           return
@@ -237,6 +244,11 @@ export function useCrmActions() {
       patchNote: (id: string, patch: Partial<CrmNote>) => {
         const current = api.crm.getState().notes.find((item) => item.id === id)
         if (!current) return
+        // Server opportunity note (SON-…) → its save-notes-detail with the number, then it reloads.
+        if (current.id.startsWith('SON-') && opportunityNoFromId(current.relatedLeadId)) {
+          void runAsync(() => saveServerOpportunityNote({ ...current, ...patch, id: current.id }))
+          return
+        }
         // Server note (SN-…) → save-notes-detail with its number (an update), then the lead reloads.
         if (current.id.startsWith('SN-') && isServerLeadId(current.relatedLeadId)) {
           void runAsync(() => saveServerLeadNote({ ...current, ...patch, id: current.id }))
@@ -247,6 +259,10 @@ export function useCrmActions() {
       removeNote: async (id: string) => {
         const current = api.crm.getState().notes.find((item) => item.id === id)
         if (!current) return false
+        // Server opportunity → /api/crm/opportunities/delete-notes-detail.
+        if (current.id.startsWith('SON-') && opportunityNoFromId(current.relatedLeadId)) {
+          return (await runAsync(async () => { await deleteServerOpportunityNote(current); return true })) ?? false
+        }
         // Server lead → /api/crm/leads/delete-notes-detail.
         if (current.id.startsWith('SN-') && isServerLeadId(current.relatedLeadId)) {
           return (await runAsync(async () => { await deleteServerLeadNote(current); return true })) ?? false

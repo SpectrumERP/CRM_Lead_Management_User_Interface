@@ -32,6 +32,7 @@ vi.mock('./db', () => ({
   getState: () => ({ opportunities: [{ id: 'SO-0099' }], leads: [] }),
   upsertServerOpportunities: vi.fn(),
   replaceServerOpportunityActivities: vi.fn(),
+  replaceServerOpportunityNotes: vi.fn(),
   dropServerOpportunity: vi.fn(),
 }))
 

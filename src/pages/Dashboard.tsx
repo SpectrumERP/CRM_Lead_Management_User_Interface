@@ -1,36 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ActivityDrawer from '../components/ActivityDrawer'
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
-import { SkeletonStatCards } from '../components/CRMStates'
 import type { ToastType } from '../components/Toast'
-import { useLeadFormFillValues } from '../components/useLeadFormFillValues'
-import { useOpportunityFillValues } from '../components/useOpportunityFillValues'
-import { useServerLeadSync, useServerOpportunitySync } from '../components/useServerLeadSync'
-import { loadDashboardActivities, resetDashboardActivities } from '../api/dashboardActivities'
-import { stageWeight } from '../api/opportunityFormFillValues'
-import { useCrmActions, useCrmSelector } from '../contexts/CrmStoreContext'
-import type { Activity } from '../data/activities'
 import {
-  closuresThisMonth,
-  currentMonthRange,
-  groupActivities,
-  isOpenStatus,
-  isPendingActivity,
-  lastSixMonthsSales,
-  leadPipeline,
-  leadsRequiringAttention,
-  opportunitiesRequiringAttention,
-  opportunityPipeline,
-  type StageMaster,
-} from '../data/dashboard'
+  getExpectedClosures,
+  getLeadPipeline,
+  getLeadsAttention,
+  getMonthlySalesSummary,
+  getOpenActivities,
+  getOpportunitiesAttention,
+  getOpportunityPipeline,
+  toMoney,
+  type DashboardOpenActivity,
+} from '../api/dashboard'
+import { api } from '../api/crm'
+import { toApiError } from '../api/errors'
+import { activityType, dateOnly, refreshServerLead, serverLeadId } from '../api/leadSync'
+import { refreshServerOpportunity, serverOpportunityId } from '../api/opportunitySync'
+import { useSpectrumCompany } from '../auth/useSpectrumCompany'
+import { useCrmActions } from '../contexts/CrmStoreContext'
+import type { Activity } from '../data/activities'
+import { currentMonthRange, type LeadPipelineRow, type MonthSales, type OpportunityPipelineRow } from '../data/dashboard'
 import { useStagnantDays } from '../data/dashboardSettings'
 import { formatMoneyTotals } from '../data/leads'
-import { Button, PageHeader } from '../ui'
+import { PageHeader } from '../ui'
 import { formatDate, toIsoDate } from '../utils/dateFormat'
 import { LeadsAttentionTable, OpportunitiesAttentionTable } from './dashboard/Attention'
-import { ClosureThisMonthTable } from './dashboard/ClosureThisMonth'
+import { ClosureThisMonthTable, type ClosurePendingActivity } from './dashboard/ClosureThisMonth'
 import { LastSixMonthsTable } from './dashboard/LastSixMonths'
-import { OpenActivitiesTable } from './dashboard/OpenActivities'
+import { isOpportunityActivity, OpenActivitiesTable } from './dashboard/OpenActivities'
 import { LeadPipelineTable, OpportunityPipelineTable } from './dashboard/Pipelines'
 import { Section } from './dashboard/parts'
 
@@ -42,11 +40,8 @@ function hexColor(value: string | null | undefined) {
   return color && HEX.test(color) ? color : undefined
 }
 
-/** Stage name (any case) → its server colour. */
-function colorLookup(stages: readonly StageMaster[]) {
-  const map = new Map(stages.filter((s) => s.color).map((s) => [s.name.trim().toLowerCase(), s.color!]))
-  return (stage: string) => map.get(stage.trim().toLowerCase())
-}
+const bySequence = (a: { sequence?: number | null }, b: { sequence?: number | null }) =>
+  (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER)
 
 interface DashboardProps {
   onOpenLead: (id: string) => void
@@ -58,20 +53,27 @@ interface DashboardProps {
   onToast?: (type: ToastType, title: string, message?: string) => void
 }
 
-/** Activities of these records are loaded for the dashboard (the server has no all-activities list). */
-function useDashboardActivities(ids: readonly string[], ready: boolean) {
-  const key = ids.join(',')
+/**
+ * One dashboard API call for the selected company. Reloads when `companyNo`, `key` or `reload` change;
+ * `retry` reloads this section only.
+ */
+function useSection<T>(companyNo: number | null, load: (companyNo: number) => Promise<T>, key: string, reload: number) {
+  const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
-  const [failed, setFailed] = useState(0)
+  const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    if (!ready) return
+    if (!companyNo) return
     let cancelled = false
     setLoading(true)
-    loadDashboardActivities(key ? key.split(',') : [])
-      .then((n) => {
-        if (!cancelled) setFailed(n)
+    setError(null)
+    load(companyNo)
+      .then((next) => {
+        if (!cancelled) setData(next)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(toApiError(err).message)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -79,171 +81,182 @@ function useDashboardActivities(ids: readonly string[], ready: boolean) {
     return () => {
       cancelled = true
     }
-  }, [key, ready, attempt])
+    // `load` is a fresh closure each render; `key` carries its inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyNo, key, reload, attempt])
 
-  const retry = useCallback(() => {
-    resetDashboardActivities()
-    setAttempt((n) => n + 1)
-  }, [])
-
-  return { loading: !ready || loading, failed, retry }
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  return { data, loading: !companyNo || loading, error, retry }
 }
 
 export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, onOpportunityStage, onToast }: DashboardProps) {
-  const leadSync = useServerLeadSync()
-  const oppSync = useServerOpportunitySync()
-  const leadFillQuery = useLeadFormFillValues()
-  const oppFillQuery = useOpportunityFillValues()
-  const leadFill = leadFillQuery.values
-  const oppFill = oppFillQuery.values
+  const company = useSpectrumCompany()
+  // Same company number the Leads / Opportunities lists search with.
+  const companyNo = company.enabled ? company.headOfficeNo : null
   const { patchActivity } = useCrmActions()
-
-  // Server records only, as on the Leads / Opportunities lists.
-  const allLeads = useCrmSelector((s) => s.leads)
-  const allOpportunities = useCrmSelector((s) => s.opportunities)
-  const allActivities = useCrmSelector((s) => s.activities)
-  const leads = useMemo(() => allLeads.filter((l) => l.spectrum), [allLeads])
-  const opportunities = useMemo(() => allOpportunities.filter((o) => o.spectrum), [allOpportunities])
 
   // Fixed for this visit; a new month is picked up the next time the dashboard opens.
   const [today] = useState(() => new Date())
   const todayIso = toIsoDate(today)
   const month = currentMonthRange(today)
-
-  const [editing, setEditing] = useState<Activity | null>(null)
-  // Opened from Expected Closure's pending list: only Notes / Outcome and Status are editable.
-  const [notesOnly, setNotesOnly] = useState(false)
-
-  // Stage order, weightage and colours come from the server masters (fill-values) only.
-  const leadStages = useMemo<StageMaster[]>(
-    () =>
-      (leadFill?.leadStages ?? []).map((s) => ({ name: s.leadStageName, sequence: s.sequence, color: hexColor(s.colorCode) })),
-    [leadFill],
-  )
-  const opportunityStages = useMemo<StageMaster[]>(
-    () =>
-      (oppFill?.opportunityStages ?? []).map((s) => ({
-        name: s.opportunityStageName,
-        sequence: s.sequence,
-        weight: stageWeight(s),
-        color: hexColor(s.colorCoding),
-      })),
-    [oppFill],
-  )
-  // Open activities follow the stage sequence of their lead / opportunity (then activity date).
-  const activitySequence = useMemo(() => {
-    const seq = (stages: readonly StageMaster[]) => new Map(stages.map((s) => [s.name.trim().toLowerCase(), s.sequence]))
-    const leadSeq = seq(leadStages)
-    const oppSeq = seq(opportunityStages)
-    const leadStage = new Map(leads.map((l) => [l.id, l.leadStage]))
-    const oppStage = new Map(opportunities.map((o) => [o.id, o.dealStage]))
-    return (a: Activity) =>
-      a.opportunityId
-        ? oppSeq.get((oppStage.get(a.opportunityId) ?? '').trim().toLowerCase())
-        : leadSeq.get((leadStage.get(a.leadId) ?? '').trim().toLowerCase())
-  }, [leadStages, opportunityStages, leads, opportunities])
-  const leadStageColor = useMemo(() => colorLookup(leadStages), [leadStages])
-  const opportunityStageColor = useMemo(() => colorLookup(opportunityStages), [opportunityStages])
-  // Loading until the masters arrive (or fail); errors from the list sync or the masters.
-  const leadMastersLoading = leadFillQuery.remote && !leadFill && !leadFillQuery.error
-  const oppMastersLoading = oppFillQuery.remote && !oppFill && !oppFillQuery.error
-  const leadError = leadSync.error || leadFillQuery.error
-  const oppError = oppSync.error || oppFillQuery.error
-  function retryLeads() {
-    if (leadSync.error) void leadSync.retry()
-    if (leadFillQuery.error) leadFillQuery.retry()
-  }
-  function retryOpportunities() {
-    if (oppSync.error) void oppSync.retry()
-    if (oppFillQuery.error) oppFillQuery.retry()
-  }
-
-  const openLeadIds = useMemo(() => leads.filter((l) => isOpenStatus(l.leadStatus)).map((l) => l.id), [leads])
-  const openOpportunityIds = useMemo(
-    () => opportunities.filter((o) => isOpenStatus(o.status)).map((o) => o.id),
-    [opportunities],
-  )
-  const syncing = leadSync.loading || oppSync.loading
-  const activityLoad = useDashboardActivities([...openLeadIds, ...openOpportunityIds], !syncing)
-
-  const serverActivities = useMemo(() => {
-    const leadIds = new Set(leads.map((l) => l.id))
-    const oppIds = new Set(opportunities.map((o) => o.id))
-    return allActivities.filter((a) => (a.opportunityId ? oppIds.has(a.opportunityId) : leadIds.has(a.leadId)))
-  }, [allActivities, leads, opportunities])
-  const grouped = useMemo(() => groupActivities(serverActivities), [serverActivities])
   const stagnantDays = useStagnantDays()
 
-  // Only open records: a converted lead's activities are copied to its opportunity by the server,
-  // so counting the lead's copy too would list the same activity twice.
-  const openActivities = useMemo(() => {
-    const open = new Set([...openLeadIds, ...openOpportunityIds])
-    return serverActivities.filter((a) => isPendingActivity(a) && open.has(a.opportunityId || a.leadId))
-  }, [serverActivities, openLeadIds, openOpportunityIds])
-  const overdueCount = openActivities.filter((a) => a.scheduleDate && a.scheduleDate < todayIso).length
-  const leadRows = useMemo(() => leadPipeline(leads, leadStages), [leads, leadStages])
-  const opportunityRows = useMemo(() => opportunityPipeline(opportunities, opportunityStages), [opportunities, opportunityStages])
-  const leadAttention = useMemo(
-    () => leadsRequiringAttention(leads, grouped.byLead, today, stagnantDays),
-    [leads, grouped, today, stagnantDays],
-  )
-  const opportunityAttention = useMemo(
-    () => opportunitiesRequiringAttention(opportunities, grouped.byOpportunity, today, stagnantDays),
-    [opportunities, grouped, today, stagnantDays],
-  )
-  const closures = useMemo(
-    () => closuresThisMonth(opportunities, grouped.byOpportunity, today),
-    [opportunities, grouped, today],
-  )
-  const months = useMemo(() => lastSixMonthsSales(opportunities, today), [opportunities, today])
+  // Bumped after an activity is saved, so the activity-based sections reload.
+  const [activityReload, setActivityReload] = useState(0)
 
-  const openLeadCount = leadRows.reduce((s, r) => s + r.count, 0)
-  const openOpportunityCount = opportunityRows.reduce((s, r) => s + r.count, 0)
+  const activities = useSection(companyNo, getOpenActivities, '', activityReload)
+  const leadPipeline = useSection(companyNo, getLeadPipeline, '', 0)
+  const opportunityPipeline = useSection(companyNo, getOpportunityPipeline, '', 0)
+  const leadAttention = useSection(companyNo, (no) => getLeadsAttention(no, stagnantDays), String(stagnantDays), activityReload)
+  const opportunityAttention = useSection(
+    companyNo,
+    (no) => getOpportunitiesAttention(no, stagnantDays),
+    String(stagnantDays),
+    activityReload,
+  )
+  const closures = useSection(companyNo, (no) => getExpectedClosures(no, month.from, month.to), month.from, activityReload)
+  const monthly = useSection(companyNo, (no) => getMonthlySalesSummary(no, 6), '', 0)
+
+  const [editing, setEditing] = useState<Activity | null>(null)
+  // Opened from Expected Closure: details read-only, only the remark and status can change.
+  const [notesOnly, setNotesOnly] = useState(false)
+  const [opening, setOpening] = useState<string | null>(null)
+
+  const openLead = useCallback((leadNo: number) => onOpenLead(serverLeadId(leadNo)), [onOpenLead])
+  const openOpportunity = useCallback((no: number) => onOpenOpportunity(serverOpportunityId(no)), [onOpenOpportunity])
+
+  /** Load the activity's lead / opportunity (puts its activities in the store), then edit it in the drawer. */
+  const openActivity = useCallback(
+    async (row: ClosurePendingActivity, remarkOnly = false, detailNo?: number) => {
+      const opp = isOpportunityActivity(row)
+      const recordNo = opp ? row.opportunityNo : row.leadNo
+      if (!recordNo) return
+      const id = opp ? `SOA-${row.activityDetailNo}` : `SA-${row.activityDetailNo}`
+      setOpening(id)
+      try {
+        if (opp) await refreshServerOpportunity(recordNo)
+        else await refreshServerLead(recordNo)
+        const activity = api.crm.getState().activities.find((a) => a.id === id)
+        if (activity) {
+          setNotesOnly(remarkOnly)
+          // Expected closures: the form takes the lastActivity's data and number (0 when there is none — the save then refuses).
+          const last = row.lastActivity
+          setEditing(
+            detailNo === undefined
+              ? activity
+              : {
+                  ...activity,
+                  serverDetailNo: detailNo,
+                  ...(last
+                    ? {
+                        subject: last.subject ?? activity.subject,
+                        type: last.activityTypeName ? activityType(last.activityTypeName) : activity.type,
+                        scheduleDate: last.activityDate ? dateOnly(last.activityDate) : activity.scheduleDate,
+                      }
+                    : {}),
+                },
+          )
+        }
+        else onToast?.('error', 'Activity not found', 'It may have been closed or deleted. Refresh the dashboard.')
+      } catch (err) {
+        onToast?.('error', 'Could not open activity', toApiError(err).message)
+      } finally {
+        setOpening(null)
+      }
+    },
+    [onToast],
+  )
+
+  const leadRows = useMemo<LeadPipelineRow[]>(
+    () =>
+      [...(leadPipeline.data?.rows ?? [])].sort(bySequence).map((s) => ({
+        stage: s.leadStageName || `Stage ${s.leadStageNo}`,
+        color: hexColor(s.colorCoding),
+        count: s.leadCount,
+      })),
+    [leadPipeline.data],
+  )
+  const opportunityRows = useMemo<OpportunityPipelineRow[]>(
+    () =>
+      [...(opportunityPipeline.data?.rows ?? [])].sort(bySequence).map((s) => ({
+        stage: s.opportunityStageName || `Stage ${s.opportunityStageNo}`,
+        color: hexColor(s.colorCoding),
+        weight: s.weightage ?? 0,
+        count: s.opportunityCount,
+        values: toMoney(s.opportunityValue),
+        weighted: toMoney(s.weightedValue),
+      })),
+    [opportunityPipeline.data],
+  )
+  const months = useMemo<MonthSales[]>(
+    () =>
+      [...(monthly.data?.rows ?? [])]
+        .sort((a, b) => (a.month ?? '').localeCompare(b.month ?? ''))
+        .map((m, i) => ({
+          key: m.month || String(i),
+          label: m.monthName || m.month || '',
+          created: m.createdCount,
+          lost: m.lostCount,
+          lostValue: toMoney(m.lostValue),
+          won: m.wonCount,
+          wonValue: toMoney(m.wonValue),
+        })),
+    [monthly.data],
+  )
+
+  const activityTotals = activities.data?.totals
+  const openActivityCount = activityTotals?.openActivityCount ?? activities.data?.rows.length ?? 0
+  const overdueCount = activityTotals?.overdueActivityCount ?? activities.data?.rows.filter((a) => a.isOverdue).length ?? 0
+  const leadAttentionCount = leadAttention.data?.totals?.attentionLeadCount ?? leadAttention.data?.rows.length ?? 0
+  const oppAttentionCount = opportunityAttention.data?.totals?.attentionOpportunityCount ?? opportunityAttention.data?.rows.length ?? 0
+  const openLeadCount = leadPipeline.data?.totals?.openLeadCount ?? leadRows.reduce((s, r) => s + r.count, 0)
+  const pipelineTotals = opportunityPipeline.data?.totals
+  const openOpportunityCount = pipelineTotals?.openOpportunityCount ?? opportunityRows.reduce((s, r) => s + r.count, 0)
+  const weightedPipeline = pipelineTotals?.weightedValue?.length
+    ? toMoney(pipelineTotals.weightedValue)
+    : opportunityRows.flatMap((r) => r.weighted)
+  const closureTotals = closures.data?.totals ?? null
+  const closingCount = closureTotals?.closingCount ?? closures.data?.rows.length ?? 0
+  const closingValue = closureTotals?.opportunityValue?.length
+    ? toMoney(closureTotals.opportunityValue)
+    : (closures.data?.rows ?? []).map((r) => ({ value: r.opportunityValue ?? 0, currency: r.currency?.currencyCode || undefined }))
 
   const summary = [
     {
       label: 'Open Activities',
-      value: String(openActivities.length),
+      value: String(openActivityCount),
       sub: overdueCount ? `${overdueCount} overdue` : 'none overdue',
       alert: overdueCount > 0,
       target: 'dash-activities',
-      loading: activityLoad.loading,
+      loading: activities.loading,
     },
     {
       label: 'Need Attention',
-      value: String(leadAttention.length + opportunityAttention.length),
-      sub: `${leadAttention.length} leads · ${opportunityAttention.length} opps`,
-      alert: leadAttention.length + opportunityAttention.length > 0,
+      value: String(leadAttentionCount + oppAttentionCount),
+      sub: `${leadAttentionCount} leads · ${oppAttentionCount} opps`,
+      alert: leadAttentionCount + oppAttentionCount > 0,
       target: 'dash-attention',
-      loading: activityLoad.loading,
+      loading: leadAttention.loading || opportunityAttention.loading,
     },
-    { label: 'Open Leads', value: String(openLeadCount), sub: 'in pipeline', target: 'dash-pipeline', loading: leadSync.loading || leadMastersLoading },
+    { label: 'Open Leads', value: String(openLeadCount), sub: 'in pipeline', target: 'dash-pipeline', loading: leadPipeline.loading },
     {
       label: 'Open Opportunities',
       value: String(openOpportunityCount),
-      sub: `Weighted ${formatMoneyTotals(opportunityRows.flatMap((r) => r.weighted))}`,
+      sub: `Weighted ${formatMoneyTotals(weightedPipeline)}`,
       target: 'dash-pipeline',
-      loading: oppSync.loading || oppMastersLoading,
+      loading: opportunityPipeline.loading,
     },
     {
       label: 'Closing This Month',
-      value: String(closures.length),
-      sub: closures.length
-        ? formatMoneyTotals(closures.map((r) => ({ value: r.opportunity.dealValue, currency: r.opportunity.valueCurrency })))
-        : 'no closures due',
+      value: String(closingCount),
+      sub: closingCount ? formatMoneyTotals(closingValue) : 'no closures due',
       target: 'dash-closure',
-      loading: oppSync.loading,
+      loading: closures.loading,
     },
   ]
 
   function scrollTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  function retryAll() {
-    retryLeads()
-    retryOpportunities()
-    activityLoad.retry()
   }
 
   return (
@@ -252,42 +265,30 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
 
       <SpectrumRequiredNotice what="Dashboard figures" />
 
-      {activityLoad.failed > 0 && !activityLoad.loading ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warning-line bg-warning-soft px-4 py-2.5 text-xs text-ink" role="status">
-          <span>
-            Activities could not be loaded for {activityLoad.failed} record{activityLoad.failed === 1 ? '' : 's'}; activity figures may be
-            incomplete.
-          </span>
-          <Button variant="secondary" onClick={activityLoad.retry}>
-            Retry
-          </Button>
-        </div>
-      ) : null}
-
       {/* Key numbers */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {summary.every((s) => s.loading) ? (
-          <SkeletonStatCards count={5} />
-        ) : (
-          summary.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              onClick={() => scrollTo(s.target)}
-              className="min-w-0 rounded-xl border border-line bg-surface p-4 text-left shadow-card transition-colors hover:border-primary hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
-              <p className="mb-1 text-xs font-semibold text-ink-muted">{s.label}</p>
-              {s.loading ? (
-                <div className="skeleton my-1.5" style={{ height: 22, width: '40%' }} />
-              ) : (
-                <p className={`font-display text-2xl font-bold tabular-nums ${s.alert ? 'text-accent' : 'text-ink'}`}>{s.value}</p>
-              )}
-              <p className="mt-0.5 truncate text-xs text-ink-faint" title={s.sub}>
-                {s.loading ? ' ' : s.sub}
-              </p>
-            </button>
-          ))
-        )}
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+        {summary.map((s) => (
+          <button
+            key={s.label}
+            type="button"
+            onClick={() => scrollTo(s.target)}
+            className="min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-left shadow-card transition-colors hover:border-primary hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-ink-muted">{s.label}</p>
+            {s.loading ? (
+              <div className="skeleton mt-1.5 mb-1" style={{ height: 18, width: '55%' }} />
+            ) : (
+              <div className="flex min-w-0 items-baseline gap-2">
+                <span className={`font-display text-xl font-bold leading-7 tabular-nums ${s.alert ? 'text-accent' : 'text-ink'}`}>
+                  {s.value}
+                </span>
+                <span className="truncate text-xs text-ink-faint" title={s.sub}>
+                  {s.sub}
+                </span>
+              </div>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* 1. Open activities */}
@@ -295,22 +296,22 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
         <Section
           id="dash-activities-title"
           title="Open Activities"
-          subtitle="Pending activities on your leads and opportunities, in stage sequence, then by date. Click a row to update it."
-          loading={activityLoad.loading}
-          error={leadSync.error || oppSync.error}
-          onRetry={retryAll}
+          subtitle={
+            opening
+              ? 'Opening activity…'
+              : 'Pending activities on your leads and opportunities, in stage sequence, then by date. Click a row to update it.'
+          }
+          loading={activities.loading}
+          error={activities.error}
+          onRetry={activities.retry}
           skeletonRows={5}
         >
           <OpenActivitiesTable
-            activities={openActivities}
+            activities={activities.data?.rows ?? []}
             todayIso={todayIso}
-            sequenceOf={activitySequence}
-            onOpenActivity={(a) => {
-              setEditing(a)
-              setNotesOnly(false)
-            }}
-            onOpenLead={onOpenLead}
-            onOpenOpportunity={onOpenOpportunity}
+            onOpenActivity={(a) => void openActivity(a)}
+            onOpenLead={openLead}
+            onOpenOpportunity={openOpportunity}
           />
         </Section>
       </div>
@@ -320,10 +321,10 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
         <Section
           id="dash-lead-pipeline"
           title="Lead Pipeline"
-          subtitle="Open leads by stage (On Hold, Cold and closed leads excluded). Click a stage to see its leads."
-          loading={leadSync.loading || leadMastersLoading}
-          error={leadError}
-          onRetry={retryLeads}
+          subtitle="Open leads by stage. Click a stage to see its leads."
+          loading={leadPipeline.loading}
+          error={leadPipeline.error}
+          onRetry={leadPipeline.retry}
           skeletonRows={6}
         >
           <LeadPipelineTable rows={leadRows} onStage={onLeadStage} />
@@ -332,9 +333,9 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
           id="dash-opp-pipeline"
           title="Opportunity Pipeline"
           subtitle="Open opportunities by stage. Weighted value = value × stage weightage."
-          loading={oppSync.loading || oppMastersLoading}
-          error={oppError}
-          onRetry={retryOpportunities}
+          loading={opportunityPipeline.loading}
+          error={opportunityPipeline.error}
+          onRetry={opportunityPipeline.retry}
           skeletonRows={6}
         >
           <OpportunityPipelineTable rows={opportunityRows} onStage={onOpportunityStage} />
@@ -346,27 +347,26 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
         <Section
           id="dash-lead-attention"
           title="Leads Requiring Attention"
-          subtitle={`Open leads with no activity, an overdue activity, or no change for over ${stagnantDays} days.`}
-          loading={leadSync.loading || activityLoad.loading}
-          error={leadError}
-          onRetry={retryAll}
+          subtitle={`Open leads with no activity, an overdue activity, or no stage change for over ${stagnantDays} days.`}
+          loading={leadAttention.loading}
+          error={leadAttention.error}
+          onRetry={leadAttention.retry}
         >
-          <LeadsAttentionTable rows={leadAttention} stagnantDays={stagnantDays} todayIso={todayIso} stageColor={leadStageColor} onOpenLead={onOpenLead} />
+          <LeadsAttentionTable rows={leadAttention.data?.rows ?? []} stagnantDays={stagnantDays} todayIso={todayIso} onOpenLead={openLead} />
         </Section>
         <Section
           id="dash-opp-attention"
           title="Opportunities Requiring Attention"
-          subtitle={`Open opportunities with no activity, an overdue activity, or no change for over ${stagnantDays} days.`}
-          loading={oppSync.loading || oppMastersLoading || activityLoad.loading}
-          error={oppError}
-          onRetry={retryAll}
+          subtitle={`Open opportunities with no activity, an overdue activity, or no stage change for over ${stagnantDays} days.`}
+          loading={opportunityAttention.loading}
+          error={opportunityAttention.error}
+          onRetry={opportunityAttention.retry}
         >
           <OpportunitiesAttentionTable
-            rows={opportunityAttention}
+            rows={opportunityAttention.data?.rows ?? []}
             stagnantDays={stagnantDays}
             todayIso={todayIso}
-            stageColor={opportunityStageColor}
-            onOpenOpportunity={onOpenOpportunity}
+            onOpenOpportunity={openOpportunity}
           />
         </Section>
       </div>
@@ -377,18 +377,17 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
           id="dash-closure-title"
           title="Expected Closure This Month"
           subtitle={`Open opportunities expected to close ${formatDate(month.from)} – ${formatDate(month.to)}.`}
-          loading={oppSync.loading || activityLoad.loading}
-          error={oppError}
-          onRetry={retryAll}
+          loading={closures.loading}
+          error={closures.error}
+          onRetry={closures.retry}
         >
           <ClosureThisMonthTable
-            rows={closures}
+            rows={closures.data?.rows ?? []}
+            totals={closureTotals}
+            activities={activities.data?.rows ?? []}
             todayIso={todayIso}
-            onOpenOpportunity={onOpenOpportunity}
-            onOpenActivity={(a) => {
-              setEditing(a)
-              setNotesOnly(true)
-            }}
+            onOpenOpportunity={openOpportunity}
+            onOpenActivity={(a) => void openActivity(a, true, a.lastActivity?.activityDetailNo ?? 0)}
           />
         </Section>
       </div>
@@ -397,10 +396,10 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
       <Section
         id="dash-six-months"
         title="Last 6 Months Sales"
-        subtitle="Won / lost months use the date the opportunity was last updated."
-        loading={oppSync.loading}
-        error={oppSync.error}
-        onRetry={() => void oppSync.retry()}
+        subtitle="Opportunities created, won and lost per month."
+        loading={monthly.loading}
+        error={monthly.error}
+        onRetry={monthly.retry}
         skeletonRows={5}
       >
         <LastSixMonthsTable months={months} />
@@ -415,7 +414,9 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
             // Server leads / opportunities → save-activity-detail, then the record reloads.
             // Success is shown only once the server confirms; a failure shows its own error.
             void patchActivity(a.id, { ...a, opportunityId: editing.opportunityId }).then((ok) => {
-              if (ok) onToast?.('success', 'Activity Updated', `"${a.subject}" has been updated.`)
+              if (!ok) return
+              onToast?.('success', 'Activity Updated', `"${a.subject}" has been updated.`)
+              setActivityReload((n) => n + 1)
             })
             setEditing(null)
           }}

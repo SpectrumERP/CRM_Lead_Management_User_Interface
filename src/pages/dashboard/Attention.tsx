@@ -1,21 +1,24 @@
 import { useMemo } from 'react'
 import { useBusinessEntityTypes } from '../../components/useBusinessEntityTypes'
 import { stageBadgeStyle } from '../../components/useOpportunityStageColors'
-import { displayLeadName, formatMoney } from '../../data/leads'
-import { type LeadAttentionRow, type OpportunityAttentionRow } from '../../data/dashboard'
+import type { DashboardLeadAttention, DashboardNextActivity, DashboardOpportunityAttention } from '../../api/dashboard'
+import { formatMoney } from '../../data/leads'
 import { formatDate } from '../../utils/dateFormat'
 import { DashboardTable, type DashboardColumn } from './DashboardTable'
-import { days, DueDate, ReasonBadges, reasonLabel, reasonSortValue, RecordLink, SectionEmpty } from './parts'
+import { days, DueDate, normalizeReason, ReasonBadges, reasonLabel, reasonSortValue, RecordLink, SectionEmpty } from './parts'
 
 const badge = 'inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold'
 /** Statuses carry no colour on the server — one neutral badge. */
 const neutral = `${badge} border-line bg-surface-hover text-ink-soft`
 
-/** Stage badge in the stage's server colour (neutral when the master has none). */
-function StageBadge({ stage, color }: { stage: string; color?: string }) {
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+/** Stage badge in the stage's server colour (neutral when it has none). */
+function StageBadge({ stage, color }: { stage?: string | null; color?: string | null }) {
   if (!stage) return <span className="text-ink-faint">—</span>
-  return color ? (
-    <span className={badge} style={stageBadgeStyle(color)}>
+  const hex = color?.trim()
+  return hex && HEX.test(hex) ? (
+    <span className={badge} style={stageBadgeStyle(hex)}>
       {stage}
     </span>
   ) : (
@@ -23,27 +26,24 @@ function StageBadge({ stage, color }: { stage: string; color?: string }) {
   )
 }
 
-export type StageColor = (stage: string) => string | undefined
-
-function NextAction({ subject, date, todayIso }: { subject?: string; date?: string; todayIso: string }) {
-  if (!subject && !date) return <span className="text-ink-faint">—</span>
+function NextAction({ next, todayIso }: { next?: DashboardNextActivity | null; todayIso: string }) {
+  if (!next?.subject && !next?.dueDate) return <span className="text-ink-faint">—</span>
   return (
     <span className="flex max-w-[14rem] flex-col">
-      <span className="truncate" title={subject}>
-        {subject || '—'}
+      <span className="truncate" title={next.subject ?? undefined}>
+        {next.subject || '—'}
       </span>
       <span className="text-[11px]">
-        <DueDate date={date} todayIso={todayIso} />
+        <DueDate date={next.dueDate} todayIso={todayIso} overdue={next.isOverdue} />
       </span>
     </span>
   )
 }
 
-const stageDaysHint = (stagnantDays: number) =>
-  `Days since the record was last updated (the server does not send the stage change date yet). Stagnant after ${stagnantDays} days.`
+const stageDaysHint = (stagnantDays: number) => `Days since the stage last changed. Stagnant after ${stagnantDays} days.`
 
 /** Entity name with its type (Customer / Prospect …) underneath. */
-function EntityCell({ name, type }: { name: string; type?: string }) {
+function EntityCell({ name, type }: { name?: string | null; type?: string }) {
   if (!name) return <span className="text-ink-faint">—</span>
   return (
     <span className="flex max-w-[14rem] flex-col">
@@ -55,61 +55,72 @@ function EntityCell({ name, type }: { name: string; type?: string }) {
   )
 }
 
-interface LeadsAttentionProps {
-  rows: LeadAttentionRow[]
-  stagnantDays: number
-  todayIso: string
-  stageColor: StageColor
-  onOpenLead: (id: string) => void
+const productNames = (products?: readonly { productName?: string | null }[] | null) =>
+  (products ?? []).map((p) => p.productName).filter(Boolean).join(', ')
+
+const reasonsOf = (row: { reasons?: string[] | null }) => (row.reasons ?? []).map(normalizeReason)
+
+function ProductCell({ text }: { text: string }) {
+  return (
+    <span className="block max-w-[12rem] truncate" title={text}>
+      {text || '—'}
+    </span>
+  )
 }
 
-export function LeadsAttentionTable({ rows, stagnantDays, todayIso, stageColor, onOpenLead }: LeadsAttentionProps) {
+interface LeadsAttentionProps {
+  rows: readonly DashboardLeadAttention[]
+  stagnantDays: number
+  todayIso: string
+  onOpenLead: (leadNo: number) => void
+}
+
+export function LeadsAttentionTable({ rows, stagnantDays, todayIso, onOpenLead }: LeadsAttentionProps) {
   const entityTypes = useBusinessEntityTypes(
-    rows.flatMap((r) => (r.lead.spectrum?.businessEntityNo ? [{ no: r.lead.spectrum.businessEntityNo, name: r.lead.companyName }] : [])),
+    rows.flatMap((r) =>
+      r.businessEntity?.businessEntityNo ? [{ no: r.businessEntity.businessEntityNo, name: r.businessEntity.businessEntityName ?? '' }] : [],
+    ),
   )
-  const entityType = (r: LeadAttentionRow) =>
-    (r.lead.spectrum?.businessEntityNo && entityTypes.get(r.lead.spectrum.businessEntityNo)) || ''
-  const columns = useMemo<DashboardColumn<LeadAttentionRow>[]>(
-    () => [
+  const columns = useMemo<DashboardColumn<DashboardLeadAttention>[]>(() => {
+    const entityType = (r: DashboardLeadAttention) => (r.businessEntity?.businessEntityNo && entityTypes.get(r.businessEntity.businessEntityNo)) || ''
+    const name = (r: DashboardLeadAttention) => r.leadName || r.code || `Lead ${r.leadNo}`
+    return [
       {
         key: 'name',
         label: 'Lead Name',
-        render: (r) => <RecordLink label={displayLeadName(r.lead)} onClick={() => onOpenLead(r.lead.id)} />,
-        sortValue: (r) => displayLeadName(r.lead),
-        searchText: (r) => displayLeadName(r.lead),
+        render: (r) => <RecordLink label={name(r)} onClick={() => onOpenLead(r.leadNo)} />,
+        sortValue: name,
+        searchText: (r) => `${name(r)} ${r.code ?? ''}`,
       },
       {
         key: 'entity',
         label: 'Business Entity',
-        render: (r) => <EntityCell name={r.lead.companyName} type={entityType(r)} />,
-        sortValue: (r) => r.lead.companyName,
-        searchText: (r) => `${r.lead.companyName} ${entityType(r)}`,
+        render: (r) => <EntityCell name={r.businessEntity?.businessEntityName} type={entityType(r)} />,
+        sortValue: (r) => r.businessEntity?.businessEntityName,
+        searchText: (r) => `${r.businessEntity?.businessEntityName ?? ''} ${entityType(r)}`,
       },
-      {
-        key: 'product',
-        label: 'Product Group',
-        render: (r) => (
-          <span className="block max-w-[12rem] truncate" title={r.lead.productsRequired}>
-            {r.lead.productsRequired || '—'}
-          </span>
-        ),
-        searchText: (r) => r.lead.productsRequired,
-      },
+      { key: 'product', label: 'Product Group', render: (r) => <ProductCell text={productNames(r.products)} />, searchText: (r) => productNames(r.products) },
       {
         key: 'stage',
         label: 'Lead Stage',
-        render: (r) => <StageBadge stage={r.lead.leadStage} color={stageColor(r.lead.leadStage)} />,
-        sortValue: (r) => r.lead.leadStage,
-        searchText: (r) => r.lead.leadStage,
+        render: (r) => <StageBadge stage={r.leadStage?.leadStageName} color={r.leadStage?.colorCoding} />,
+        sortValue: (r) => r.leadStage?.leadStageName,
+        searchText: (r) => r.leadStage?.leadStageName,
       },
       {
         key: 'status',
         label: 'Lead Status',
-        render: (r) => <span className={neutral}>{r.lead.leadStatus}</span>,
-        searchText: (r) => r.lead.leadStatus,
+        render: (r) => (r.leadStatus?.leadStatusName ? <span className={neutral}>{r.leadStatus.leadStatusName}</span> : '—'),
+        searchText: (r) => r.leadStatus?.leadStatusName,
       },
-      { key: 'owner', label: 'Lead Owner', render: (r) => r.lead.assignedSalesperson || '—', sortValue: (r) => r.lead.assignedSalesperson, searchText: (r) => r.lead.assignedSalesperson },
-      { key: 'age', label: 'Lead Age', render: (r) => days(r.ageDays), sortValue: (r) => (r.ageDays === null ? null : r.ageDays - (r.createdTime ?? 0) / 1e15), align: 'right' },
+      {
+        key: 'owner',
+        label: 'Lead Owner',
+        render: (r) => r.leadOwner?.printingName || '—',
+        sortValue: (r) => r.leadOwner?.printingName,
+        searchText: (r) => r.leadOwner?.printingName,
+      },
+      { key: 'age', label: 'Lead Age', render: (r) => days(r.leadAgeDays), sortValue: (r) => r.leadAgeDays, align: 'right' },
       {
         key: 'inStage',
         label: 'Days in Current Stage',
@@ -117,112 +128,99 @@ export function LeadsAttentionTable({ rows, stagnantDays, todayIso, stageColor, 
         sortValue: (r) => r.daysInStage,
         align: 'right',
       },
-      { key: 'last', label: 'Last Activity Date', render: (r) => formatDate(r.lastActivity), sortValue: (r) => r.lastActivity },
+      { key: 'last', label: 'Last Activity Date', render: (r) => formatDate(r.lastActivityDate), sortValue: (r) => r.lastActivityDate },
       {
         key: 'next',
         label: 'Pending Activity / Due Date',
-        render: (r) => <NextAction subject={r.next?.subject} date={r.next?.scheduleDate} todayIso={todayIso} />,
-        sortValue: (r) => r.next?.scheduleDate,
-        searchText: (r) => r.next?.subject,
+        render: (r) => <NextAction next={r.nextActivity} todayIso={todayIso} />,
+        sortValue: (r) => r.nextActivity?.dueDate,
+        searchText: (r) => r.nextActivity?.subject,
       },
       {
         key: 'reason',
         label: 'Attention Reason',
-        render: (r) => <ReasonBadges reasons={r.reasons} record="lead" />,
-        sortValue: (r) => reasonSortValue(r.reasons),
-        searchText: (r) => r.reasons.map((x) => reasonLabel(x, 'lead')).join(' '),
+        render: (r) => <ReasonBadges reasons={reasonsOf(r)} record="lead" />,
+        sortValue: (r) => reasonSortValue(reasonsOf(r)),
+        searchText: (r) => reasonsOf(r).map((x) => reasonLabel(x, 'lead')).join(' '),
       },
-    ],
-    [todayIso, stageColor, onOpenLead, stagnantDays, entityTypes],
-  )
+    ]
+  }, [todayIso, onOpenLead, stagnantDays, entityTypes])
 
   return (
     <DashboardTable
       label="Leads requiring attention"
       rows={rows}
       columns={columns}
-      rowKey={(r) => r.lead.id}
+      rowKey={(r) => String(r.leadNo)}
       defaultSort={{ key: 'age', dir: 'asc' }}
       searchable
       searchPlaceholder="Search leads…"
-      onRowClick={(r) => onOpenLead(r.lead.id)}
-      rowLabel={(r) => `Open lead ${displayLeadName(r.lead)}`}
+      onRowClick={(r) => onOpenLead(r.leadNo)}
+      rowLabel={(r) => `Open lead ${r.leadName || r.code || r.leadNo}`}
       empty={<SectionEmpty positive title="No leads require attention" subtitle="Every open lead has activity on track." />}
     />
   )
 }
 
 interface OpportunitiesAttentionProps {
-  rows: OpportunityAttentionRow[]
+  rows: readonly DashboardOpportunityAttention[]
   stagnantDays: number
   todayIso: string
-  stageColor: StageColor
-  onOpenOpportunity: (id: string) => void
+  onOpenOpportunity: (opportunityNo: number) => void
 }
 
-export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, stageColor, onOpenOpportunity }: OpportunitiesAttentionProps) {
-  const columns = useMemo<DashboardColumn<OpportunityAttentionRow>[]>(
-    () => [
+export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, onOpenOpportunity }: OpportunitiesAttentionProps) {
+  const columns = useMemo<DashboardColumn<DashboardOpportunityAttention>[]>(() => {
+    const name = (r: DashboardOpportunityAttention) => r.opportunityName || r.code || `Opportunity ${r.opportunityNo}`
+    return [
       {
         key: 'name',
         label: 'Opportunity Name',
-        render: (r) => <RecordLink label={r.opportunity.name} onClick={() => onOpenOpportunity(r.opportunity.id)} />,
-        sortValue: (r) => r.opportunity.name,
-        searchText: (r) => r.opportunity.name,
+        render: (r) => <RecordLink label={name(r)} onClick={() => onOpenOpportunity(r.opportunityNo)} />,
+        sortValue: name,
+        searchText: (r) => `${name(r)} ${r.code ?? ''}`,
       },
       {
         key: 'entity',
         label: 'Business Entity',
-        render: (r) => r.opportunity.companyName || '—',
-        sortValue: (r) => r.opportunity.companyName,
-        searchText: (r) => r.opportunity.companyName,
+        render: (r) => r.businessEntity?.businessEntityName || '—',
+        sortValue: (r) => r.businessEntity?.businessEntityName,
+        searchText: (r) => r.businessEntity?.businessEntityName,
       },
-      {
-        key: 'product',
-        label: 'Product Group',
-        render: (r) => (
-          <span className="block max-w-[12rem] truncate" title={r.opportunity.productsRequired}>
-            {r.opportunity.productsRequired || '—'}
-          </span>
-        ),
-        searchText: (r) => r.opportunity.productsRequired,
-      },
+      { key: 'product', label: 'Product Group', render: (r) => <ProductCell text={productNames(r.products)} />, searchText: (r) => productNames(r.products) },
       {
         key: 'value',
         label: 'Opportunity Value',
-        render: (r) => formatMoney(r.opportunity.dealValue, r.opportunity.valueCurrency),
-        sortValue: (r) => r.opportunity.dealValue,
+        render: (r) => (r.opportunityValue == null ? '—' : formatMoney(r.opportunityValue, r.currency?.currencyCode || undefined)),
+        sortValue: (r) => r.opportunityValue,
         align: 'right',
       },
       {
         key: 'stage',
         label: 'Opportunity Stage',
-        render: (r) => (
-          <StageBadge stage={r.opportunity.dealStage} color={stageColor(r.opportunity.dealStage)} />
-        ),
-        sortValue: (r) => r.opportunity.dealStage,
-        searchText: (r) => r.opportunity.dealStage,
+        render: (r) => <StageBadge stage={r.opportunityStage?.opportunityStageName} color={r.opportunityStage?.colorCoding} />,
+        sortValue: (r) => r.opportunityStage?.opportunityStageName,
+        searchText: (r) => r.opportunityStage?.opportunityStageName,
       },
       {
         key: 'weight',
         label: 'Weightage',
-        render: (r) => `${r.opportunity.weightPercent}%`,
-        sortValue: (r) => r.opportunity.weightPercent,
+        render: (r) => (r.opportunityStage?.weightage == null ? '—' : `${r.opportunityStage.weightage}%`),
+        sortValue: (r) => r.opportunityStage?.weightage,
         align: 'right',
       },
       {
         key: 'status',
         label: 'Opportunity Status',
-        render: (r) => (
-          <span className={neutral}>{r.opportunity.status}</span>
-        ),
-        searchText: (r) => r.opportunity.status,
+        render: (r) =>
+          r.opportunityStatus?.opportunityStatusName ? <span className={neutral}>{r.opportunityStatus.opportunityStatusName}</span> : '—',
+        searchText: (r) => r.opportunityStatus?.opportunityStatusName,
       },
       {
         key: 'closing',
         label: 'Expected Closure Date',
-        render: (r) => formatDate(r.opportunity.closingDate),
-        sortValue: (r) => r.opportunity.closingDate,
+        render: (r) => formatDate(r.expectedClosureDate),
+        sortValue: (r) => r.expectedClosureDate,
       },
       {
         key: 'inStage',
@@ -231,36 +229,35 @@ export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, stag
         sortValue: (r) => r.daysInStage,
         align: 'right',
       },
-      { key: 'last', label: 'Last Activity Date', render: (r) => formatDate(r.lastActivity), sortValue: (r) => r.lastActivity },
+      { key: 'last', label: 'Last Activity Date', render: (r) => formatDate(r.lastActivityDate), sortValue: (r) => r.lastActivityDate },
       {
         key: 'next',
         label: 'Pending Activity / Due',
-        render: (r) => <NextAction subject={r.next?.subject} date={r.next?.scheduleDate} todayIso={todayIso} />,
-        sortValue: (r) => r.next?.scheduleDate,
-        searchText: (r) => r.next?.subject,
+        render: (r) => <NextAction next={r.nextActivity} todayIso={todayIso} />,
+        sortValue: (r) => r.nextActivity?.dueDate,
+        searchText: (r) => r.nextActivity?.subject,
       },
       {
         key: 'reason',
         label: 'Attention Reason',
-        render: (r) => <ReasonBadges reasons={r.reasons} />,
-        sortValue: (r) => reasonSortValue(r.reasons),
-        searchText: (r) => r.reasons.join(' '),
+        render: (r) => <ReasonBadges reasons={reasonsOf(r)} />,
+        sortValue: (r) => reasonSortValue(reasonsOf(r)),
+        searchText: (r) => reasonsOf(r).join(' '),
       },
-    ],
-    [todayIso, stageColor, onOpenOpportunity, stagnantDays],
-  )
+    ]
+  }, [todayIso, onOpenOpportunity, stagnantDays])
 
   return (
     <DashboardTable
       label="Opportunities requiring attention"
       rows={rows}
       columns={columns}
-      rowKey={(r) => r.opportunity.id}
+      rowKey={(r) => String(r.opportunityNo)}
       defaultSort={{ key: 'reason', dir: 'asc' }}
       searchable
       searchPlaceholder="Search opportunities…"
-      onRowClick={(r) => onOpenOpportunity(r.opportunity.id)}
-      rowLabel={(r) => `Open opportunity ${r.opportunity.name}`}
+      onRowClick={(r) => onOpenOpportunity(r.opportunityNo)}
+      rowLabel={(r) => `Open opportunity ${r.opportunityName || r.code || r.opportunityNo}`}
       empty={<SectionEmpty positive title="No opportunities require attention" subtitle="Every open opportunity has activity on track." />}
     />
   )

@@ -15,6 +15,7 @@ import { buildLeadSaveBody, saveLead } from '../api/leads'
 import { refreshServerLead } from '../api/leadSync'
 import { toApiError } from '../api/errors'
 import { useSpectrumCompany } from '../auth/useSpectrumCompany'
+import { useAuth } from '../auth/AuthContext'
 import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 import {
   Lead,
@@ -36,7 +37,7 @@ import { LeadActivitiesPanel } from '../components/LeadActivities'
 import { LeadNotesPanel } from '../components/LeadNotes'
 import { useOptionalToast } from '../contexts/ToastContext'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
-import { formatDate, formatDateTime } from '../utils/dateFormat'
+import { formatDate, formatDateTime, toIsoDate } from '../utils/dateFormat'
 
 const SPECTRUM_REQUIRED = 'Sign in with your Spectrum account to create or edit leads.'
 
@@ -269,8 +270,10 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   })
   // New lead: activities added to the list (saved with the lead); the fields above hold the next one.
   const [addedActivities, setAddedActivities] = useState<AddedActivity[]>([])
-  const [noteDateTime, setNoteDateTime] = useState('')
-  const [noteCreatedBy, setNoteCreatedBy] = useState('')
+  // A note starts with today's date and the logged-in user as Created By.
+  const userName = useAuth().user?.name ?? ''
+  const [noteDateTime, setNoteDateTime] = useState(() => toIsoDate())
+  const [noteCreatedBy, setNoteCreatedBy] = useState(userName)
   const [noteDiscussion, setNoteDiscussion] = useState('')
   const [addedNotes, setAddedNotes] = useState<{ key: string; date: string; time: string; by: string; text: string; at: string }[]>([])
   // Uploaded to the document store as they are picked; the save links them by docNo.
@@ -453,8 +456,8 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
         at: dateTime,
       },
     ])
-    setNoteDateTime('')
-    setNoteCreatedBy('')
+    setNoteDateTime(toIsoDate())
+    setNoteCreatedBy(userName)
     setNoteDiscussion('')
     clearErr('noteDateTime')
     clearErr('noteCreatedBy')
@@ -479,8 +482,9 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     setAddedNotes((prev) => prev.filter((item) => item.key !== key))
   }
 
+  /** Date and Created By are pre-filled, so only the discussion text starts a note. */
   function notesDirty() {
-    return Boolean(noteDateTime.trim() || noteCreatedBy.trim() || noteDiscussion.trim())
+    return Boolean(noteDiscussion.trim())
   }
 
   // Activity / notes are optional: their fields are required only once the user starts filling them.
@@ -896,7 +900,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
           )}
 
           {!isEdit ? (
-            <Section title="Internal Notes" icon={SECTION_ICONS.notes} >
+            <Section title="Internal Notes / Observations" icon={SECTION_ICONS.notes} >
               <FormGrid>
                 <TextField
                   label="Date"
@@ -970,7 +974,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
           </Section>
           ) : existing ? (
             // Edit: the lead's saved notes, added and deleted straight away (as on the lead view).
-            <Section title="Internal Notes" icon={SECTION_ICONS.notes}>
+            <Section title="Internal Notes / Observations" icon={SECTION_ICONS.notes}>
               <LeadNotesPanel lead={existing} onToast={addToast} />
             </Section>
           ) : null}

@@ -126,7 +126,7 @@ describe('audit (created / modified)', () => {
   })
 
   it('formats the stamps as date and time', () => {
-    expect(formatAuditStamp('2026-09-28T14:05:00')).toMatch(/28 Sept? 2026,? 14:05/)
+    expect(formatAuditStamp('2026-09-28T14:05:00')).toMatch(/28\/Sep\/2026,? 14:05/)
     expect(formatAuditStamp('')).toBe('—')
   })
 })

@@ -5,6 +5,8 @@
  *   GET    /api/crm/opportunities/search-data     ?CompanyNo=&PageNo=&PageSize=…
  *   GET    /api/crm/opportunities/load-data/{id}
  *   DELETE /api/crm/opportunities/delete          ?opportunityNo=
+ *   POST   /api/crm/opportunities/save-notes-detail    add / update one internal note
+ *   DELETE /api/crm/opportunities/delete-notes-detail  ?opportunityNotesDetailNos=
  */
 import { spectrumEndpoints } from './endpoints'
 import { fail } from './errors'
@@ -78,10 +80,20 @@ export interface OpportunityActivityRow {
   status?: { statusNo: number; statusName?: string | null } | null
 }
 
+export interface OpportunityNoteRow {
+  opportunityNotesDetailNo: number
+  originatedBy?: string | null
+  notesDate?: string | null
+  notesDiscussion?: string | null
+  createdBy?: ServerUserRef | null
+  createdDate?: string | null
+}
+
 export interface OpportunityDetail extends OpportunityRow {
   contacts?: (DetailContactRow & { oppContactDetailNo?: number })[] | null
   products?: (DetailProductRow & { oppProductDetailNo?: number })[] | null
   activities?: OpportunityActivityRow[] | null
+  notes?: OpportunityNoteRow[] | null
 }
 
 /** Body of `POST /api/crm/opportunities/save-activity-detail`. */
@@ -110,6 +122,28 @@ export async function saveOpportunityActivity(body: OpportunityActivityBody): Pr
 export async function deleteOpportunityActivities(detailNos: number[]): Promise<void> {
   if (!detailNos.length) return
   const url = `${spectrumEndpoints.opportunities.deleteActivities}?${repeatedQuery('opportunityActivityDetailNos', detailNos)}`
+  assertSuccess(await http.delete<SpectrumResponse<boolean>>(url))
+}
+
+/** Body of `POST /api/crm/opportunities/save-notes-detail` (same fields as the lead one). */
+export interface OpportunityNoteBody {
+  opportunityNo: number
+  /** Omit to add; set to update that note. */
+  opportunityNotesDetailNo?: number
+  originatedBy?: string
+  /** ISO date-time. */
+  notesDate: string
+  notesDiscussion?: string
+}
+
+export async function saveOpportunityNote(body: OpportunityNoteBody): Promise<void> {
+  assertSuccess(await http.post<SpectrumResponse<boolean>>(spectrumEndpoints.opportunities.saveNote, body))
+}
+
+/** `DELETE …/delete-notes-detail?opportunityNotesDetailNos=1&opportunityNotesDetailNos=2`. */
+export async function deleteOpportunityNotes(detailNos: number[]): Promise<void> {
+  if (!detailNos.length) return
+  const url = `${spectrumEndpoints.opportunities.deleteNotes}?${repeatedQuery('opportunityNotesDetailNos', detailNos)}`
   assertSuccess(await http.delete<SpectrumResponse<boolean>>(url))
 }
 
