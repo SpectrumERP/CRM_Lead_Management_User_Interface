@@ -46,7 +46,7 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5175,
+    port: 5173,
     strictPort: true,
     proxy: {
       // Task Management dev server (pages, assets and HMR websocket).
@@ -70,7 +70,7 @@ export default defineConfig({
   },
   preview: {
     host: true,
-    port: 5175,
+    port: 5173,
     strictPort: true,
     // Serve the built dist/task (not the dev proxy, which preview would otherwise inherit).
     proxy: {},
