@@ -378,7 +378,7 @@ export function activityStatusMeta(s: string) {
   return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' }; // Pending / Open
 }
 
-/** An activity's date and optional time — see utils/dateFormat. */
-export function formatDateTime(date: string, time: string): string {
-  return formatDateParts(date, time);
+/** An activity's date and optional time — see utils/dateFormat. Pass `empty = ''` in grids (blank cell). */
+export function formatDateTime(date: string, time: string, empty?: string): string {
+  return formatDateParts(date, time, empty);
 }

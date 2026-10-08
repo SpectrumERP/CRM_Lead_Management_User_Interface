@@ -15,7 +15,7 @@ interface OpenActivitiesProps {
 export const isOpportunityActivity = (a: DashboardOpenActivity) =>
   Boolean(a.opportunityNo) || (a.recordType ?? '').toLowerCase().startsWith('opp')
 
-const recordName = (a: DashboardOpenActivity) => a.recordName || a.recordCode || '—'
+const recordName = (a: DashboardOpenActivity) => a.recordName || a.recordCode || ''
 
 /** Server overdue flag; falls back to the due date. */
 const overdue = (a: DashboardOpenActivity, todayIso: string) => a.isOverdue || (!!a.dueDate && isoDay(a.dueDate) < todayIso)
@@ -34,7 +34,7 @@ export function OpenActivitiesTable({ activities, todayIso, onOpenActivity, onOp
       {
         key: 'type',
         label: 'Activity Type',
-        render: (a) => a.activityType?.activityTypeName || '—',
+        render: (a) => a.activityType?.activityTypeName || '',
         sortValue: (a) => a.activityType?.activityTypeName,
         searchText: (a) => a.activityType?.activityTypeName,
       },
@@ -43,7 +43,7 @@ export function OpenActivitiesTable({ activities, todayIso, onOpenActivity, onOp
         label: 'Subject',
         render: (a) => (
           <span className="block max-w-[18rem] truncate" title={a.subject ?? undefined}>
-            {a.subject || '—'}
+            {a.subject || ''}
           </span>
         ),
         sortValue: (a) => a.subject,
@@ -72,7 +72,7 @@ export function OpenActivitiesTable({ activities, todayIso, onOpenActivity, onOp
       {
         key: 'assigned',
         label: 'Assigned To',
-        render: (a) => a.assignTo?.printingName || '—',
+        render: (a) => a.assignTo?.printingName || '',
         sortValue: (a) => a.assignTo?.printingName,
         searchText: (a) => a.assignTo?.printingName,
       },

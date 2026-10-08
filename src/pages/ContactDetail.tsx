@@ -401,7 +401,7 @@ function ActivitiesTab({ activities, onAdd }: { activities: Activity[]; onAdd: (
                     </td>
                     <td><span className="text-sm" style={{ color: '#0c1a3a' }}>{a.subject}</span></td>
                     <td><span className="text-sm" style={{ color: '#7a8494' }}>{a.assignedTo}</span></td>
-                    <td><span className="text-sm" style={{ color: '#7a8494' }}>{formatDateTime(a.scheduleDate, a.scheduleTime)}</span></td>
+                    <td><span className="text-sm" style={{ color: '#7a8494' }}>{formatDateTime(a.scheduleDate, a.scheduleTime, '')}</span></td>
                     <td>
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: sMeta.bg, color: sMeta.color, border: `1px solid ${sMeta.border}` }}>
                         <span className="w-1.5 h-1.5 rounded-full" style={{ background: sMeta.color }} />
@@ -453,7 +453,7 @@ function MeetingsTab({ meetings, onAdd }: { meetings: Meeting[]; onAdd: () => vo
                         {mMeta.icon} {m.mode}
                       </span>
                     </td>
-                    <td><span className="text-sm" style={{ color: '#7a8494' }}>{formatMeetingDateTime(m.date, m.time, m.endTime)}</span></td>
+                    <td><span className="text-sm" style={{ color: '#7a8494' }}>{formatMeetingDateTime(m.date, m.time, m.endTime, '')}</span></td>
                     <td>
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: sMeta.bg, color: sMeta.color, border: `1px solid ${sMeta.border}` }}>
                         <span className="w-1.5 h-1.5 rounded-full" style={{ background: sMeta.color }} />

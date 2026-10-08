@@ -341,7 +341,7 @@ export default function MeetingsPage({ onViewLead, onToast }: MeetingsPageProps)
                       </td>
                       <td className="text-xs text-ink-soft">{meeting.contactPerson || ''}</td>
                       <td className="text-xs tabular-nums text-ink">
-                        {formatMeetingDateTime(meeting.date, meeting.time, meeting.endTime)}
+                        {formatMeetingDateTime(meeting.date, meeting.time, meeting.endTime, '')}
                       </td>
                       <td><ModeBadge mode={meeting.mode} /></td>
                       <td>

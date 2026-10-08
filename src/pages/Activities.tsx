@@ -277,7 +277,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                         </div>
                       </td>
                       <td className="text-xs tabular-nums text-ink">
-                        {formatDateTime(activity.scheduleDate, activity.scheduleTime)}
+                        {formatDateTime(activity.scheduleDate, activity.scheduleTime, '')}
                       </td>
                       <td className="text-xs text-ink-muted">{activity.reminder !== 'None' ? activity.reminder : ''}</td>
                       <td><StatusBadge status={activity.status} /></td>
@@ -285,7 +285,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                         {activity.status === 'Completed' ? (
                           <div>
                             <p className="text-xs font-semibold text-success">
-                              {formatDateTime(activity.completeDate, activity.completeTime)}
+                              {formatDateTime(activity.completeDate, activity.completeTime, '')}
                             </p>
                             {activity.outcome && (
                               <p className="text-xs mt-0.5 line-clamp-1 text-ink-soft">

@@ -180,9 +180,9 @@ export function meetingStatusMeta(status: string) {
   return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' }; // Scheduled
 }
 
-/** A meeting's date and start (– end) time — see utils/dateFormat. */
-export function formatMeetingDateTime(date: string, time: string, endTime?: string): string {
-  return formatTimeRange(date, time, endTime);
+/** A meeting's date and start (– end) time — see utils/dateFormat. Pass `empty = ''` in grids (blank cell). */
+export function formatMeetingDateTime(date: string, time: string, endTime?: string, empty?: string): string {
+  return formatTimeRange(date, time, endTime, empty);
 }
 
 export const SAMPLE_LEADS_FOR_MEETINGS = [

@@ -471,7 +471,7 @@ export function ContactAlbum({ rows, onEdit }: { rows: ContactListRow[] } & RowH
                     <div className="min-w-0">
                       <h4 className="truncate text-xs font-semibold leading-tight text-ink">{row.name}</h4>
                       <p className="mt-0.5 truncate text-[10px] font-medium text-ink-faint">
-                        {row.designation || 'Representative'} ({row.department || 'General'})
+                        {[row.designation, row.department && `(${row.department})`].filter(Boolean).join(' ')}
                       </p>
                     </div>
                   </div>

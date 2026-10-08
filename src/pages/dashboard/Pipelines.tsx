@@ -94,8 +94,8 @@ export function OpportunityPipelineTable({ rows, onStage }: { rows: OpportunityP
                 <span className="ml-1.5 text-[11px] text-ink-muted">({r.weight}%)</span>
               </td>
               <td className={`text-right tabular-nums ${r.count ? 'font-bold' : 'text-ink-faint'}`}>{r.count}</td>
-              <td className="text-right tabular-nums">{r.count ? formatMoneyTotals(r.values) : '—'}</td>
-              <td className="text-right tabular-nums">{r.count ? formatMoneyTotals(r.weighted) : '—'}</td>
+              <td className="text-right tabular-nums">{r.count ? formatMoneyTotals(r.values) : ''}</td>
+              <td className="text-right tabular-nums">{r.count ? formatMoneyTotals(r.weighted) : ''}</td>
             </tr>
           ))}
         </tbody>
