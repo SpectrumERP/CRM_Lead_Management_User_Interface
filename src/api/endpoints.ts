@@ -19,14 +19,46 @@ export const spectrumEndpoints = {
     status: '/api/document-attachments/status',
     rename: '/api/document-attachments/rename',
     delete: '/api/document-attachments/delete',
+    /** Thumbnails for image attachments: POST [docNo…] → base64 images. */
+    images: '/api/document-attachments/images',
     /** `${root}/{docNo}/download` */
     download: (docNo: number) => `/api/document-attachments/${docNo}/download`,
   },
+  /**
+   * Open / Save / Update / Delete rights per form for the signed-in user (see formRights.ts). The server
+   * has one menu (no CRM-specific one); it covers Business Entity (1550) and its masters.
+   */
+  formRights: '/api/globaldata/forms/task-management-menu',
   businessEntities: {
-    /** Paged search used for the Business Entity field (see businessEntities.ts). */
+    /** Paged search used for the Business Entity field and the list (see businessEntities.ts). */
     search: '/api/master/business-entities/search/business-entity-wise',
+    /** List "Contact" views: one row per contact person. */
+    searchContactWise: '/api/master/business-entities/search/contact-person-wise',
+    /** List "Attachments" view: one row per attachment. */
+    searchAttachmentWise: '/api/master/business-entities/search/attachment-wise',
     /** Contact persons of one entity (see businessEntities.ts). */
     contactPersons: '/api/master/business-entities/contact-persons',
+    /** All form dropdowns in one call: types, countries, ports, location types, time zones, GSTIN types. */
+    fillValues: '/api/master/business-entities/fill-values',
+    /** `${loadData}/{businessEntityNo}?companyNo=` */
+    loadData: '/api/master/business-entities/load-data',
+    /** Insert (no number) or update. */
+    save: '/api/master/business-entities/save',
+    delete: '/api/master/business-entities/delete',
+    deleteContactPerson: '/api/master/business-entities/delete-contact-person',
+    /** GET ?BusinessEntityName= — existing names, for the "already exists?" hint while typing. */
+    names: '/api/master/business-entities',
+  },
+  /** Geography lookups for location fields (see geo.ts). */
+  geo: {
+    statesByCountry: (countryNo: number) => `/api/master/states/by-country/${countryNo}`,
+    citiesByState: (stateNo: number) => `/api/master/cities/by-state/${stateNo}`,
+    /** GET ?KeywordSearch=&StateNo= — city search across states, each row with its state and country. */
+    cityCombo: '/api/master/cities/fill-city-combo',
+  },
+  /** Business card reading (see businessCard.ts). */
+  utility: {
+    visionAnnotate: '/api/utility/google-vision/images/annotate',
   },
   leads: {
     /** All lead form dropdowns in one call (see leadFormFillValues.ts). */
@@ -86,7 +118,6 @@ export const endpoints = {
   },
   entities: {
     list: `${API_BASE}/entities`,
-    create: `${API_BASE}/entities`,
     item: `${API_BASE}/entities/:id`,
     byId: (id: string) => `${API_BASE}/entities/${encodeURIComponent(id)}`,
   },

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   checkAttachmentStatus,
   createAttachmentEntry,
@@ -69,6 +69,8 @@ export interface AttachmentsFieldProps {
   onBusyChange?: (busy: boolean) => void
   /** Record noun for messages, e.g. "lead". */
   noun: string
+  /** Extra per-file actions shown before Delete (e.g. share, analyze). */
+  extraActions?: (item: Attachment) => ReactNode
 }
 
 /**
@@ -84,6 +86,7 @@ export default function AttachmentsField({
   transactionId,
   onBusyChange,
   noun,
+  extraActions,
 }: AttachmentsFieldProps) {
   const { addToast } = useOptionalToast()
   const confirm = useConfirm()
@@ -389,6 +392,7 @@ export default function AttachmentsField({
                         </svg>
                       </Button>
                     </IconTooltip>
+                    {extraActions?.(a)}
                     <IconTooltip label="Delete">
                       <Button variant="icon" aria-label={`Delete ${a.name}`} onClick={() => void remove(a)}>
                         <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">

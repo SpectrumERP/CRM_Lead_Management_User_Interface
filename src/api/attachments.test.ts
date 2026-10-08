@@ -112,8 +112,8 @@ describe('attachment API', () => {
     expect(new URL(String(fetchMock.mock.calls[0]![0])).pathname).toBe('/api/document-attachments/5/download')
   })
 
-  it('files lead attachments under form 377 and opportunity attachments under 380', () => {
-    expect(ATTACHMENT_FORM_NO).toEqual({ lead: 377, opportunity: 380 })
+  it('files lead attachments under form 377, opportunity under 380 and business entity under 1550', () => {
+    expect(ATTACHMENT_FORM_NO).toEqual({ lead: 377, opportunity: 380, businessEntity: 1550 })
   })
 
   it('builds the link rows for a parent save', () => {

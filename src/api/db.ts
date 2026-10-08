@@ -283,36 +283,6 @@ function sanitizeLead(lead: Lead): Lead {
   }
 }
 
-function sanitizeEntity(entity: BusinessEntity): BusinessEntity {
-  return {
-    ...entity,
-    name: sanitizeName(entity.name),
-    website: sanitizeText(entity.website, 500),
-    gstin: sanitizeText(entity.gstin, 40),
-    products: sanitizeText(entity.products, 500),
-    remarks: sanitizeText(entity.remarks, 2000),
-    salesperson: sanitizeName(entity.salesperson),
-    locations: entity.locations.map((location) => ({
-      ...location,
-      label: sanitizeName(location.label),
-      address: sanitizeText(location.address, 500),
-      city: sanitizeName(location.city),
-      state: sanitizeName(location.state),
-      country: sanitizeName(location.country),
-      territory: sanitizeName(location.territory),
-      preferredPort: sanitizeName(location.preferredPort),
-    })),
-    contacts: entity.contacts.map((contact) => ({
-      ...contact,
-      name: sanitizeName(contact.name),
-      designation: sanitizeName(contact.designation),
-      department: sanitizeName(contact.department),
-      mobile: sanitizeText(contact.mobile, 40),
-      email: sanitizeEmail(contact.email),
-    })),
-  }
-}
-
 function sanitizeContact(contact: Contact): Contact {
   return {
     ...contact,
@@ -622,21 +592,6 @@ export function convertLeadToOpportunity(
     ),
   )
   return opportunity
-}
-
-export function addEntity(entity: BusinessEntity) {
-  assertCanWriteRecord(entity.salesperson)
-  const next = sanitizeEntity(entity)
-  rejectDuplicate(state.entities.some((item) => item.id === next.id), 'Business entity')
-  setState(
-    withAudit(
-      { ...state, entities: [next, ...state.entities] },
-      auditEntry('Business Entity', 'Created', next.id, next.name, {
-        details: `Business entity ${next.name} created.`,
-        navigateType: 'entity',
-      }),
-    ),
-  )
 }
 
 export function addContact(contact: Contact) {

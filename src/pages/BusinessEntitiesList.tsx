@@ -1,328 +1,377 @@
-import { nextSort } from '../ui';
-import { useState } from 'react';
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { deleteBusinessEntity } from '../api/businessEntities';
+import { getBusinessEntityFillValues } from '../api/businessEntityFillValues';
+import { toApiError } from '../api/errors';
+import { FORM_NO } from '../api/formRights';
+import { useSpectrumCompany } from '../auth/useSpectrumCompany';
+import ConfirmDialog from '../components/ConfirmDialog';
+import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
+import type { ToastType } from '../components/Toast';
+import { useFormRights } from '../contexts/FormRightsContext';
+import { Select, Spinner, nextSort, type SortDir } from '../ui';
+import { downloadCsv } from '../utils/csv';
+import { AttachmentGroups, ContactAlbum, ContactTable, EntityAlbum, EntityTable } from './businessEntities/ListViews';
 import {
-  BusinessEntity, EntityType, EntityStatus,
-  ENTITY_STATUSES, TERRITORIES, SALESPERSONS,
-  entityTypeMeta, entityStatusMeta,
-} from '../data/businessEntities';
-import { SkeletonTableRows, EmptyState, NoResults, EmptyIcons } from '../components/CRMStates';
-import { RecordRowActions } from '../components/RecordRowActions';
-import { useMasterData } from '../contexts/MasterDataContext';
-import { api } from '../api/crm';
-import { useApiQuery } from '../api/useApiQuery';
-import { Button, CountBadge, PageHeader, SortChevrons, sortAlpha, StatPill, StatPillRow } from '../ui';
-import { FilterSearch, FilterSelect } from '../components/InlineFilterRow';
-import { formatDate } from '../utils/dateFormat';
+  exportRows,
+  searchRows,
+  sourceOf,
+  type AttachmentListRow,
+  type ContactListRow,
+  type EntityListRow,
+  type ListViewMode,
+} from './businessEntities/listRows';
+import { useBusinessEntityFeed } from './businessEntities/useBusinessEntityFeed';
+import { ICON, Icon, OutlineButton, SolidButton } from './businessEntities/ui';
 
 interface Props {
   onCreate: () => void;
-  onView: (id: string) => void;
-  onEdit: (id: string) => void;
+  onEdit: (businessEntityNo: number) => void;
+  onToast?: (type: ToastType, title: string, message?: string) => void;
 }
 
-function TypeBadge({ type }: { type: string }) {
-  const m = entityTypeMeta(type);
-  return (
-    <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold"
-      style={{ background: m.bg, color: m.color, border: `1px solid ${m.border}` }}>
-      {type}
-    </span>
-  );
+const VIEW_MODES: { id: ListViewMode; label: string; icon: string }[] = [
+  { id: 'list', label: 'Grid List', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
+  { id: 'album', label: 'Album View', icon: ICON.building },
+  { id: 'contact-list', label: 'Contact List', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  { id: 'contact-album', label: 'Contact Album', icon: ICON.user },
+  { id: 'attachment', label: 'Attachments', icon: ICON.paperclip },
+];
+
+const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
+const PAGE_SIZES = [10, 25, 50, 100];
+
+type SortState = { field: string; dir: SortDir };
+/** Task Management sorts the list by code by default. */
+const DEFAULT_SORT: SortState = { field: 'code', dir: 'asc' };
+const SORT_FIELD: Record<ListViewMode, string> = { list: 'code', album: 'code', 'contact-list': 'name', 'contact-album': 'name', attachment: 'code' };
+
+function sortRows<T>(rows: T[], sort: SortState): T[] {
+  if (!sort.field) return rows;
+  const key = sort.field as keyof T;
+  const factor = sort.dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = a[key];
+    const y = b[key];
+    if (typeof x === 'number' || typeof y === 'number') return ((Number(x) || 0) - (Number(y) || 0)) * factor;
+    return String(x ?? '').localeCompare(String(y ?? ''), undefined, { numeric: true, sensitivity: 'base' }) * factor;
+  });
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const m = entityStatusMeta(status);
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-      style={{ background: m.bg, color: m.color, border: `1px solid ${m.border}` }}>
-      <span className="w-1.5 h-1.5 rounded-full mr-1.5 flex-shrink-0" style={{ background: m.color }} />
-      {status}
-    </span>
-  );
+function pageItems(page: number, totalPages: number): Array<number | '…'> {
+  return Array.from({ length: totalPages }, (_, i) => i + 1)
+    .filter((n) => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
+    .reduce<Array<number | '…'>>((acc, n, i, arr) => {
+      if (i > 0 && n - (arr[i - 1] as number) > 1) acc.push('…');
+      acc.push(n);
+      return acc;
+    }, []);
 }
 
-export default function BusinessEntitiesList({ onCreate, onView, onEdit }: Props) {
-  const { activeEntityTypeNames } = useMasterData();
-  const { data: entityPage, loading } = useApiQuery(() => api.entities.list(), []);
-  const entities = entityPage?.items ?? [];
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<EntityType | 'All'>('All');
-  const [statusFilter, setStatusFilter] = useState<EntityStatus | 'All'>('All');
-  const [territoryFilter, setTerritoryFilter] = useState('All');
-  const [salespersonFilter, setSalespersonFilter] = useState('All');
-  const [sortField, setSortField] = useState<'name' | 'createdDate'>('name');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  function toggleSort(field: 'name' | 'createdDate') {
-    const next = nextSort({ field: sortField, dir: sortDir }, field, { field: 'name', dir: 'asc' });
-    setSortField(next.field);
-    setSortDir(next.dir);
-  }
-
-  const filtered = entities
-    .filter((e) => {
-      const q = search.toLowerCase();
-      const matchSearch = !q || e.name.toLowerCase().includes(q) || e.gstin.toLowerCase().includes(q);
-      const matchType = typeFilter === 'All' || e.type === typeFilter;
-      const matchStatus = statusFilter === 'All' || e.status === statusFilter;
-      const matchTerritory = territoryFilter === 'All' || e.locations.some((l) => l.territory === territoryFilter);
-      const matchSp = salespersonFilter === 'All' || e.salesperson === salespersonFilter;
-      return matchSearch && matchType && matchStatus && matchTerritory && matchSp;
-    })
-    .sort((a, b) => {
-      const va = sortField === 'name' ? a.name : a.createdDate;
-      const vb = sortField === 'name' ? b.name : b.createdDate;
-      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-    });
-
-  const allSelected = filtered.length > 0 && filtered.every((e) => selected.has(e.id));
-
-  function toggleAll() {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(filtered.map((e) => e.id)));
-  }
-
-  function primaryLocation(e: BusinessEntity) {
-    return e.locations.find((l) => l.isPrimary) ?? e.locations[0];
-  }
-
-  function primaryContact(e: BusinessEntity) {
-    return e.contacts.find((c) => c.isPrimary) ?? e.contacts[0];
-  }
-
-  const customers = entities.filter((e) => e.status === 'Customer').length;
-  const prospects = entities.filter((e) => e.status === 'Prospect').length;
-
+/** Showing x–y of N · page buttons · rows per page (Task Management's pagination bar). */
+function PaginationBar({ total, page, pageSize, onPage, onPageSize }: {
+  total: number; page: number; pageSize: number; onPage: (p: number) => void; onPageSize: (s: number) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = total ? (page - 1) * pageSize + 1 : 0;
+  const end = Math.min(page * pageSize, total);
+  const nav = 'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-muted shadow-sm hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40';
   return (
-    <div className="page-gutter space-y-5 py-4">
-      <PageHeader
-        title="Business Entities"
-        subtitle="Companies, customers, dealers and distribution partners"
-        actions={
-          <Button variant="solid" onClick={onCreate}>
-            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Create Business Entity
-          </Button>
-        }
-      />
-
-      <StatPillRow>
-        <StatPill label="Total" value={entities.length} tone="primary" />
-        <StatPill label="Customers" value={customers} tone="success" />
-        <StatPill label="Prospects" value={prospects} tone="warning" />
-        <StatPill label="Inactive" value={entities.filter((e) => e.status === 'Inactive').length} tone="muted" />
-      </StatPillRow>
-
-      {/* Filters: search full-width, then equal filter columns */}
-      <div className="mb-4 space-y-2">
-        <FilterSearch
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by company name or GSTIN…"
-          aria-label="Search entities"
-        />
-        <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <FilterSelect
-            aria-label="Entity type"
-            widthClass="w-full"
-            value={typeFilter}
-            onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}
-            options={[
-              { value: 'All', label: 'All Types' },
-              ...sortAlpha(activeEntityTypeNames).map((t) => ({ value: t, label: t })),
-            ]}
-          />
-          <FilterSelect
-            aria-label="Entity status"
-            widthClass="w-full"
-            value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
-            options={[
-              { value: 'All', label: 'All Statuses' },
-              ...sortAlpha(ENTITY_STATUSES).map((s) => ({ value: s, label: s })),
-            ]}
-          />
-          <FilterSelect
-            aria-label="Territory"
-            widthClass="w-full"
-            value={territoryFilter}
-            onValueChange={setTerritoryFilter}
-            options={[
-              { value: 'All', label: 'All Territories' },
-              ...sortAlpha(TERRITORIES).map((t) => ({ value: t, label: t })),
-            ]}
-          />
-          <FilterSelect
-            aria-label="Salesperson"
-            widthClass="w-full"
-            value={salespersonFilter}
-            onValueChange={setSalespersonFilter}
-            options={[
-              { value: 'All', label: 'All Salespersons' },
-              ...sortAlpha(SALESPERSONS).map((s) => ({ value: s, label: s })),
-            ]}
-          />
+    <div className="flex flex-col items-center gap-2 border-t border-line bg-surface-muted px-4 py-2 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-3">
+      <span className="text-[11px] font-medium tabular-nums text-ink-muted lg:justify-self-start">
+        Showing <strong className="text-ink">{start}</strong>–<strong className="text-ink">{end}</strong> of <strong className="text-ink">{total}</strong> records
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button type="button" aria-label="Previous page" className={nav} disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          <Icon d="M15 19l-7-7 7-7" size={12} />
+        </button>
+        <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
+          {pageItems(page, totalPages).map((item, i) =>
+            item === '…' ? (
+              <span key={`gap-${i}`} className="px-1 text-[10px] text-ink-faint">…</span>
+            ) : (
+              <button key={item} type="button" onClick={() => onPage(item)} aria-current={item === page ? 'page' : undefined}
+                className={`h-6 w-9 rounded-md text-[10px] font-semibold tabular-nums transition-all ${item === page ? 'bg-primary text-surface shadow-sm' : 'text-ink-muted hover:bg-surface-hover hover:text-primary'}`}>
+                {item}
+              </button>
+            ),
+          )}
         </div>
-        {(search || typeFilter !== 'All' || statusFilter !== 'All' || territoryFilter !== 'All' || salespersonFilter !== 'All') ? (
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                setSearch('');
-                setTypeFilter('All');
-                setStatusFilter('All');
-                setTerritoryFilter('All');
-                setSalespersonFilter('All');
-              }}
-              className="h-8 shrink-0 rounded-lg border border-accent/30 bg-accent-soft px-3 text-xs font-semibold text-accent"
-            >
-              Clear filters
-            </button>
-          </div>
-        ) : null}
+        <button type="button" aria-label="Next page" className={nav} disabled={page >= totalPages} onClick={() => onPage(page + 1)}>
+          <Icon d="M9 5l7 7-7 7" size={12} />
+        </button>
       </div>
+      <div className="flex items-center gap-2 lg:justify-self-end">
+        <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Rows per page</span>
+        <Select size="compact" aria-label="Rows per page" preserveOrder rootClassName="w-20"
+          options={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
+          value={String(pageSize)} onValueChange={(v) => onPageSize(Number(v))} />
+      </div>
+    </div>
+  );
+}
 
-      {/* Table */}
-      <div className="rounded-2xl overflow-hidden border border-line bg-surface shadow-card">
-        <div className="table-scroll relative min-w-0">
-          <table className="crm-table w-full" style={{ minWidth: '72rem' }}>
-            <thead>
-              <tr>
-                <th className="sticky-col-check">
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll}
-                    className="rounded accent-primary" />
-                </th>
-                <th
-                  className="sticky-col-name"
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => toggleSort('name')}
-                >
-                  <span className="flex items-center justify-between gap-2">Business Entity Name <SortChevrons active={sortField === 'name'} dir={sortDir} /></span>
-                </th>
-                <th style={{ minWidth: 110 }}>Entity Type</th>
-                <th style={{ minWidth: 140 }}>City / State</th>
-                <th style={{ minWidth: 160 }}>Territory / Region</th>
-                <th style={{ minWidth: 130 }}>Salesperson</th>
-                <th style={{ minWidth: 100 }}>Status</th>
-                <th style={{ minWidth: 150 }}>Primary Contact</th>
-                <th style={{ minWidth: 90, cursor: 'pointer' }} onClick={() => toggleSort('createdDate')}>
-                  <span className="flex items-center justify-between gap-2">Active Leads <SortChevrons active={sortField === 'createdDate'} dir={sortDir} /></span>
-                </th>
-                <th style={{ minWidth: 120 }}>Last Activity</th>
-                <th className="sticky-col-end">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <SkeletonTableRows cols={11} rows={6} />}
-              {!loading && entities.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="table-empty-td">
-                    <EmptyState
-                      icon={EmptyIcons.entities}
-                      title="No business entities found"
-                      subtitle="Add your first customer, prospect or partner to get started."
-                      action={{ label: 'Create Business Entity', onClick: onCreate }}
-                    />
-                  </td>
-                </tr>
-              )}
-              {!loading && entities.length > 0 && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="table-empty-td">
-                    <NoResults onClear={() => { setSearch(''); setTypeFilter('All'); setStatusFilter('All'); setTerritoryFilter('All'); setSalespersonFilter('All'); }} />
-                  </td>
-                </tr>
-              )}
-              {!loading && filtered.map((entity) => {
-                const loc = primaryLocation(entity);
-                const contact = primaryContact(entity);
-                return (
-                  <tr key={entity.id}>
-                    <td className="sticky-col-check">
-                      <input type="checkbox" checked={selected.has(entity.id)}
-                        onChange={() => setSelected((s) => { const n = new Set(s); n.has(entity.id) ? n.delete(entity.id) : n.add(entity.id); return n; })}
-                        className='accent-primary' />
-                    </td>
-                    <td className="sticky-col-name">
-                      <button onClick={() => onView(entity.id)}
-                        className="flex items-center gap-2.5 text-left group">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0 bg-gradient-to-br from-ink to-primary text-xs text-surface">
-                          {entity.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold group-hover:underline text-primary">
-                            {entity.name}
-                          </p>
-                          <p className="text-xs text-ink-faint">{entity.id}</p>
-                        </div>
-                      </button>
-                    </td>
-                    <td><TypeBadge type={entity.type} /></td>
-                    <td>
-                      {loc ? (
-                        <div>
-                          <p className="text-xs font-semibold text-ink">{loc.city}</p>
-                          <p className="text-xs text-ink-faint">{loc.state}</p>
-                        </div>
-                      ) : <span className="text-line-strong">—</span>}
-                    </td>
-                    <td className="text-xs text-ink-soft">
-                      {loc?.territory || '—'}
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 h-6 w-6 bg-primary text-[8px] text-surface">
-                          {entity.salesperson.split(' ').map((n) => n[0]).join('')}
-                        </div>
-                        <span className="text-xs text-ink">{entity.salesperson}</span>
-                      </div>
-                    </td>
-                    <td><StatusBadge status={entity.status} /></td>
-                    <td>
-                      {contact ? (
-                        <div>
-                          <p className="text-xs font-semibold text-ink">{contact.name}</p>
-                          <p className="text-xs text-ink-faint">{contact.designation}</p>
-                        </div>
-                      ) : <span className="text-line-strong">—</span>}
-                    </td>
-                    <td className="text-center">
-                      {entity.activeLeads > 0 ? (
-                        <CountBadge value={entity.activeLeads} size="md" tone="accent" />
-                      ) : (
-                        <span className="text-xs text-line-strong">—</span>
-                      )}
-                    </td>
-                    <td className="text-xs text-ink-muted">{formatDate(entity.lastActivity)}</td>
-                    <td className="sticky-col-end" onClick={(e) => e.stopPropagation()}>
-                      <RecordRowActions
-                        onView={() => onView(entity.id)}
-                        onEdit={() => onEdit(entity.id)}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+/** Business Entities list, laid out and behaving as the Task Management "Business Entity" master list. */
+export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Props) {
+  const rights = useFormRights(FORM_NO.businessEntity);
+  const company = useSpectrumCompany();
+  const [view, setView] = useState<ListViewMode>('list');
+  const [search, setSearch] = useState('');
+  const keyword = useDeferredValue(search.trim());
+  const [serverKeyword, setServerKeyword] = useState('');
+  const [letter, setLetter] = useState('');
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [typeNames, setTypeNames] = useState<ReadonlyMap<number, string>>(new Map());
+  const [confirmDelete, setConfirmDelete] = useState<EntityListRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prependFrom = useRef<{ height: number; top: number } | null>(null);
+  const source = sourceOf(view);
+
+  // The loaded rows are filtered as you type; the server is also asked once typing pauses.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setServerKeyword(keyword), 350);
+    return () => window.clearTimeout(timer);
+  }, [keyword]);
+
+  // Type names for rows that only carry the type number.
+  useEffect(() => {
+    if (!company.headOfficeNo) return;
+    let cancelled = false;
+    getBusinessEntityFillValues(company.headOfficeNo)
+      .then((fill) => { if (!cancelled) setTypeNames(new Map(fill.businessEntityTypes.map((t) => [t.typeNo, t.typeName]))); })
+      .catch(() => { /* names stay as the search sent them */ });
+    return () => { cancelled = true; };
+  }, [company.headOfficeNo]);
+
+  const feed = useBusinessEntityFeed(source, {
+    keyword: serverKeyword,
+    startsWith: letter,
+    enabled: company.enabled && rights.isOpen,
+    typeNames,
+    reloadKey: `${reloadKey}:${company.companyNo ?? ''}`,
+  });
+
+  // A new view starts from the top, sorted by its default column.
+  useEffect(() => {
+    setLetter('');
+    setSort({ field: SORT_FIELD[view], dir: 'asc' });
+    setPage(1);
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [view]);
+
+  useEffect(() => { setPage(1); }, [keyword, letter]);
+
+  const filtered = useMemo(() => searchRows(feed.rows, keyword), [feed.rows, keyword]);
+  // A search ranks best matches first; otherwise the chosen column sorts.
+  const ordered = useMemo(() => (keyword ? filtered : sortRows(filtered, sort)), [filtered, keyword, sort]);
+  const totalPages = Math.max(1, Math.ceil(ordered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = ordered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  // Keep the reader's place when earlier rows are added above.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const from = prependFrom.current;
+    if (!el || !from || feed.loadingMore) return;
+    prependFrom.current = null;
+    el.scrollTop = from.top + (el.scrollHeight - from.height);
+  }, [feed.rows, feed.loadingMore]);
+
+  // While the list does not fill its box, the next server page loads (as in Task Management).
+  const { loading: feedLoading, loadingMore, hasNext, error: feedError, loadNext } = feed;
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const el = scrollRef.current;
+      if (!el || feedLoading || loadingMore || !hasNext || feedError) return;
+      if (el.scrollHeight <= el.clientHeight + 4) void loadNext();
+    }, 200);
+    return () => window.clearTimeout(timer);
+    // `loadNext` is recreated each render; the state it reads is listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedLoading, loadingMore, hasNext, feedError, feed.rows.length, pageRows.length]);
+
+  const lastTop = useRef(0);
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el || feed.loading || feed.loadingMore) return;
+    const down = el.scrollTop > lastTop.current;
+    const up = el.scrollTop < lastTop.current;
+    lastTop.current = el.scrollTop;
+    if (down && el.scrollHeight - el.scrollTop - el.clientHeight < 80 && feed.hasNext) void feed.loadNext();
+    else if (up && el.scrollTop < 20 && feed.hasPrev) {
+      prependFrom.current = { height: el.scrollHeight, top: el.scrollTop };
+      void feed.loadPrev();
+    }
+  }
+
+  function pickLetter(next: string) {
+    setLetter((current) => (current === next ? '' : next));
+    scrollRef.current?.scrollTo({ top: 0 });
+  }
+
+  async function remove(row: EntityListRow) {
+    setDeleting(true);
+    try {
+      await deleteBusinessEntity(row.businessEntityNo);
+      onToast?.('success', 'Business entity deleted');
+      setConfirmDelete(null);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      onToast?.('error', 'Failed to delete business entity', toApiError(err).message);
+      setConfirmDelete(null);
+      setReloadKey((k) => k + 1);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const handlers = {
+    onEdit: rights.isUpdate ? onEdit : undefined,
+    onDelete: rights.isDelete ? setConfirmDelete : undefined,
+  };
+  const sortProps = { sort, onSort: (field: string) => setSort((prev) => nextSort(prev, field, DEFAULT_SORT)) };
+  const enabledLetters = new Set(feed.alphabets.map((l) => l.toUpperCase()));
+  const searching = Boolean(search.trim());
+
+  if (!rights.ready) {
+    return <div className="flex flex-1 items-center justify-center py-16"><Spinner label="Loading" /></div>;
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
+      <div className="page-gutter flex min-h-0 flex-1 flex-col gap-3 py-3">
+        <div className="flex shrink-0 flex-col items-stretch gap-2 lg:flex-row lg:items-center">
+          <label className="flex h-10 flex-1 items-center gap-2.5 rounded-lg border border-line bg-surface px-3 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.06)]">
+            <Icon d={ICON.search} size={16} className="shrink-0 text-ink-faint" />
+            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search"
+              placeholder="Search business entity records by name, code..."
+              className="h-full min-w-0 flex-1 border-none bg-transparent p-0 text-xs font-medium text-ink outline-none placeholder:text-ink-faint" />
+          </label>
+          <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5" role="tablist" aria-label="View">
+            {VIEW_MODES.map((mode) => (
+              <button key={mode.id} type="button" role="tab" aria-selected={view === mode.id} onClick={() => setView(mode.id)}
+                className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors ${
+                  view === mode.id ? 'bg-primary text-surface' : 'text-ink-muted hover:bg-surface-hover hover:text-ink'
+                }`}>
+                <Icon d={mode.icon} size={12} />
+                <span>{mode.label}</span>
+              </button>
+            ))}
+          </div>
+          {rights.isSave ? (
+            <SolidButton className="h-9 px-4" onClick={onCreate}>
+              <Icon d={ICON.plus} size={14} strokeWidth={2.5} /> Create Business Entity
+            </SolidButton>
+          ) : null}
         </div>
-        {filtered.length > 0 && (
-          <div className="px-5 py-3 flex items-center justify-between border-t border-line-subtle">
-            <p className="text-xs text-ink-faint">
-              Showing <span className="font-semibold text-ink">{filtered.length}</span> of{' '}
-              <span className="font-semibold text-ink">{entities.length}</span> entities
-            </p>
-            {selected.size > 0 && (
-              <p className="text-xs font-semibold text-primary">
-                {selected.size} selected
-              </p>
+
+        {!company.ready ? (
+          <div className="flex justify-center py-16"><Spinner label="Loading" /></div>
+        ) : !company.enabled ? (
+          <SpectrumRequiredNotice what="Business entities" />
+        ) : (
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-[0_8px_30px_-12px_rgba(15,23,42,0.06)]">
+            {feed.loading && feed.rows.length === 0 ? (
+              <div className="flex min-h-[200px] items-center justify-center p-10"><Spinner label="Loading business entities" /></div>
+            ) : feed.error && feed.rows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 p-10 text-center">
+                <p className="text-sm font-semibold text-ink">Failed to load business entities</p>
+                <p className="text-xs text-ink-muted">Could not load this list. Retry runs the same search again.</p>
+                <p className="text-xs text-accent">{feed.error}</p>
+                <OutlineButton className="mt-2 h-9" onClick={() => setReloadKey((k) => k + 1)}>Retry</OutlineButton>
+              </div>
+            ) : ordered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 p-10 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-soft text-primary"><Icon d={ICON.layers} size={20} /></span>
+                <p className="text-sm font-semibold text-ink">{searching ? 'No results match your search' : 'No Companies Found'}</p>
+                <p className="max-w-md text-xs text-ink-muted">
+                  {searching
+                    ? 'Try a different search term or clear the search to see all business entities.'
+                    : 'No companies match your criteria. Try adjusting filters or click the Add button above to create a new one.'}
+                </p>
+                {searching ? <OutlineButton className="mt-2 h-9" onClick={() => setSearch('')}>Clear search</OutlineButton> : null}
+              </div>
+            ) : (
+              <>
+                <div className="flex shrink-0 items-center justify-between border-b border-line bg-surface-muted/50 px-4 py-2">
+                  <span className="text-[11px] font-semibold text-ink-faint">Total {ordered.length} Records</span>
+                  <OutlineButton active className="h-7 px-3" onClick={() => downloadCsv('Business_Entity_Report.csv', exportRows(view, ordered))}>
+                    <Icon d={ICON.download} size={12} /> Export CSV
+                  </OutlineButton>
+                </div>
+                <div className="flex min-h-0 flex-1 overflow-hidden">
+                  <div ref={scrollRef} onScroll={onScroll}
+                    onWheel={(e) => { if (e.currentTarget.scrollTop === 0 && e.deltaY < 0 && feed.hasPrev && !feed.loadingMore) void feed.loadPrev(); }}
+                    className="relative min-h-0 min-w-0 flex-1 overflow-auto select-none"
+                    aria-busy={feed.loading || Boolean(feed.loadingMore)}>
+                    {feed.loadingMore === 'prev' ? <div className="flex justify-center py-2"><Spinner label="Loading earlier" /></div> : null}
+                    {view === 'list' ? (
+                      <EntityTable rows={pageRows as EntityListRow[]} {...handlers} {...sortProps} />
+                    ) : view === 'album' ? (
+                      <EntityAlbum rows={pageRows as EntityListRow[]} {...handlers} />
+                    ) : view === 'contact-list' ? (
+                      <ContactTable rows={pageRows as ContactListRow[]} onEdit={handlers.onEdit} {...sortProps} />
+                    ) : view === 'contact-album' ? (
+                      <ContactAlbum rows={pageRows as ContactListRow[]} onEdit={handlers.onEdit} />
+                    ) : (
+                      <AttachmentGroups rows={pageRows as AttachmentListRow[]} onEdit={handlers.onEdit} onPreview={setPreview} />
+                    )}
+                    {feed.loadingMore === 'next' ? <div className="flex justify-center py-3"><Spinner label="Loading more" /></div> : null}
+                    {feed.error ? (
+                      <div className="flex items-center justify-center gap-2 py-3 text-xs text-accent" role="alert">
+                        <span>Failed to load more business entities: {feed.error}</span>
+                        <button type="button" className="font-bold underline" onClick={() => void feed.loadNext()}>Retry</button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* A–Z jump: letters with entries are enabled; picking the active letter again clears it. */}
+                  <nav aria-label="Jump to letter" className="flex w-7 shrink-0 flex-col items-center gap-px overflow-y-auto border-l border-line py-2">
+                    {LETTERS.map((l) => {
+                      const enabled = enabledLetters.has(l) || letter === l;
+                      return (
+                        <button key={l} type="button" disabled={!enabled || feed.loading} aria-pressed={letter === l} onClick={() => pickLetter(l)}
+                          className={`h-5 w-5 rounded text-[9px] font-semibold transition-colors ${
+                            letter === l ? 'bg-primary text-surface' : enabled ? 'text-primary hover:bg-primary-soft' : 'cursor-default text-ink-faint/50'
+                          }`}>
+                          {l}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+                <PaginationBar total={ordered.length} page={safePage} pageSize={pageSize} onPage={setPage}
+                  onPageSize={(size) => { setPageSize(size); setPage(1); }} />
+              </>
             )}
           </div>
         )}
       </div>
+
+      {confirmDelete ? (
+        <ConfirmDialog
+          title="Delete business entity"
+          message={`Are you sure you want to delete "${confirmDelete.name || confirmDelete.code}"? This action cannot be undone.`}
+          confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+          danger
+          onConfirm={() => { if (!deleting) void remove(confirmDelete); }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      ) : null}
+
+      {preview ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-modal="true" aria-label="Image preview"
+          onClick={() => setPreview(null)}>
+          <img src={preview} alt="Attachment preview" className="max-h-full max-w-full rounded-lg object-contain shadow-overlay" />
+          <button type="button" className="absolute right-4 top-4 rounded-full bg-surface/90 px-3 py-1 text-xs font-bold text-ink" onClick={() => setPreview(null)}>
+            Close
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

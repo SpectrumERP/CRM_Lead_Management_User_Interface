@@ -1,8 +1,16 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState } from 'react'
+import { FORM_NO } from '../api/formRights'
+import { useSpectrumCompany } from '../auth/useSpectrumCompany'
+import { useFormRights } from '../contexts/FormRightsContext'
+import { useOptionalToast } from '../contexts/ToastContext'
 import type { LeadContactEntry } from '../data/leads'
-import { FormGrid, TableSearchSelect, TableSearchSelectField, Tag, Field, type TableSearchColumn } from '../ui'
-import { useBusinessEntityOptions, type EntityOption } from './useBusinessEntityOptions'
+import { FormGrid, Spinner, TableSearchSelect, TableSearchSelectField, Tag, Field, type TableSearchColumn } from '../ui'
+import OverlayShell from './OverlayShell'
+import { loadCreatedEntity, spectrumEntityId, useBusinessEntityOptions, type EntityOption } from './useBusinessEntityOptions'
 import { useContactPersonOptions } from './useContactPersonOptions'
+
+// The entity form loads only when someone creates an entity from the field.
+const CreateBusinessEntity = lazy(() => import('../pages/CreateBusinessEntity'))
 
 /** A contact as the lead / opportunity forms hold it. */
 export interface ContactPick {
@@ -90,6 +98,14 @@ export default function EntityContactsFields({ value, onChange, errors = {}, ent
   const { entity, primary, secondary } = value
   const entityField = useBusinessEntityOptions(entity)
   const contactField = useContactPersonOptions(entity)
+  const company = useSpectrumCompany()
+  const entityRights = useFormRights(FORM_NO.businessEntity)
+  const { addToast } = useOptionalToast()
+  const [creating, setCreating] = useState(false)
+  // Latest value for the read-back after a create (the user may pick something else meanwhile).
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const canCreate = entityField.remote && entityRights.isSave && !entityLocked
 
   // Contact persons of the selected server entity only. An entity known only by name (older record,
   // no entity number) has nothing to query — the user picks the entity again.
@@ -126,6 +142,35 @@ export default function EntityContactsFields({ value, onChange, errors = {}, ent
     onChange({ entity: next, primary: null, secondary: [] })
   }
 
+  /** A new entity from the "Create Business Entity" drawer: select it, then fill its code and primary contact. */
+  async function entityCreated(businessEntityNo: number, name: string) {
+    setCreating(false)
+    const id = spectrumEntityId(businessEntityNo)
+    onChange({ entity: { id, name, type: '', city: '', source: 'spectrum', businessEntityNo }, primary: null, secondary: [] })
+    addToast('success', 'Business Entity Created', `"${name}" is selected.`)
+    if (!company.headOfficeNo) return
+    try {
+      const { entity: created, primaryContact: p } = await loadCreatedEntity(businessEntityNo, company.headOfficeNo)
+      if (valueRef.current.entity?.id !== id) return
+      onChange({
+        entity: created,
+        primary: p
+          ? {
+              id: `SPX-CP-${p.contactPersonNo}`,
+              name: p.name,
+              designation: p.designation,
+              email: p.email,
+              phone: p.phone,
+              businessEntityContactPersonDetailNo: p.contactPersonNo ?? undefined,
+            }
+          : null,
+        secondary: [],
+      })
+    } catch {
+      // The entity stays selected by name and number; its contacts load when the field opens.
+    }
+  }
+
   function setPrimary(next: ContactPick | null) {
     onChange({ ...value, primary: next, secondary: secondary.filter((c) => c.id !== next?.id) })
   }
@@ -152,6 +197,7 @@ export default function EntityContactsFields({ value, onChange, errors = {}, ent
         onOpenChange={entityField.onOpenChange}
         loading={entityField.loading}
         footer={entityField.footer}
+        action={canCreate ? { label: 'Create Business Entity', onSelect: () => setCreating(true) } : undefined}
       />
       <TableSearchSelectField
         label="Primary Contact Person"
@@ -206,6 +252,21 @@ export default function EntityContactsFields({ value, onChange, errors = {}, ent
           </div>
         ) : null}
       </div>
+      {creating ? (
+        <OverlayShell title="New Business Entity" subtitle="Create it here and it is selected on this form" widthClass="w-full max-w-6xl"
+          onClose={() => setCreating(false)}>
+          {(requestClose) => (
+            <Suspense fallback={<div className="flex justify-center py-16"><Spinner label="Loading form" /></div>}>
+              <CreateBusinessEntity
+                embedded
+                onBack={requestClose}
+                onSuccess={(no, name) => void entityCreated(no, name)}
+                onToast={addToast}
+              />
+            </Suspense>
+          )}
+        </OverlayShell>
+      ) : null}
     </FormGrid>
   )
 }

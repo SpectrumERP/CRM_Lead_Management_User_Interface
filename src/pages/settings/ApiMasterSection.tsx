@@ -3,6 +3,7 @@ import { toApiError } from '../../api/errors';
 import { NAME_MAX, needsDetailForEdit, type MasterApi, type MasterRow } from '../../api/masters';
 import { clearLeadFillValuesCache } from '../../api/leadFormFillValues';
 import { clearOpportunityFillValuesCache } from '../../api/opportunityFormFillValues';
+import { clearBusinessEntityFillValuesCache } from '../../api/businessEntityFillValues';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import type { ToastType } from '../../components/Toast';
 import { IconTooltip, Spinner } from '../../ui';
@@ -20,6 +21,17 @@ export interface ApiMasterSectionProps {
   noun: string;
   namePlaceholder: string;
   onToast?: (type: ToastType, title: string, message?: string) => void;
+  /** Form rights (see formRights.ts); everything allowed when omitted. */
+  rights?: { canAdd: boolean; canEdit: boolean; canDelete: boolean };
+}
+
+const FULL_RIGHTS = { canAdd: true, canEdit: true, canDelete: true };
+
+/** Forms opened from now on fetch the changed lists. */
+function clearFillValueCaches() {
+  clearLeadFillValuesCache();
+  clearOpportunityFillValuesCache();
+  clearBusinessEntityFillValuesCache();
 }
 
 
@@ -59,7 +71,7 @@ const DEFAULT_COLOR = '#2955A3';
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** Master backed by the Spectrum Save / Search / Delete APIs. Status is read-only (the API has no toggle). */
-export default function ApiMasterSection({ api, state, title, subtitle, noun, namePlaceholder, onToast }: ApiMasterSectionProps) {
+export default function ApiMasterSection({ api, state, title, subtitle, noun, namePlaceholder, onToast, rights = FULL_RIGHTS }: ApiMasterSectionProps) {
   const confirm = useConfirm()
   const { rows, loading, error, reload } = state;
   const hasSequence = api.definition.hasSequence;
@@ -162,6 +174,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     try {
       await api.save({
         no: editing?.no ?? null,
+        companyNo: state.companyNo,
         name: form.name.trim(),
         sequence: hasSequence ? Number(form.sequence) : undefined,
         description: hasDescription ? form.description : undefined,
@@ -174,9 +187,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
             }))
           : undefined,
       });
-      // Forms opened from now on fetch the changed lists.
-      clearLeadFillValuesCache();
-      clearOpportunityFillValuesCache();
+      clearFillValueCaches();
       onToast?.('success', isNew ? `${noun} Added` : `${noun} Updated`, `"${form.name.trim()}" saved successfully.`);
       closeModal();
       await reload();
@@ -192,8 +203,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     setDeleting(true);
     try {
       await api.remove(item.no);
-      clearLeadFillValuesCache();
-      clearOpportunityFillValuesCache();
+      clearFillValueCaches();
       onToast?.('info', `${noun} Deleted`, `"${item.name}" has been deleted.`);
       setConfirmDelete(null);
       await reload();
@@ -207,7 +217,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
 
   return (
     <div>
-      <SectionHeader title={title} subtitle={subtitle} count={rows.length} onAdd={openAdd} />
+      <SectionHeader title={title} subtitle={subtitle} count={rows.length} onAdd={rights.canAdd ? openAdd : undefined} />
       <FilterBar search={search} onSearch={setSearch} statusFilter={statusFilter} onStatus={setStatusFilter}
         onClear={() => { setSearch(''); setStatusFilter('All'); }} />
 
@@ -230,7 +240,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
           {loading && rows.length === 0 ? (
             <tr><td colSpan={99} className="py-16"><div className="flex justify-center"><Spinner label={`Loading ${title}`} /></div></td></tr>
           ) : filtered.length === 0 ? (
-            error ? null : <EmptyRows onAdd={openAdd} />
+            error ? null : <EmptyRows onAdd={rights.canAdd ? openAdd : undefined} />
           ) : filtered.map((item) => (
             <tr key={item.no} style={{ opacity: item.inactive ? 0.6 : 1 }}>
               {hasSequence ? (
@@ -259,8 +269,8 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
               </Td>
               <Td right narrow>
                 <div className="flex items-center gap-1 justify-end">
-                  <EditAction onClick={() => void openEdit(item)} />
-                  <DeleteAction onClick={() => setConfirmDelete(item)} />
+                  {rights.canEdit ? <EditAction onClick={() => void openEdit(item)} /> : null}
+                  {rights.canDelete ? <DeleteAction onClick={() => setConfirmDelete(item)} /> : null}
                 </div>
               </Td>
             </tr>
@@ -284,7 +294,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
           </FormField>
           {hasDescription ? (
             <FormField label="Description">
-              <textarea className="form-input resize-none" rows={2}
+              <textarea className="form-input resize-none" rows={2} maxLength={api.definition.descriptionMax}
                 value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </FormField>
           ) : null}

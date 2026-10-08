@@ -11,7 +11,7 @@ const PAGE_LOADERS: Partial<Record<AppPage, () => Promise<unknown>>> = {
   'lead-detail': () => import('../pages/LeadDetail'),
   'business-entities': () => import('../pages/BusinessEntitiesList'),
   'create-business-entity': () => import('../pages/CreateBusinessEntity'),
-  'business-entity-detail': () => import('../pages/BusinessEntityDetail'),
+  'edit-business-entity': () => import('../pages/CreateBusinessEntity'),
   contacts: () => import('../pages/ContactsList'),
   'create-contact': () => import('../pages/CreateContact'),
   'contact-detail': () => import('../pages/ContactDetail'),

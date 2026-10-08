@@ -47,7 +47,6 @@ export interface CrmStore {
   addLead: (lead: Lead) => void
   patchLead: (id: string, patch: Partial<Lead>) => void
   removeLead: (id: string) => void
-  addEntity: (entity: BusinessEntity) => void
   addContact: (contact: Contact) => void
   addActivity: (activity: Activity) => void
   addMeeting: (meeting: Meeting) => void
@@ -75,7 +74,6 @@ const RAW_ACTIONS = {
   addLead: api.leads.create,
   patchLead: api.leads.update,
   removeLead: api.leads.remove,
-  addEntity: api.entities.create,
   addContact: api.contacts.create,
   addActivity: api.activities.create,
   addMeeting: api.meetings.create,
@@ -174,9 +172,6 @@ export function useCrmActions() {
           return
         }
         run(() => RAW_ACTIONS.removeLead(id))
-      },
-      addEntity: (entity: BusinessEntity) => {
-        run(() => RAW_ACTIONS.addEntity(entity))
       },
       addContact: (contact: Contact) => {
         run(() => RAW_ACTIONS.addContact(contact))

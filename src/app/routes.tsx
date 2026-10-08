@@ -1,4 +1,4 @@
-import { lazy, useEffect } from 'react'
+import { lazy, useEffect, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useCrmSelector } from '../contexts/CrmStoreContext'
 import { useToast } from '../contexts/ToastContext'
@@ -6,6 +6,8 @@ import AppShell from './AppShell'
 import { AdminGuard, AuthGuard } from './guards'
 import { paths } from './paths'
 import { isLeadLocked, leadLockedReason } from '../data/leads'
+import { FORM_NO } from '../api/formRights'
+import { useFormRights } from '../contexts/FormRightsContext'
 
 const Dashboard = lazy(() => import('../pages/Dashboard'))
 const LeadsList = lazy(() => import('../pages/LeadsList'))
@@ -19,7 +21,6 @@ const ActivitiesPage = lazy(() => import('../pages/Activities'))
 const MeetingsPage = lazy(() => import('../pages/Meetings'))
 const BusinessEntitiesList = lazy(() => import('../pages/BusinessEntitiesList'))
 const CreateBusinessEntity = lazy(() => import('../pages/CreateBusinessEntity'))
-const BusinessEntityDetail = lazy(() => import('../pages/BusinessEntityDetail'))
 const ContactsList = lazy(() => import('../pages/ContactsList'))
 const CreateContact = lazy(() => import('../pages/CreateContact'))
 const ContactDetail = lazy(() => import('../pages/ContactDetail'))
@@ -45,14 +46,24 @@ function DashboardPage() {
   )
 }
 
+/** Business entity screens need the Open right on form 1550 (see formRights.ts). */
+function EntityRightsGate({ children }: { children: ReactNode }) {
+  const rights = useFormRights(FORM_NO.businessEntity)
+  if (rights.ready && !rights.isOpen) return <Navigate to={paths.forbidden} replace />
+  return children
+}
+
 function EntitiesListPage() {
   const navigate = useNavigate()
+  const { addToast } = useToast()
   return (
-    <BusinessEntitiesList
-      onCreate={() => navigate(paths.entityNew)}
-      onView={(id) => navigate(paths.entity(id))}
-      onEdit={(id) => navigate(paths.entityEdit(id))}
-    />
+    <EntityRightsGate>
+      <BusinessEntitiesList
+        onCreate={() => navigate(paths.entityNew)}
+        onEdit={(no) => navigate(paths.entityEdit(String(no)))}
+        onToast={addToast}
+      />
+    </EntityRightsGate>
   )
 }
 
@@ -60,13 +71,16 @@ function CreateEntityPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   return (
-    <CreateBusinessEntity
-      onBack={() => navigate(paths.entities)}
-      onSuccess={() => {
-        navigate(paths.entities)
-        addToast('success', 'Business Entity Created', 'New entity has been saved successfully.')
-      }}
-    />
+    <EntityRightsGate>
+      <CreateBusinessEntity
+        onBack={() => navigate(paths.entities)}
+        onSuccess={() => {
+          navigate(paths.entities)
+          addToast('success', 'Data saved successfully.')
+        }}
+        onToast={addToast}
+      />
+    </EntityRightsGate>
   )
 }
 
@@ -74,32 +88,28 @@ function EditEntityPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { addToast } = useToast()
-  const existing = useCrmSelector((state) => state.entities.find((entity) => entity.id === id) ?? null)
+  const businessEntityNo = Number(id)
+  if (!Number.isInteger(businessEntityNo) || businessEntityNo < 1) return <Navigate to={paths.entities} replace />
   return (
-    <CreateBusinessEntity
-      existing={existing}
-      onBack={() => navigate(paths.entity(id))}
-      onSuccess={() => {
-        navigate(paths.entity(id))
-        addToast('success', 'Entity Updated', 'Changes saved successfully.')
-      }}
-    />
+    <EntityRightsGate>
+      <CreateBusinessEntity
+        key={businessEntityNo}
+        businessEntityNo={businessEntityNo}
+        onBack={() => navigate(paths.entities)}
+        onSuccess={() => {
+          navigate(paths.entities)
+          addToast('success', 'Data saved successfully.')
+        }}
+        onToast={addToast}
+      />
+    </EntityRightsGate>
   )
 }
 
-function EntityDetailPage() {
+/** Entities open straight in their form (as in Task Management); old detail links land there. */
+function EntityDetailRedirect() {
   const { id = '' } = useParams()
-  const navigate = useNavigate()
-  const { addToast } = useToast()
-  return (
-    <BusinessEntityDetail
-      entityId={id}
-      onBack={() => navigate(paths.entities)}
-      onEdit={(entityId) => navigate(paths.entityEdit(entityId))}
-      onViewLead={(leadId) => navigate(paths.lead(leadId))}
-      onToast={addToast}
-    />
-  )
+  return <Navigate to={paths.entityEdit(id)} replace />
 }
 
 function ContactsListPage() {
@@ -377,7 +387,7 @@ export function AppRouter() {
           <Route index element={<DashboardPage />} />
           <Route path="entities" element={<EntitiesListPage />} />
           <Route path="entities/new" element={<CreateEntityPage />} />
-          <Route path="entities/:id" element={<EntityDetailPage />} />
+          <Route path="entities/:id" element={<EntityDetailRedirect />} />
           <Route path="entities/:id/edit" element={<EditEntityPage />} />
           <Route path="contacts" element={<ContactsListPage />} />
           <Route path="contacts/new" element={<CreateContactPage />} />

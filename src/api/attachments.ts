@@ -22,12 +22,14 @@ function formNoFromEnv(raw: string | undefined, fallback: number): number {
 }
 
 /**
- * Spectrum form numbers the store files attachments under: Lead 377, Opportunity 380
- * (Task Management uses Task 1547, Business Entity 1550). VITE_LEAD_FORM_NO / VITE_OPPORTUNITY_FORM_NO override.
+ * Spectrum form numbers the store files attachments under: Lead 377, Opportunity 380, Business Entity 1550
+ * (shared with Task Management, which also uses Task 1547). VITE_LEAD_FORM_NO / VITE_OPPORTUNITY_FORM_NO /
+ * VITE_BUSINESS_ENTITY_FORM_NO override.
  */
 export const ATTACHMENT_FORM_NO = {
   lead: formNoFromEnv(import.meta.env.VITE_LEAD_FORM_NO, 377),
   opportunity: formNoFromEnv(import.meta.env.VITE_OPPORTUNITY_FORM_NO, 380),
+  businessEntity: formNoFromEnv(import.meta.env.VITE_BUSINESS_ENTITY_FORM_NO, 1550),
 } as const
 
 /** An uploaded file, as the forms keep it. `id` is the store's docNo. */
@@ -122,6 +124,31 @@ export async function renameAttachment(docNo: number, docName: string, formNo: n
 export async function deleteAttachment(docNo: number): Promise<void> {
   const response = await http.delete<SpectrumResponse<boolean>>(withQuery(spectrumEndpoints.attachments.delete, { docNo }))
   assertSuccess(response)
+}
+
+interface ImageRow {
+  docNo?: number
+  id?: number
+  imageBase64?: string | null
+  base64?: string | null
+  contentType?: string | null
+  mimeType?: string | null
+}
+
+/** Image thumbnails as data URLs, by docNo. Files the server has no image for are left out. */
+export async function fetchAttachmentImages(docNos: readonly number[], signal?: AbortSignal): Promise<Map<number, string>> {
+  const images = new Map<number, string>()
+  const ids = docNos.filter((no) => Number.isInteger(no) && no > 0)
+  if (!ids.length) return images
+  const response = await http.post<SpectrumResponse<ImageRow[] | null>>(spectrumEndpoints.attachments.images, ids, { signal })
+  assertSuccess(response)
+  for (const row of response.data ?? []) {
+    const docNo = Number(row.docNo ?? row.id)
+    const base64 = row.imageBase64 ?? row.base64
+    if (!docNo || !base64) continue
+    images.set(docNo, base64.startsWith('data:') ? base64 : `data:${row.contentType || row.mimeType || 'image/jpeg'};base64,${base64}`)
+  }
+  return images
 }
 
 /** The file with the auth header, typed from its name so PDFs / images render inline. */

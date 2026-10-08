@@ -27,7 +27,9 @@ export function StatusBadge({ status }: { status: MasterItemStatus }) {
 }
 
 export function SectionHeader({ title, subtitle, count, onAdd }: {
-  title: string; subtitle: string; count: number; onAdd: () => void;
+  title: string; subtitle: string; count: number;
+  /** Omit to hide Add New (no rights to add). */
+  onAdd?: () => void;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 mb-5">
@@ -35,14 +37,14 @@ export function SectionHeader({ title, subtitle, count, onAdd }: {
         <h2 className="text-base font-bold" style={{ fontFamily: 'DM Sans, sans-serif', color: C.text }}>{title}</h2>
         <p className="text-xs mt-0.5" style={{ color: C.muted }}>{subtitle} · <span style={{ color: C.blue, fontWeight: 600 }}>{count} configured</span></p>
       </div>
-      <button onClick={onAdd}
+      {onAdd ? <button onClick={onAdd}
         className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-white flex-shrink-0 transition-all"
         style={{ background: C.blue, boxShadow: '0 2px 8px rgba(41,85,163,0.25)' }}
         onMouseEnter={(e) => (e.currentTarget.style.background = '#1e3f87')}
         onMouseLeave={(e) => (e.currentTarget.style.background = C.blue)}>
         <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
         Add New
-      </button>
+      </button> : null}
     </div>
   );
 }
@@ -203,7 +205,7 @@ export function RowActions({ onEdit, onToggle, status }: { onEdit: () => void; o
 }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
-export function EmptyRows({ onAdd }: { onAdd: () => void }) {
+export function EmptyRows({ onAdd }: { onAdd?: () => void }) {
   return (
     <tr>
       <td colSpan={99} className="py-16 text-center">
@@ -211,8 +213,12 @@ export function EmptyRows({ onAdd }: { onAdd: () => void }) {
           <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#2955a3" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
         </div>
         <p className="text-sm font-bold mb-1" style={{ color: C.text }}>No items found</p>
-        <p className="text-xs mb-3" style={{ color: '#94a3b8' }}>Add your first item to get started.</p>
-        <button onClick={onAdd} className="px-4 py-2 rounded-lg text-xs font-bold text-white" style={{ background: C.blue }}>Add New</button>
+        {onAdd ? (
+          <>
+            <p className="text-xs mb-3" style={{ color: '#94a3b8' }}>Add your first item to get started.</p>
+            <button onClick={onAdd} className="px-4 py-2 rounded-lg text-xs font-bold text-white" style={{ background: C.blue }}>Add New</button>
+          </>
+        ) : null}
       </td>
     </tr>
   );

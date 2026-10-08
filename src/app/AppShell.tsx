@@ -48,7 +48,6 @@ function useShellDetailName() {
   const page = matchAppPage(pathname)
   const id = params.id ?? recordIdFromPath(pathname)
   return useCrmSelector((state) => {
-    if (page === 'business-entity-detail' && id) return state.entities.find((entity) => entity.id === id)?.name
     if (page === 'contact-detail' && id) return state.contacts.find((contact) => contact.id === id)?.name
     if (page === 'lead-detail' && id) return state.leads.find((lead) => lead.id === id)?.companyName
     if ((page === 'opportunity-detail' || page === 'edit-opportunity') && id) {

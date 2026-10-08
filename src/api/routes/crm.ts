@@ -1,5 +1,4 @@
 import type { Activity } from '../../data/activities'
-import type { BusinessEntity } from '../../data/businessEntities'
 import type { Contact } from '../../data/contacts'
 import type { CRMDocument } from '../../data/documents'
 import type { Lead } from '../../data/leads'
@@ -12,7 +11,6 @@ import {
   addActivity,
   addContact,
   addDocument,
-  addEntity,
   addLead,
   addMeeting,
   addEmail,
@@ -57,7 +55,6 @@ register('DELETE', endpoints.leads.item, ({ params }) => {
 })
 
 register('GET', endpoints.entities.list, () => listEntities())
-register('POST', endpoints.entities.create, ({ body }) => addEntity(body as BusinessEntity))
 register('GET', endpoints.entities.item, ({ params }) => getEntity(params.id ?? ''))
 
 register('GET', endpoints.contacts.list, () => listContacts())

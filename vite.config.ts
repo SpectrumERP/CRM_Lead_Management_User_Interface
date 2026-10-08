@@ -63,9 +63,13 @@ export default defineConfig({
     },
   },
   build: {
+    // OpenCV alone is ~10 MB; it loads only when the business card scanner opens.
+    chunkSizeWarningLimit: 11000,
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes('node_modules/@techstark/opencv-js')) return 'opencv'
+          if (id.includes('node_modules/tesseract.js')) return 'tesseract'
           if (id.includes('node_modules/react-router')) return 'router'
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'react'
         },

@@ -70,6 +70,8 @@ export interface MasterDetail {
 export interface MasterSaveInput {
   /** Omit or null to insert; > 0 to update. */
   no?: number | null
+  /** Head office the record belongs to — sent only by masters with `sendCompanyNo` (countries). */
+  companyNo?: number | null
   name: string
   sequence?: number
   description?: string
@@ -97,6 +99,10 @@ export interface MasterDefinition {
   hasSequence: boolean
   /** Has a free-text `description`. */
   hasDescription?: boolean
+  /** Longest description the server accepts (business entity types: 500). */
+  descriptionMax?: number
+  /** Save sends the head office as `companyNo` (countries). */
+  sendCompanyNo?: boolean
   /** Has a `colorCoding` hex colour (lead stages). */
   hasColor?: boolean
   /** Required yes / no fields sent on save (opportunity statuses: isFirstActivity / isLastActivity). */
@@ -224,7 +230,18 @@ export function createMasterApi(def: MasterDefinition) {
         assertPositive(input.sequence, 'Sequence')
         body.sequence = input.sequence
       }
-      if (def.hasDescription) body.description = input.description?.trim() || undefined
+      if (def.hasDescription) {
+        const description = input.description?.trim() ?? ''
+        if (def.descriptionMax && description.length > def.descriptionMax) {
+          fail('VALIDATION', `Description is too long — keep it to ${def.descriptionMax} characters or fewer.`)
+        }
+        // Sent as null when cleared, so an update removes the old text.
+        body.description = description || null
+      }
+      if (def.sendCompanyNo) {
+        assertPositive(input.companyNo ?? 0, 'Company')
+        body.companyNo = input.companyNo
+      }
       if (def.hasColor) body.colorCoding = input.colorCoding?.trim() || undefined
       // Required booleans: always sent (false when not ticked).
       for (const flag of def.flags ?? []) body[flag.key] = input.flags?.[flag.key] === true
@@ -302,6 +319,25 @@ export const masterApis = {
     hasSequence: false,
     searchFilters: false,
     label: 'Product',
+  }),
+  businessEntityTypes: createMasterApi({
+    path: 'business-entity-types',
+    field: 'operCRMBusinessEntityType',
+    nameMax: 50,
+    hasSequence: false,
+    hasDescription: true,
+    descriptionMax: 500,
+    searchFilters: false,
+    label: 'Business entity type',
+  }),
+  countries: createMasterApi({
+    path: 'countries',
+    field: 'country',
+    nameMax: 50,
+    hasSequence: false,
+    sendCompanyNo: true,
+    searchFilters: false,
+    label: 'Country',
   }),
 }
 

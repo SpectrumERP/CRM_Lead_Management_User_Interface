@@ -11,6 +11,8 @@ import { useAuth } from '../auth/AuthContext';
 import { isAdmin } from '../auth/users';
 import { getErrorTitle, PAGE_COPY } from '../constants/messages';
 import { IconTooltip, CountBadge } from '../ui';
+import { useFormRights } from '@/contexts/FormRightsContext';
+import { FORM_NO } from '@/api/formRights';
 
 /** Header global search is temporarily hidden. Flip to `true` to restore. */
 const SHOW_HEADER_SEARCH = false;
@@ -66,7 +68,7 @@ interface LayoutProps {
 }
 
 const navItems = [
-  // Only Leads and Opportunities are shown for now — the other menus are kept here, commented out.
+  // Contacts is kept here, commented out. Business Entities shows only with the Open right (form 1550).
   {
     id: 'dashboard' as Page,
     label: 'Dashboard',
@@ -79,15 +81,15 @@ const navItems = [
       </svg>
     ),
   },
-  // {
-  //   id: 'business-entities' as Page,
-  //   label: 'Business Entities',
-  //   icon: (
-  //     <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-  //       <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M9 21V7l6-4v18M9 11H3v10M15 21V11h6v10" />
-  //     </svg>
-  //   ),
-  // },
+  {
+    id: 'business-entities' as Page,
+    label: 'Business Entities',
+    icon: (
+      <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M9 21V7l6-4v18M9 11H3v10M15 21V11h6v10" />
+      </svg>
+    ),
+  },
   // {
   //   id: 'contacts' as Page,
   //   label: 'Contacts',
@@ -247,6 +249,8 @@ function AppSidebar({
 }) {
   const { user } = useAuth();
   const admin = isAdmin(user?.role);
+  const entityRights = useFormRights(FORM_NO.businessEntity);
+  const visibleNavItems = navItems.filter((item) => item.id !== 'business-entities' || entityRights.isOpen);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SidebarHeader collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
@@ -258,7 +262,7 @@ function AppSidebar({
           </p>
         ) : null}
         <div className="space-y-0.5">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <SidebarNavButton
               key={item.id}
               active={activePage === item.id}

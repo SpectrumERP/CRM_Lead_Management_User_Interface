@@ -46,7 +46,6 @@ export const api = {
   entities: {
     list: () => client.get<ListResponse<BusinessEntity>>(endpoints.entities.list),
     get: (id: string) => client.get<BusinessEntity>(endpoints.entities.byId(id)),
-    create: (entity: BusinessEntity) => client.postSync<void>(endpoints.entities.create, entity),
   },
   contacts: {
     list: () => client.get<ListResponse<Contact>>(endpoints.contacts.list),

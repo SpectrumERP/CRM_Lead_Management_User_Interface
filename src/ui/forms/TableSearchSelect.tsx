@@ -34,6 +34,8 @@ export interface TableSearchSelectProps<T> {
   loading?: boolean
   /** Small note above the search box, e.g. a load error. */
   footer?: ReactNode
+  /** Row at the bottom of the list, e.g. "+ Create Business Entity"; picking it closes the list first. */
+  action?: { label: string; onSelect: () => void }
   /** Fires when the list opens / closes — lets callers load options only once the user opens the field. */
   onOpenChange?: (open: boolean) => void
   /** Accessible name when there is no visible label (e.g. a currency picker inside a combo). */
@@ -72,6 +74,7 @@ export function TableSearchSelect<T>({
   onQueryChange,
   loading = false,
   footer,
+  action,
   onOpenChange,
   'aria-label': ariaLabel,
   inlineSearch = true,
@@ -359,6 +362,21 @@ export function TableSearchSelect<T>({
                   })
                 )}
               </div>
+              {action ? (
+                <button
+                  type="button"
+                  className="flex w-full shrink-0 items-center gap-2 border-t border-line-subtle px-3 py-2.5 text-left text-xs font-semibold text-primary transition-colors hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+                  onClick={() => {
+                    setOpen(false)
+                    action.onSelect()
+                  }}
+                >
+                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  {action.label}
+                </button>
+              ) : null}
               {footer ? (
                 <div className="shrink-0 border-t border-line-subtle px-3 py-1.5 text-[11px] text-ink-faint">{footer}</div>
               ) : null}
