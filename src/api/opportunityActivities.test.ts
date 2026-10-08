@@ -148,6 +148,7 @@ describe('opportunity view and activities', () => {
     const saves = fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/api/crm/opportunities/save-notes-detail')
     expect(JSON.parse(String(saves[0]![1].body))).toEqual({
       opportunityNo: 27,
+      opportunityNotesDetailNo: null,
       originatedBy: 'Vikram Nair',
       notesDate: new Date('2026-10-06T09:15:00').toISOString(),
       notesDiscussion: 'Follow up next week',

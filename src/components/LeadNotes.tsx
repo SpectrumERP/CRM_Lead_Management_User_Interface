@@ -331,12 +331,13 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly
     if (editingId) {
       // Server notes → save-notes-detail with their number, then the lead / opportunity reloads.
       // Failed → the error toast shows and the form stays open with the text.
-      if (!(await patchNote(editingId, { text, by, date: `${date} ${time}`.trim() }))) return
+      const responseMessage = await patchNote(editingId, { text, by, date: `${date} ${time}`.trim() })
+      if (!responseMessage) return
       setDraft(EMPTY_DRAFT)
       setErrors({})
       setAdding(false)
       setEditingId(null)
-      onToast?.("success", "Internal Note / Observation Updated", "The discussion has been updated.")
+      onToast?.("success", "Internal Note / Observation Updated", typeof responseMessage === 'string' ? responseMessage : "The discussion has been updated.")
       return
     }
     const created: CrmNote = {
@@ -348,12 +349,13 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly
       date: `${date} ${time}`.trim(),
       by,
     }
-    if (!(await addNote(created))) return
+    const responseMessage = await addNote(created)
+    if (!responseMessage) return
     setPending((prev) => [{ id: created.id, text, date, time, by }, ...prev])
     setDraft(EMPTY_DRAFT)
     setErrors({})
     setAdding(false)
-    onToast?.("success", "Internal Note / Observation Added", `The discussion has been saved on this ${noun}.`)
+    onToast?.("success", "Internal Note / Observation Added", typeof responseMessage === 'string' ? responseMessage : `The discussion has been saved on this ${noun}.`)
   }
 
   function edit(note: LeadNote) {

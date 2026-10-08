@@ -283,17 +283,18 @@ export async function deleteServerOpportunityActivity(activity: Pick<Activity, '
 }
 
 /** Add (in-app id) or update (`SON-…` id) an internal note on a server opportunity, then reload it. */
-export async function saveServerOpportunityNote(note: CrmNote): Promise<void> {
+export async function saveServerOpportunityNote(note: CrmNote): Promise<string> {
   const opportunityNo = opportunityNoFromId(note.relatedLeadId)
   if (!opportunityNo) fail('VALIDATION', 'This note is not on a server opportunity.')
-  await saveOpportunityNote({
+  const message = await saveOpportunityNote({
     opportunityNo,
-    opportunityNotesDetailNo: note.id.startsWith('SON-') ? Number(note.id.slice(4)) : undefined,
-    originatedBy: note.by.trim() || undefined,
+    opportunityNotesDetailNo: note.id.startsWith('SON-') ? Number(note.id.slice(4)) : null,
+    originatedBy: note.by.trim(),
     notesDate: noteDateToIso(note.date),
-    notesDiscussion: note.text.trim() || undefined,
+    notesDiscussion: note.text.trim(),
   })
   await refreshServerOpportunity(opportunityNo)
+  return message
 }
 
 /** Delete a server opportunity note (`SON-…` id) through `delete-notes-detail`, then reload it. */

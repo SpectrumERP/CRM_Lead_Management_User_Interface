@@ -51,7 +51,7 @@ export interface CrmStore {
   addActivity: (activity: Activity) => void
   addMeeting: (meeting: Meeting) => void
   /** Resolves true once saved (server records: after the API call and reload); false when it failed. */
-  addNote: (note: CrmNote) => Promise<boolean>
+  addNote: (note: CrmNote) => Promise<boolean | string>
   addEmail: (email: CrmEmail) => void
   addDocument: (doc: CRMDocument) => void
   /** Resolves true once saved (server records: after the API call and reload); false when it failed. */
@@ -60,7 +60,7 @@ export interface CrmStore {
   removeActivity: (id: string) => Promise<boolean>
   removeNote: (id: string) => Promise<boolean>
   /** Edit a note (server leads → save-notes-detail with its detail number). */
-  patchNote: (id: string, patch: Partial<CrmNote>) => Promise<boolean>
+  patchNote: (id: string, patch: Partial<CrmNote>) => Promise<boolean | string>
   patchMeeting: (id: string, patch: Partial<Meeting>) => void
   convertLead: (
     leadId: string,
@@ -196,7 +196,9 @@ export function useCrmActions() {
       addNote: (note: CrmNote) => {
         const saved = (save: Promise<void>) => runAsync(() => save.then(() => true)).then((ok) => ok === true)
         // Server opportunity → /api/crm/opportunities/save-notes-detail.
-        if (opportunityNoFromId(note.relatedLeadId)) return saved(saveServerOpportunityNote(note))
+        if (opportunityNoFromId(note.relatedLeadId)) {
+          return runAsync(() => saveServerOpportunityNote(note)).then((message) => message === undefined ? false : message || true)
+        }
         if (isServerLeadId(note.relatedLeadId)) return saved(saveServerLeadNote(note))
         run(() => RAW_ACTIONS.addNote(note))
         return Promise.resolve(true)
@@ -239,7 +241,7 @@ export function useCrmActions() {
         const saved = (save: Promise<void>) => runAsync(() => save.then(() => true)).then((ok) => ok === true)
         // Server opportunity note (SON-…) → its save-notes-detail with the number, then it reloads.
         if (current.id.startsWith('SON-') && opportunityNoFromId(current.relatedLeadId)) {
-          return saved(saveServerOpportunityNote({ ...current, ...patch, id: current.id }))
+          return runAsync(() => saveServerOpportunityNote({ ...current, ...patch, id: current.id })).then((message) => message === undefined ? false : message || true)
         }
         // Server note (SN-…) → save-notes-detail with its number (an update), then the lead reloads.
         if (current.id.startsWith('SN-') && isServerLeadId(current.relatedLeadId)) {

@@ -128,16 +128,18 @@ export async function deleteOpportunityActivities(detailNos: number[]): Promise<
 /** Body of `POST /api/crm/opportunities/save-notes-detail` (same fields as the lead one). */
 export interface OpportunityNoteBody {
   opportunityNo: number
-  /** Omit to add; set to update that note. */
-  opportunityNotesDetailNo?: number
-  originatedBy?: string
+  /** `null` when adding; the saved positive detail number when updating. */
+  opportunityNotesDetailNo: number | null
+  originatedBy: string
   /** ISO date-time. */
   notesDate: string
-  notesDiscussion?: string
+  notesDiscussion: string
 }
 
-export async function saveOpportunityNote(body: OpportunityNoteBody): Promise<void> {
-  assertSuccess(await http.post<SpectrumResponse<boolean>>(spectrumEndpoints.opportunities.saveNote, body))
+export async function saveOpportunityNote(body: OpportunityNoteBody): Promise<string> {
+  const response = await http.post<SpectrumResponse<boolean>>(spectrumEndpoints.opportunities.saveNote, body)
+  assertSuccess(response)
+  return response.message ?? ''
 }
 
 /** `DELETE …/delete-notes-detail?opportunityNotesDetailNos=1&opportunityNotesDetailNos=2`. */
