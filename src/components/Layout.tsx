@@ -120,15 +120,6 @@ const navItems = [
   },
 ];
 
-const taskNavItem = {
-  label: 'Tasks',
-  icon: (
-    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-    </svg>
-  ),
-};
-
 const settingsNavItem = {
   id: 'settings' as Page,
   label: 'Settings',
@@ -274,14 +265,6 @@ function AppSidebar({
               onPrefetch={() => prefetchPage(item.id)}
             />
           ))}
-          <SidebarNavButton
-            active={false}
-            label={taskNavItem.label}
-            icon={taskNavItem.icon}
-            collapsed={collapsed}
-            onClick={() => window.location.assign(taskAppUrl)}
-            onPrefetch={() => prerenderApp(taskAppUrl)}
-          />
         </div>
 
         {admin && (
@@ -636,7 +619,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
         <header className="z-40 flex-shrink-0 border-b border-line bg-surface">
           <div className="page-gutter flex min-h-14 items-center justify-between gap-2 py-0">
           {/* Menu — desktop: toggle / logo 1rem from the sidebar (gutter is 1.25rem), same as Task Management */}
-          <div className="flex min-w-0 flex-1 items-center gap-2 lg:-ml-1">
+          <div className="flex min-w-0 flex-1 items-center lg:-ml-1">
             {/* lg:hidden on the wrapper too — an empty wrapper would still add the row gap before the toggle */}
             <IconTooltip label="Open navigation" className="lg:hidden">
             <button
@@ -681,7 +664,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
               </IconTooltip>
             )}
             {/* Spectrum ERP │ client (SteelMont) logo — vertical line, then the client logo; desktop/tablet only */}
-            <div className="hidden shrink-0 items-center gap-3 md:flex">
+            <div className="hidden shrink-0 items-center pl-3 gap-3 md:flex pr-3">
               <span aria-hidden className="h-8 w-px bg-line-strong" />
               <span className="client-logo-chip">
                 <img src="/steelmont-logo.png" alt="SteelMont" className="client-logo block h-10 w-auto object-contain" />
