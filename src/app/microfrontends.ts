@@ -20,5 +20,7 @@ export function remoteAppUrl(name: RemoteName): string {
   if (!remote) throw new Error(`Unknown micro-frontend "${name}"`)
   const configured = env[remote.urlEnv]?.trim()
   if (configured && /^https?:\/\//i.test(configured)) return configured.endsWith('/') ? configured : `${configured}/`
+  // Inside the Spectrum ERP shell, the shell hosts every module at its own path on the shell's root.
+  if (import.meta.env.VITE_CRM_ROUTE_BASE) return remote.basePath
   return `${import.meta.env.BASE_URL.replace(/\/+$/, '')}${remote.basePath}`
 }

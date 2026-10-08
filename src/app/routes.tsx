@@ -29,7 +29,6 @@ const Settings = lazy(() => import('../pages/Settings'))
 const Notifications = lazy(() => import('../pages/Notifications'))
 const AuditLog = lazy(() => import('../pages/AuditLog'))
 const UserProfile = lazy(() => import('../pages/UserProfile'))
-const Login = lazy(() => import('../pages/Login'))
 const Forbidden = lazy(() => import('../pages/Forbidden'))
 
 function DashboardPage() {
@@ -381,7 +380,6 @@ function NotificationsPage() {
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="login" element={<Login />} />
       <Route element={<AuthGuard />}>
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />

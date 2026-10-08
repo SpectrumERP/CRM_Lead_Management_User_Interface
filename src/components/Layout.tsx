@@ -670,10 +670,10 @@ export default function Layout({ children, detailName }: LayoutProps) {
                 <img src="/steelmont-logo.png" alt="SteelMont" className="client-logo block h-10 w-auto object-contain" />
               </span>
             </div>
-            {/* Standalone: our ERP module launcher. Inside Spectrum ERP the host injects its own into the slot. */}
-            {import.meta.env.VITE_CRM_ROUTE_BASE ? null : (
-              <ModuleLauncher activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} />
-            )}
+            {/* ERP module launcher. Inside Spectrum ERP its Dashboard tile is the shell's home, so every CRM page is "CRM". */}
+            <ModuleLauncher
+              activeModule={activePage === 'dashboard' && !import.meta.env.VITE_CRM_ROUTE_BASE ? 'dashboard' : 'crm'}
+            />
             {/* Spectrum ERP injects module launcher after logo / toggle. */}
             <div id="spectrum-module-launcher-slot" className="flex shrink-0 items-center" />
           </div>
@@ -842,7 +842,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
                   <div className="mt-1 border-t border-line-subtle">
                     <button
                       type="button"
-                      onClick={() => { setAvatarOpen(false); logout(); navigate(paths.login); }}
+                      onClick={() => { setAvatarOpen(false); logout(); navigate(paths.dashboard); }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-accent outline-none transition-colors hover:bg-accent-soft focus-visible:bg-accent-soft"
                     >
                       <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>

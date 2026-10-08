@@ -94,7 +94,6 @@ export const paths = {
   notifications: withBase('/notifications'),
   auditLog: withBase('/audit-log'),
   profile: withBase('/profile'),
-  login: withBase('/login'),
   forbidden: withBase('/forbidden'),
 } as const
 

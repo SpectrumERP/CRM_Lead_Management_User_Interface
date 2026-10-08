@@ -1,10 +1,10 @@
 import { verifyLogin } from '../auth/users'
 import type { AuthUser } from '../auth/types'
-import { clearAuth, loadAuth } from './authStore'
+import { clearAuth, loadAuth, reloadAuth } from './authStore'
 import { usesSpectrumApi } from './config'
 import { invalidCredentials, isApiError, rateLimited, type ApiError } from './errors'
 import { createSession, clearSession, readSession } from './session'
-import { spectrumLogin } from './spectrumAuth'
+import { spectrumLogin, toAuthUser } from './spectrumAuth'
 
 const WINDOW_MS = 5 * 60 * 1000
 const MAX_ATTEMPTS = 5
@@ -54,7 +54,16 @@ export function logout() {
 }
 
 export async function me(): Promise<AuthUser | null> {
-  return readSession()
+  const user = await readSession()
+  if (user) return user
+  // Signed in by the host app (Spectrum ERP shell), which writes only the shared auth cookie: derive
+  // the CRM session from it. Re-read the cookie, since the host may have signed in again since.
+  reloadAuth()
+  const auth = await loadAuth()
+  if (!auth) return null
+  const adopted = toAuthUser(auth.user)
+  await createSession(adopted, auth.expiresAt)
+  return adopted
 }
 
 /** Test-only: clear rate-limit counters and the in-memory session. */

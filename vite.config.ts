@@ -1,4 +1,5 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, type Plugin, type UserConfig } from 'vite'
+import { federation } from '@module-federation/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
@@ -55,13 +56,69 @@ function remoteProxy(remote: (typeof remotes)[number]) {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), remoteAppsPreviewFallback()],
-    resolve: {
-      alias: {
-      '@': path.resolve(import.meta.dirname, './src'),
+const alias = { '@': path.resolve(import.meta.dirname, './src') }
+
+/**
+ * `vite --mode spectrum` (npm run dev:spectrum / build:spectrum): the CRM as a Module Federation remote of
+ * the Spectrum ERP shell (SpectrumERP-Web), mounted at /crm. The shell signs the user in and writes the
+ * shared auth cookie; this build exposes ./App without its own router and uses the shell's React and
+ * React Router.
+ */
+const SPECTRUM_MODE = 'spectrum'
+const SPECTRUM_PORT = 5177
+
+/**
+ * As a remote this server only feeds the shell. A page opened on it directly goes to the same page in the
+ * shell, which has the one Spectrum ERP login. Module requests (Accept without text/html) pass through.
+ */
+function redirectPagesToShell(routeBase: string): Plugin {
+  const shellUrl = (process.env.SPECTRUM_SHELL_URL ?? 'http://localhost:5173').replace(/\/+$/, '')
+  return {
+    name: 'redirect-pages-to-spectrum-shell',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET' || !req.headers.accept?.includes('text/html')) return next()
+        res.writeHead(302, { Location: `${shellUrl}${routeBase}${req.url === '/' ? '/' : req.url}` })
+        res.end()
+      })
     },
-  },
+  }
+}
+
+function spectrumRemote(): UserConfig {
+  // Routes live under the shell's /crm (src/app/paths.ts reads this).
+  process.env.VITE_CRM_ROUTE_BASE ??= '/crm'
+  // Assets must load from this server when the shell, on another origin, imports the remote.
+  const publicUrl = process.env.CRM_PUBLIC_URL ?? `http://localhost:${SPECTRUM_PORT}/`
+  return {
+    base: publicUrl,
+    plugins: [
+      redirectPagesToShell(process.env.VITE_CRM_ROUTE_BASE ?? '/crm'),
+      react(),
+      tailwindcss(),
+      federation({
+        name: 'crm',
+        filename: 'remoteEntry.js',
+        exposes: { './App': './src/SpectrumApp.tsx' },
+        // Same instances as the shell: one React, and one router so shell and CRM links share history.
+        shared: {
+          react: { singleton: true },
+          'react-dom': { singleton: true },
+          'react-router-dom': { singleton: true },
+        },
+        dts: false,
+      }),
+    ],
+    resolve: { alias },
+    build: { target: 'esnext', chunkSizeWarningLimit: 11000 },
+    server: { port: SPECTRUM_PORT, strictPort: true, origin: `http://localhost:${SPECTRUM_PORT}` },
+    preview: { port: SPECTRUM_PORT, strictPort: true },
+  }
+}
+
+const standalone: UserConfig = {
+  plugins: [react(), tailwindcss(), remoteAppsPreviewFallback()],
+  resolve: { alias },
   build: {
     // OpenCV alone is ~10 MB; it loads only when the business card scanner opens.
     chunkSizeWarningLimit: 11000,
@@ -99,4 +156,6 @@ export default defineConfig({
     // Serve the built dist/<basePath> remotes (not the dev proxy, which preview would otherwise inherit).
     proxy: {},
   },
-})
+}
+
+export default defineConfig(({ mode }) => (mode === SPECTRUM_MODE ? spectrumRemote() : standalone))

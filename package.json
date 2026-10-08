@@ -15,7 +15,9 @@
     "build:task": "node scripts/build-remotes.mjs",
     "build:all": "npm run build && npm run build:remotes",
     "setup:task": "npm --prefix task-management install",
-    "dev:crm": "vite"
+    "dev:crm": "vite",
+    "dev:spectrum": "vite --mode spectrum",
+    "build:spectrum": "vite build --mode spectrum"
   },
   "dependencies": {
     "@techstark/opencv-js": "^4.12.0-release.1",
@@ -26,6 +28,7 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@module-federation/vite": "^1.23.3",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

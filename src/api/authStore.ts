@@ -81,8 +81,11 @@ export function clearAuth() {
   cookieVault.remove(COOKIE_NAME)
 }
 
-/** Test-only: forget the in-memory copy so the next read goes back to the cookie. */
-export function __resetAuthStoreForTests() {
+/** Forget the in-memory copy so the next read goes back to the cookie (another app may have written it). */
+export function reloadAuth() {
   cached = null
   loaded = false
 }
+
+/** Test-only: forget the in-memory copy so the next read goes back to the cookie. */
+export const __resetAuthStoreForTests = reloadAuth

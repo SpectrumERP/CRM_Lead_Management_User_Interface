@@ -34,13 +34,19 @@ const glyph = {
   'aria-hidden': true,
 }
 
+/**
+ * Inside the Spectrum ERP shell (VITE_CRM_ROUTE_BASE) every module shares the shell's router: Dashboard is
+ * the shell's home, CRM opens on its Sales Dashboard, and Task is a route there too, not a page load.
+ */
+const IN_SPECTRUM = Boolean(import.meta.env.VITE_CRM_ROUTE_BASE)
+
 const MODULES: ErpModule[] = [
   {
     id: 'dashboard',
     label: 'Dashboard',
     description: 'Overview and KPIs',
     color: '#1E56A0',
-    to: paths.dashboard,
+    to: IN_SPECTRUM ? '/' : paths.dashboard,
     icon: (
       <svg {...glyph}>
         <rect x="3" y="3" width="7" height="9" rx="1.5" />
@@ -55,7 +61,7 @@ const MODULES: ErpModule[] = [
     label: 'CRM',
     description: 'Leads, opportunities, contacts',
     color: '#0e7490',
-    to: paths.leads,
+    to: IN_SPECTRUM ? paths.dashboard : paths.leads,
     icon: (
       <svg {...glyph}>
         {/* Handshake — the CRM icon in the sidebar (lucide "handshake") */}
@@ -73,7 +79,7 @@ const MODULES: ErpModule[] = [
     description: 'Tasks, meetings, reports',
     color: '#7c3aed',
     to: taskAppUrl,
-    external: true,
+    external: !IN_SPECTRUM,
     icon: (
       <svg {...glyph}>
         <rect x="3" y="3" width="18" height="18" rx="3" />

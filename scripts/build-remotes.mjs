@@ -36,3 +36,29 @@ for (const remote of remoteApps(root, 'production')) {
   console.log(`${remote.title} built → ${outDir} (served at ${remote.basePath})`)
 }
 if (failed) process.exit(1)
+
+// CRM is hosted at the domain root. Send its client-side routes (for example /login) to the
+// CRM entry point, while leaving /task routes to the Task app's own nested IIS configuration.
+writeFileSync(
+  resolve(root, 'dist', 'web.config'),
+  `<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <system.webServer>
+    <rewrite>
+      <rules>
+        <rule name="CRM SPA Routing" stopProcessing="true">
+          <match url=".*" />
+          <conditions logicalGrouping="MatchAll">
+            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+            <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+            <add input="{URL}" pattern="^/task(/|$)" negate="true" />
+          </conditions>
+          <action type="Rewrite" url="/index.html" />
+        </rule>
+      </rules>
+    </rewrite>
+  </system.webServer>
+</configuration>
+`,
+)
+console.log('CRM IIS SPA fallback written → dist/web.config')
