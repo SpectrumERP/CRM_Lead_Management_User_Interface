@@ -474,7 +474,6 @@ export function LeadSummaryEdit({
                   getKey={(item) => item.id}
                   getLabel={(item) => item.name}
                   placeholder="Search company…"
-                  clearable={false}
                 />
                 <SaveCancel onSave={saveEntity} onCancel={onCancel} disabled={!entityDraft} />
               </div>
@@ -500,7 +499,6 @@ export function LeadSummaryEdit({
                   getKey={(item) => item.id}
                   getLabel={(item) => item.name}
                   placeholder="Search contact…"
-                  clearable={false}
                   renderOption={(item) => (
                     <div>
                       <p className="text-xs font-semibold text-ink">{item.name}</p>

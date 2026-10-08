@@ -7,6 +7,7 @@
  * `npm run dev:remotes` (this script with --remotes-only) runs the remotes alone.
  */
 import { spawn, spawnSync } from 'node:child_process'
+import { createServer } from 'node:net'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { remoteApps, remoteEnv } from './microfrontends.mjs'
@@ -24,6 +25,33 @@ const remotes = remoteApps(root, 'development').filter((remote) => {
   return false
 })
 if (remotesOnly && remotes.length === 0) process.exit(1)
+
+// Already running (e.g. in another terminal tab)? Say so plainly instead of Vite's "Port … is already in use".
+function portTaken(port, host) {
+  return new Promise((done) => {
+    const probe = createServer()
+    probe.once('error', () => done(true))
+    probe.once('listening', () => probe.close(() => done(false)))
+    probe.listen(port, host)
+  })
+}
+// Vite binds `localhost` (often ::1) or all interfaces — check both.
+async function portBusy(port) {
+  return (await portTaken(port)) || (await portTaken(port, 'localhost'))
+}
+const ports = [...(remotesOnly ? [] : [5173]), ...remotes.map((remote) => remote.devPort)]
+const busy = []
+for (const port of ports) if (await portBusy(port)) busy.push(port)
+if (busy.length) {
+  console.log(`
+The dev servers are already running (port ${busy.join(', ')} in use) — probably \`npm run dev\` in another terminal.
+  Open:  http://localhost:5173  ·  http://localhost:5173/task/
+  Restart: press Ctrl+C in that terminal, or run
+           lsof -tiTCP:${ports.join(',')} -sTCP:LISTEN | xargs kill
+           then \`npm run dev\` again.
+`)
+  process.exit(1)
+}
 
 // First run: install each remote's own dependencies.
 for (const remote of remotes) {

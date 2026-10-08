@@ -29,6 +29,7 @@ import type { Product } from '../data/products'
 import { FIELD_LIMITS } from '../constants/fieldLimits'
 import AttachmentsField from '../components/AttachmentsField'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
+import { BreadcrumbActions } from '../components/BreadcrumbActions'
 
 interface CreateOpportunityProps {
   onBack: () => void
@@ -327,7 +328,6 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
                   loading={leadsLoading}
                   onOpenChange={onLeadFieldOpen}
                   emptyText="No leads found"
-                  clearable={false}
                 />
               ) : null} */}
               <div className="lg:col-span-2">
@@ -445,14 +445,15 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          {/* Cancel / Create at the right of the breadcrumb line (in place inside the Quick Create drawer). */}
+          <BreadcrumbActions inline={embedded}>
             <Button variant="secondary" onClick={onBack} disabled={saving}>
               Cancel
             </Button>
             <Button variant="solid" onClick={handleSave} disabled={saving || !serverMode}>
               {saving ? 'Creating…' : 'Create Opportunity'}
             </Button>
-          </div>
+          </BreadcrumbActions>
         </div>
       </div>
     </div>

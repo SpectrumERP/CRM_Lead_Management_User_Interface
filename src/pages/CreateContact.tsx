@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Contact, DEPARTMENTS, CONTACT_STATUSES } from '../data/contacts';
 import { useCrmActions, useCrmSelector } from '../contexts/CrmStoreContext';
-import { ChoiceField, FormGrid, SearchSelectField, SelectField, TextAreaField, TextField } from '../ui';
+import { Button, ChoiceField, FormGrid, SearchSelectField, SelectField, TextAreaField, TextField } from '../ui';
+import { BreadcrumbActions } from '../components/BreadcrumbActions';
 
 interface Props {
   existing?: Contact | null;
@@ -218,30 +219,11 @@ export default function CreateContact({ existing, onBack, onSuccess, embedded, p
         </FormGrid>
       </SectionWrapper>
 
-      {/* Bottom actions */}
-      <div
-        className="page-gutter sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-3 rounded-xl py-4"
-        style={{ background: '#fff', border: '1px solid #dce4f2' }}
-      >
-        <button
-          onClick={onBack}
-          className="px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
-          style={{ color: '#7a8494', border: '1px solid #dce4f2' }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f4fb')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          className="px-6 py-2 rounded-lg text-sm font-semibold text-white transition-all"
-          style={{ background: 'linear-gradient(135deg,#2955a3,#1a3d7c)', boxShadow: '0 2px 8px rgba(41,85,163,0.25)' }}
-          onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 14px rgba(41,85,163,0.4)')}
-          onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(41,85,163,0.25)')}
-        >
-          {isEdit ? 'Save Changes' : 'Add Contact'}
-        </button>
-      </div>
+      {/* Cancel / Save at the right of the breadcrumb line (in place inside the Quick Create drawer). */}
+      <BreadcrumbActions inline={embedded}>
+        <Button variant="secondary" onClick={onBack}>Cancel</Button>
+        <Button variant="solid" onClick={handleSave}>{isEdit ? 'Save Changes' : 'Add Contact'}</Button>
+      </BreadcrumbActions>
     </div>
   );
 }

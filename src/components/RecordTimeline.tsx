@@ -6,7 +6,7 @@ import { PersonContactCard } from "./PersonContactCard"
 import { EmptyState, EmptyIcons } from "./CRMStates"
 import type { Contact } from "../data/contacts"
 import type { LeadTimelineEntry } from "../data/leads"
-import { formatDate, formatTime, joinDateTime } from "../utils/dateFormat"
+import { formatDate, formatTime } from "../utils/dateFormat"
 
 /**
  * Record timeline (lead and opportunity views): the server's load-data `timeline`, shown as received
@@ -177,7 +177,8 @@ export function TimelineRows({ timeline, contacts = [] }: { timeline: readonly T
         {timeline.map((t, i) => {
         const ic = timelineIconMeta(t.icon)
         const last = i === timeline.length - 1
-        const when = joinDateTime(t.date, t.time)
+        // Heading shows the date only (e.g. 08/Oct/2026) — no time.
+        const when = t.date
           return (
           <li
             key={`${t.event}-${t.date}-${i}`}

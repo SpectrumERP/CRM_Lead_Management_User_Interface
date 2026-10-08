@@ -55,8 +55,9 @@ export default function QuickCreateHost({ onToast }: { onToast: (type: ToastType
       <NoteDrawer
         preselectedLead={prefill.leadId ? { id: prefill.leadId, name: prefill.leadName ?? '' } : null}
         onClose={close}
-        onSave={(note) => {
-          store.addNote(note);
+        onSave={async (note) => {
+          // Toast only once saved; a failed save shows the error instead.
+          if (!(await store.addNote(note))) return;
           onToast('success', 'Note Added', `"${note.title}" saved on ${note.relatedLeadName}.`);
         }}
       />

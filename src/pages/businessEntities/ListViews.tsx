@@ -1,10 +1,14 @@
 /** The five Business Entities list views, laid out as in Task Management. */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { fetchAttachmentImages, openAttachment } from '../../api/attachments'
 import { toApiError } from '../../api/errors'
 import { BusinessEntityShareMenu } from '../../components/BusinessEntityShareMenu'
+import { ColumnVisibilityMenu, useColumnVisibility, type GridColumn } from '../../components/ColumnVisibility'
+import { SkeletonTableRows } from '../../components/CRMStates'
+import { RecordRowActions } from '../../components/RecordRowActions'
 import { useOptionalToast } from '../../contexts/ToastContext'
 import { IconTooltip, SortChevrons, type SortDir } from '../../ui'
+import { stopBubbleProps } from '../../utils/events'
 import { formatDateTime } from '../../utils/dateFormat'
 import {
   formatCreditLimit,
@@ -88,27 +92,89 @@ function AlphabetHeader({ letter, note }: { letter: string; note: string }) {
   )
 }
 
-function Th({ label, field, sort, onSort, className = '' }: { label: string; field?: string; className?: string } & SortProps) {
+type EntityColumnKey =
+  | 'code' | 'name' | 'typeName' | 'address' | 'city' | 'state' | 'country' | 'vatGst' | 'creditLimit' | 'actions'
+
+const ENTITY_COLUMNS: (GridColumn<EntityColumnKey> & { sort?: string })[] = [
+  { key: 'code', label: 'Code', sort: 'code', locked: true },
+  { key: 'name', label: 'Business Entity Name', sort: 'name' },
+  { key: 'typeName', label: 'Type', sort: 'typeName' },
+  { key: 'address', label: 'Primary Address', sort: 'address' },
+  { key: 'city', label: 'City', sort: 'city' },
+  { key: 'state', label: 'State', sort: 'state' },
+  { key: 'country', label: 'Country', sort: 'country' },
+  { key: 'vatGst', label: 'VAT/GST No.', sort: 'vatGst' },
+  { key: 'creditLimit', label: 'Credit Limit', sort: 'creditLimit' },
+  { key: 'actions', label: 'Actions', locked: true },
+]
+
+type ContactColumnKey =
+  | 'name' | 'entityName' | 'designation' | 'department' | 'phone' | 'email' | 'status' | 'actions'
+
+const CONTACT_COLUMNS: (GridColumn<ContactColumnKey> & { sort?: string })[] = [
+  { key: 'name', label: 'Contact Name', sort: 'name', locked: true },
+  { key: 'entityName', label: 'Business Entity', sort: 'entityName' },
+  { key: 'designation', label: 'Designation', sort: 'designation' },
+  { key: 'department', label: 'Department', sort: 'department' },
+  { key: 'phone', label: 'Phone', sort: 'phone' },
+  { key: 'email', label: 'Email', sort: 'email' },
+  { key: 'status', label: 'Status', sort: 'status' },
+  { key: 'actions', label: 'Actions', locked: true },
+]
+
+function SortHeader({
+  label,
+  field,
+  sort,
+  onSort,
+  className = '',
+  menu,
+}: {
+  label: string
+  field?: string
+  className?: string
+  menu?: ReactNode
+} & SortProps) {
   return (
-    <th onClick={field ? () => onSort(field) : undefined}
-      className={`whitespace-nowrap border-b border-r border-line bg-surface-muted px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-soft ${field ? 'cursor-pointer select-none' : ''} ${className}`.trim()}>
-      <span className="flex items-center justify-between gap-2">
-        {label}
-        {field ? <SortChevrons active={sort.field === field} dir={sort.dir} /> : null}
-      </span>
+    <th
+      onClick={field ? () => onSort(field) : undefined}
+      className={`${field ? 'cursor-pointer select-none' : ''} ${className}`.trim()}
+    >
+      {menu ? (
+        <span className="inline-flex items-center gap-1.5">
+          {label}
+          {menu}
+        </span>
+      ) : (
+        <span className="flex items-center justify-between gap-2">
+          {label}
+          {field ? <SortChevrons active={sort.field === field} dir={sort.dir} /> : null}
+        </span>
+      )}
     </th>
   )
 }
 
-const TD = 'border-b border-r border-line px-3 py-2.5 align-middle text-xs text-ink-soft'
-/** Sticky first and last columns (code / actions) over the horizontal scroll. */
-const STICKY_LEFT = 'sticky left-0 z-20 bg-surface shadow-[4px_0_10px_-4px_rgba(0,0,0,0.12)]'
-const STICKY_RIGHT = 'sticky right-0 z-20 bg-surface shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.12)]'
-
 // ─── Grid list ───────────────────────────────────────────────────────────────
 
-export function EntityTable({ rows, onEdit, onDelete, sort, onSort }: { rows: EntityListRow[] } & RowHandlers & SortProps) {
+export function EntityTable({
+  rows,
+  onEdit,
+  onDelete,
+  sort,
+  onSort,
+  loading,
+  empty,
+}: {
+  rows: EntityListRow[]
+  loading?: boolean
+  empty?: ReactNode
+} & RowHandlers & SortProps) {
+  const columns = useColumnVisibility('crm.entities.hiddenColumns', ENTITY_COLUMNS)
+  const show = columns.isVisible
+  const colSpan = columns.visibleColumns.length
   const sp = { sort, onSort }
+
   return (
     <>
       {/* Phones: one card per entity. */}
@@ -133,52 +199,94 @@ export function EntityTable({ rows, onEdit, onDelete, sort, onSort }: { rows: En
           </div>
         ))}
       </div>
-      <table className="hidden w-full min-w-[1290px] table-fixed border-separate border-spacing-0 text-left md:table">
-        <colgroup>
-          <col style={{ width: 110 }} />
-          <col style={{ width: 220 }} />
-          <col style={{ width: 150 }} />
-          <col style={{ width: 240 }} />
-          <col style={{ width: 110 }} />
-          <col style={{ width: 120 }} />
-          <col style={{ width: 110 }} />
-          <col style={{ width: 150 }} />
-          <col style={{ width: 120 }} />
-          <col style={{ width: 96 }} />
-        </colgroup>
-        <thead className="sticky top-0 z-30">
+      <table className="crm-table crm-table-entities hidden md:table">
+        <thead>
           <tr>
-            <Th label="Code" field="code" className={`${STICKY_LEFT} !bg-surface-muted z-40`} {...sp} />
-            <Th label="Business Entity Name" field="name" {...sp} />
-            <Th label="Type" field="typeName" {...sp} />
-            <Th label="Primary Address" field="address" {...sp} />
-            <Th label="City" field="city" {...sp} />
-            <Th label="State" field="state" {...sp} />
-            <Th label="Country" field="country" {...sp} />
-            <Th label="VAT/GST No." field="vatGst" {...sp} />
-            <Th label="Credit Limit" field="creditLimit" {...sp} />
-            <Th label="Actions" className={`${STICKY_RIGHT} !bg-surface-muted z-40 text-center`} {...sp} />
+            {columns.visibleColumns.map((column) => {
+              const sticky = column.key === 'actions' ? 'sticky-col-end' : column.key === 'code' ? 'sticky-col-id' : ''
+              return (
+                <SortHeader
+                  key={column.key}
+                  label={column.label}
+                  field={column.sort}
+                  className={sticky}
+                  menu={
+                    column.key === 'actions' ? (
+                      <ColumnVisibilityMenu
+                        columns={ENTITY_COLUMNS}
+                        isVisible={columns.isVisible}
+                        onToggle={columns.toggle}
+                        onShowAll={columns.showAll}
+                        hiddenCount={columns.hiddenCount}
+                      />
+                    ) : undefined
+                  }
+                  {...sp}
+                />
+              )
+            })}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.key} className="group hover:[&>td]:bg-surface-muted">
-              <td className={`${TD} ${STICKY_LEFT}`}><Truncated text={row.code} className="font-mono text-[11px] font-medium text-primary" /></td>
-              <td className={`${TD} font-medium text-ink ${onEdit ? 'cursor-pointer hover:text-primary' : ''}`} onClick={() => onEdit?.(row.businessEntityNo)}>
-                <Truncated text={row.name} className="font-medium" />
+          {loading ? <SkeletonTableRows cols={colSpan} rows={7} /> : null}
+          {!loading && rows.length === 0 && empty ? (
+            <tr>
+              <td colSpan={colSpan} className="table-empty-td">{empty}</td>
+            </tr>
+          ) : null}
+          {!loading && rows.map((row) => (
+            <tr
+              key={row.key}
+              className={onEdit ? 'cursor-pointer' : undefined}
+              onClick={() => onEdit?.(row.businessEntityNo)}
+            >
+              <td className="sticky-col-id">
+                <button
+                  type="button"
+                  className="font-mono text-xs font-bold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onEdit?.(row.businessEntityNo)
+                  }}
+                >
+                  {row.code}
+                </button>
               </td>
-              <td className={TD}><TypeBadge name={row.typeName} /></td>
-              <td className={TD}><Truncated text={fullAddress(row) || 'N/A'} /></td>
-              <td className={TD}><Truncated text={na(row.city)} /></td>
-              <td className={TD}><Truncated text={na(row.state)} /></td>
-              <td className={TD}><Truncated text={na(row.country)} /></td>
-              <td className={`${TD} font-mono`}><Truncated text={na(row.vatGst)} /></td>
-              <td className={TD}><Truncated text={formatCreditLimit(row.creditLimit)} /></td>
-              <td className={`${TD} ${STICKY_RIGHT} text-center`}>
-                <div className="inline-flex items-center justify-center gap-0.5">
-                  {onEdit ? <ActionButton label="Edit" d={ICON.edit} tone="edit" size="sm" onClick={() => onEdit(row.businessEntityNo)} /> : null}
-                  {onDelete ? <ActionButton label="Delete" d={ICON.trash} tone="delete" size="sm" onClick={() => onDelete(row)} /> : null}
-                </div>
+              {show('name') && (
+                <td>
+                  <Truncated text={row.name} className="text-xs font-bold text-ink" />
+                </td>
+              )}
+              {show('typeName') && (
+                <td><TypeBadge name={row.typeName} /></td>
+              )}
+              {show('address') && (
+                <td>
+                  <Truncated text={fullAddress(row) || 'N/A'} className="text-xs text-ink-soft" />
+                </td>
+              )}
+              {show('city') && (
+                <td><Truncated text={na(row.city)} className="text-xs text-ink-soft" /></td>
+              )}
+              {show('state') && (
+                <td><Truncated text={na(row.state)} className="text-xs text-ink-soft" /></td>
+              )}
+              {show('country') && (
+                <td><Truncated text={na(row.country)} className="text-xs text-ink-soft" /></td>
+              )}
+              {show('vatGst') && (
+                <td><Truncated text={na(row.vatGst)} className="font-mono text-xs text-ink-soft" /></td>
+              )}
+              {show('creditLimit') && (
+                <td><Truncated text={formatCreditLimit(row.creditLimit)} className="text-xs text-ink-soft" /></td>
+              )}
+              <td className="sticky-col-end" {...stopBubbleProps}>
+                <RecordRowActions
+                  editLabel="Edit Business Entity"
+                  deleteLabel="Delete Business Entity"
+                  onEdit={onEdit ? () => onEdit(row.businessEntityNo) : undefined}
+                  onDelete={onDelete ? () => onDelete(row) : undefined}
+                />
               </td>
             </tr>
           ))}
@@ -253,48 +361,93 @@ function shareInfo(row: ContactListRow) {
   return { companyName: row.entityName, companyCode: row.code, name: row.name, designation: row.designation, department: row.department, phone: row.phone, email: row.email }
 }
 
-export function ContactTable({ rows, onEdit, sort, onSort }: { rows: ContactListRow[] } & RowHandlers & SortProps) {
+export function ContactTable({
+  rows,
+  onEdit,
+  sort,
+  onSort,
+  loading,
+  empty,
+}: {
+  rows: ContactListRow[]
+  loading?: boolean
+  empty?: ReactNode
+} & RowHandlers & SortProps) {
+  const columns = useColumnVisibility('crm.entityContacts.hiddenColumns', CONTACT_COLUMNS)
+  const show = columns.isVisible
+  const colSpan = columns.visibleColumns.length
   const sp = { sort, onSort }
+
   return (
-    <table className="w-full min-w-[1180px] table-fixed border-separate border-spacing-0 text-left">
-      <colgroup>
-        <col style={{ width: 180 }} />
-        <col style={{ width: 220 }} />
-        <col style={{ width: 150 }} />
-        <col style={{ width: 140 }} />
-        <col style={{ width: 130 }} />
-        <col style={{ width: 200 }} />
-        <col style={{ width: 100 }} />
-        <col style={{ width: 100 }} />
-      </colgroup>
-      <thead className="sticky top-0 z-30">
+    <table className="crm-table crm-table-entities">
+      <thead>
         <tr>
-          <Th label="Contact Name" field="name" className={`${STICKY_LEFT} !bg-surface-muted z-40`} {...sp} />
-          <Th label="Business Entity" field="entityName" {...sp} />
-          <Th label="Designation" field="designation" {...sp} />
-          <Th label="Department" field="department" {...sp} />
-          <Th label="Phone" field="phone" {...sp} />
-          <Th label="Email" field="email" {...sp} />
-          <Th label="Status" field="status" {...sp} />
-          <Th label="Actions" className={`${STICKY_RIGHT} !bg-surface-muted z-40 text-center`} {...sp} />
+          {columns.visibleColumns.map((column) => {
+            const sticky = column.key === 'actions' ? 'sticky-col-end' : column.key === 'name' ? 'sticky-col-start' : ''
+            return (
+              <SortHeader
+                key={column.key}
+                label={column.label}
+                field={column.sort}
+                className={sticky}
+                menu={
+                  column.key === 'actions' ? (
+                    <ColumnVisibilityMenu
+                      columns={CONTACT_COLUMNS}
+                      isVisible={columns.isVisible}
+                      onToggle={columns.toggle}
+                      onShowAll={columns.showAll}
+                      hiddenCount={columns.hiddenCount}
+                    />
+                  ) : undefined
+                }
+                {...sp}
+              />
+            )
+          })}
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
-          <tr key={row.key} className="hover:[&>td]:bg-surface-muted">
-            <td className={`${TD} ${STICKY_LEFT} font-medium text-ink`}><Truncated text={row.name} className="font-medium" /></td>
-            <td className={`${TD} ${onEdit ? 'cursor-pointer hover:text-primary' : ''}`} onClick={() => onEdit?.(row.businessEntityNo)}>
-              <Truncated text={row.entityName} />
+        {loading ? <SkeletonTableRows cols={colSpan} rows={7} /> : null}
+        {!loading && rows.length === 0 && empty ? (
+          <tr>
+            <td colSpan={colSpan} className="table-empty-td">{empty}</td>
+          </tr>
+        ) : null}
+        {!loading && rows.map((row) => (
+          <tr
+            key={row.key}
+            className={onEdit ? 'cursor-pointer' : undefined}
+            onClick={() => onEdit?.(row.businessEntityNo)}
+          >
+            <td className="sticky-col-start">
+              <Truncated text={row.name} className="text-xs font-bold text-ink" />
             </td>
-            <td className={TD}><Truncated text={na(row.designation)} /></td>
-            <td className={TD}><Truncated text={na(row.department)} /></td>
-            <td className={`${TD} font-mono`}><Truncated text={na(row.phone)} /></td>
-            <td className={TD}><Truncated text={na(row.email)} /></td>
-            <td className={`${TD} whitespace-nowrap`}><StatusChip status={row.status} /></td>
-            <td className={`${TD} ${STICKY_RIGHT} text-center`}>
-              <div className="inline-flex items-center justify-center gap-0.5">
+            {show('entityName') && (
+              <td><Truncated text={row.entityName} className="text-xs font-semibold text-ink-soft" /></td>
+            )}
+            {show('designation') && (
+              <td><Truncated text={na(row.designation)} className="text-xs text-ink-soft" /></td>
+            )}
+            {show('department') && (
+              <td><Truncated text={na(row.department)} className="text-xs text-ink-soft" /></td>
+            )}
+            {show('phone') && (
+              <td><Truncated text={na(row.phone)} className="font-mono text-xs text-ink-soft" /></td>
+            )}
+            {show('email') && (
+              <td><Truncated text={na(row.email)} className="text-xs text-ink-soft" /></td>
+            )}
+            {show('status') && (
+              <td><StatusChip status={row.status} /></td>
+            )}
+            <td className="sticky-col-end" {...stopBubbleProps}>
+              <div className="flex items-center gap-0.5">
                 <BusinessEntityShareMenu mode="contact" contact={shareInfo(row)} />
-                {onEdit ? <ActionButton label="Edit" d={ICON.edit} tone="edit" size="sm" onClick={() => onEdit(row.businessEntityNo)} /> : null}
+                <RecordRowActions
+                  editLabel="Edit Business Entity"
+                  onEdit={onEdit ? () => onEdit(row.businessEntityNo) : undefined}
+                />
               </div>
             </td>
           </tr>

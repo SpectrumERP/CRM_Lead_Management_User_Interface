@@ -220,12 +220,10 @@ describe('locked leads', () => {
   it.each([
     ['converted', { leadStage: 'Converted To Opportunity', leadStatus: 'Converted', spectrum: { leadNo: 42 } }],
     ['at a completed stage', { leadStage: 'Won', leadStatus: 'Open', spectrum: { leadNo: 42, stageCompleted: true } }],
-  ])('refuse activity and note changes when %s', async (_label, lead) => {
+  ])('refuse activity changes when %s (internal notes stay open)', async (_label, lead) => {
     store.leads = [{ id: 'SL-0042', ...lead }]
     await expect(saveServerLeadActivity({ ...activity, id: 'SA-8' })).rejects.toMatchObject({ code: 'VALIDATION' })
-    await expect(saveServerLeadNote({ id: 'SN-1', title: '', text: 'x', relatedLeadId: 'SL-0042', relatedLeadName: '', date: '01-10-2026 10:00', by: 'a' })).rejects.toMatchObject({ code: 'VALIDATION' })
     await expect(deleteServerLeadActivity({ id: 'SA-8', leadId: 'SL-0042' })).rejects.toMatchObject({ code: 'VALIDATION' })
-    await expect(deleteServerLeadNote({ id: 'SN-1', relatedLeadId: 'SL-0042' })).rejects.toMatchObject({ code: 'VALIDATION' })
     // The lead itself cannot be deleted either.
     await expect(deleteServerLead({ id: 'SL-0042', ...lead } as never)).rejects.toMatchObject({ code: 'VALIDATION' })
     expect(fetchMock).not.toHaveBeenCalled()

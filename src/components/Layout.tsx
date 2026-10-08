@@ -6,6 +6,7 @@ import QuickCreateMenu from './QuickCreateMenu';
 import { matchAppPage, navPaths, paths, taskAppUrl, type AppPage } from '../app/paths';
 import { prefetchPage, prerenderApp } from '../app/prefetch';
 import ModuleLauncher from './ModuleLauncher';
+import { BreadcrumbActionsSlot } from './BreadcrumbActions';
 import { toggleTheme, useTheme } from '../app/theme';
 import { useAuth } from '../auth/AuthContext';
 import { isAdmin } from '../auth/users';
@@ -569,6 +570,8 @@ export default function Layout({ children, detailName }: LayoutProps) {
   };
   const leaf = nestedLeaf[currentPage];
   const sectionPage = (activePage || currentPage) as Page;
+  // Form pages portal their Cancel / Save into this slot (right end of the breadcrumb line).
+  const [crumbActions, setCrumbActions] = useState<HTMLElement | null>(null);
   const crumbs: { label: string; to?: string }[] = leaf
     ? [
         { label: 'CRM', to: paths.dashboard },
@@ -578,6 +581,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
     : [];
 
   return (
+    <BreadcrumbActionsSlot.Provider value={crumbs.length > 0 ? crumbActions : null}>
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* ── Desktop sidebar ── */}
@@ -876,7 +880,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
               Top-level pages skip it: the sidebar highlight and page title already say where you are. */}
           {crumbs.length > 0 && (
           <nav
-            className="page-gutter flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-line-subtle py-2 text-xs text-ink-muted"
+            className="page-gutter flex min-h-11 min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-line-subtle py-1.5 text-xs text-ink-muted"
             aria-label="Breadcrumb"
           >
             {crumbs.map((crumb, index) => {
@@ -893,6 +897,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
                 </span>
               );
             })}
+            <div ref={setCrumbActions} className="ml-auto flex shrink-0 items-center empty:hidden" />
           </nav>
           )}
         </header>
@@ -920,6 +925,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
 
       <AppFooter />
     </div>
+    </BreadcrumbActionsSlot.Provider>
   );
 }
 

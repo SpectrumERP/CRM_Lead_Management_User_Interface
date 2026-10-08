@@ -5,10 +5,13 @@ import { toApiError } from '../api/errors';
 import { FORM_NO } from '../api/formRights';
 import { useSpectrumCompany } from '../auth/useSpectrumCompany';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { EmptyIcons, EmptyState, NoResults } from '../components/CRMStates';
+import Pagination from '../components/Pagination';
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
 import type { ToastType } from '../components/Toast';
+import { PAGE_COPY } from '../constants/messages';
 import { useFormRights } from '../contexts/FormRightsContext';
-import { Select, Spinner, nextSort, type SortDir } from '../ui';
+import { Button, IconTooltip, PageHeader, PageLoader, Spinner, nextSort, type SortDir } from '../ui';
 import { downloadCsv } from '../utils/csv';
 import { AttachmentGroups, ContactAlbum, ContactTable, EntityAlbum, EntityTable } from './businessEntities/ListViews';
 import {
@@ -21,7 +24,7 @@ import {
   type ListViewMode,
 } from './businessEntities/listRows';
 import { useBusinessEntityFeed } from './businessEntities/useBusinessEntityFeed';
-import { ICON, Icon, OutlineButton, SolidButton } from './businessEntities/ui';
+import { ICON, Icon, OutlineButton } from './businessEntities/ui';
 
 interface Props {
   onCreate: () => void;
@@ -37,8 +40,7 @@ const VIEW_MODES: { id: ListViewMode; label: string; icon: string }[] = [
   { id: 'attachment', label: 'Attachments', icon: ICON.paperclip },
 ];
 
-const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
-const PAGE_SIZES = [10, 25, 50, 100];
+const PAGE_SIZE = 10;
 
 type SortState = { field: string; dir: SortDir };
 /** Task Management sorts the list by code by default. */
@@ -57,60 +59,7 @@ function sortRows<T>(rows: T[], sort: SortState): T[] {
   });
 }
 
-function pageItems(page: number, totalPages: number): Array<number | '…'> {
-  return Array.from({ length: totalPages }, (_, i) => i + 1)
-    .filter((n) => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
-    .reduce<Array<number | '…'>>((acc, n, i, arr) => {
-      if (i > 0 && n - (arr[i - 1] as number) > 1) acc.push('…');
-      acc.push(n);
-      return acc;
-    }, []);
-}
-
-/** Showing x–y of N · page buttons · rows per page (Task Management's pagination bar). */
-function PaginationBar({ total, page, pageSize, onPage, onPageSize }: {
-  total: number; page: number; pageSize: number; onPage: (p: number) => void; onPageSize: (s: number) => void
-}) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const start = total ? (page - 1) * pageSize + 1 : 0;
-  const end = Math.min(page * pageSize, total);
-  const nav = 'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-muted shadow-sm hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40';
-  return (
-    <div className="flex flex-col items-center gap-2 border-t border-line bg-surface-muted px-4 py-2 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-3">
-      <span className="text-[11px] font-medium tabular-nums text-ink-muted lg:justify-self-start">
-        Showing <strong className="text-ink">{start}</strong>–<strong className="text-ink">{end}</strong> of <strong className="text-ink">{total}</strong> records
-      </span>
-      <div className="flex items-center gap-1.5">
-        <button type="button" aria-label="Previous page" className={nav} disabled={page <= 1} onClick={() => onPage(page - 1)}>
-          <Icon d="M15 19l-7-7 7-7" size={12} />
-        </button>
-        <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
-          {pageItems(page, totalPages).map((item, i) =>
-            item === '…' ? (
-              <span key={`gap-${i}`} className="px-1 text-[10px] text-ink-faint">…</span>
-            ) : (
-              <button key={item} type="button" onClick={() => onPage(item)} aria-current={item === page ? 'page' : undefined}
-                className={`h-6 w-9 rounded-md text-[10px] font-semibold tabular-nums transition-all ${item === page ? 'bg-primary text-surface shadow-sm' : 'text-ink-muted hover:bg-surface-hover hover:text-primary'}`}>
-                {item}
-              </button>
-            ),
-          )}
-        </div>
-        <button type="button" aria-label="Next page" className={nav} disabled={page >= totalPages} onClick={() => onPage(page + 1)}>
-          <Icon d="M9 5l7 7-7 7" size={12} />
-        </button>
-      </div>
-      <div className="flex items-center gap-2 lg:justify-self-end">
-        <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Rows per page</span>
-        <Select size="compact" aria-label="Rows per page" preserveOrder rootClassName="w-20"
-          options={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
-          value={String(pageSize)} onValueChange={(v) => onPageSize(Number(v))} />
-      </div>
-    </div>
-  );
-}
-
-/** Business Entities list, laid out and behaving as the Task Management "Business Entity" master list. */
+/** Business Entities list chrome matches the Leads grid (no row checkboxes). */
 export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Props) {
   const rights = useFormRights(FORM_NO.businessEntity);
   const company = useSpectrumCompany();
@@ -118,10 +67,9 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
   const [search, setSearch] = useState('');
   const keyword = useDeferredValue(search.trim());
   const [serverKeyword, setServerKeyword] = useState('');
-  const [letter, setLetter] = useState('');
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageLoading, setPageLoading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [typeNames, setTypeNames] = useState<ReadonlyMap<number, string>>(new Map());
   const [confirmDelete, setConfirmDelete] = useState<EntityListRow | null>(null);
@@ -149,7 +97,7 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
 
   const feed = useBusinessEntityFeed(source, {
     keyword: serverKeyword,
-    startsWith: letter,
+    startsWith: '',
     enabled: company.enabled && rights.isOpen,
     typeNames,
     reloadKey: `${reloadKey}:${company.companyNo ?? ''}`,
@@ -157,20 +105,26 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
 
   // A new view starts from the top, sorted by its default column.
   useEffect(() => {
-    setLetter('');
     setSort({ field: SORT_FIELD[view], dir: 'asc' });
     setPage(1);
     scrollRef.current?.scrollTo({ top: 0 });
   }, [view]);
 
-  useEffect(() => { setPage(1); }, [keyword, letter]);
+  useEffect(() => { setPage(1); }, [keyword, sort.field, sort.dir]);
+
+  useEffect(() => {
+    if (!pageLoading) return;
+    const timer = window.setTimeout(() => setPageLoading(false), 380);
+    return () => window.clearTimeout(timer);
+  }, [pageLoading, page]);
 
   const filtered = useMemo(() => searchRows(feed.rows, keyword), [feed.rows, keyword]);
   // A search ranks best matches first; otherwise the chosen column sorts.
   const ordered = useMemo(() => (keyword ? filtered : sortRows(filtered, sort)), [filtered, keyword, sort]);
-  const totalPages = Math.max(1, Math.ceil(ordered.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageRows = ordered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pageRows = ordered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const listBusy = feed.loading || pageLoading;
 
   // Keep the reader's place when earlier rows are added above.
   useLayoutEffect(() => {
@@ -208,8 +162,10 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
     }
   }
 
-  function pickLetter(next: string) {
-    setLetter((current) => (current === next ? '' : next));
+  function handlePageChange(next: number) {
+    if (next === safePage || pageLoading) return;
+    setPageLoading(true);
+    setPage(next);
     scrollRef.current?.scrollTo({ top: 0 });
   }
 
@@ -234,123 +190,166 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
     onDelete: rights.isDelete ? setConfirmDelete : undefined,
   };
   const sortProps = { sort, onSort: (field: string) => setSort((prev) => nextSort(prev, field, DEFAULT_SORT)) };
-  const enabledLetters = new Set(feed.alphabets.map((l) => l.toUpperCase()));
   const searching = Boolean(search.trim());
+  const isTableView = view === 'list' || view === 'contact-list';
+  const titleCount = ordered.length;
+  const emptyNode = searching ? (
+    <NoResults onClear={() => setSearch('')} />
+  ) : (
+    <EmptyState
+      icon={EmptyIcons.entities}
+      title="No business entities found"
+      subtitle="Create your first business entity to get started."
+      action={rights.isSave ? { label: 'Create Business Entity', onClick: onCreate } : undefined}
+    />
+  );
 
   if (!rights.ready) {
     return <div className="flex flex-1 items-center justify-center py-16"><Spinner label="Loading" /></div>;
   }
 
+  const body = !company.ready ? (
+    <div className="flex flex-1 items-center justify-center py-16"><Spinner label="Loading" /></div>
+  ) : !company.enabled ? null : feed.error && feed.rows.length === 0 ? (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-center">
+      <p className="text-sm font-semibold text-ink">Failed to load business entities</p>
+      <p className="text-xs text-ink-muted">Could not load this list. Retry runs the same search again.</p>
+      <p className="text-xs text-accent">{feed.error}</p>
+      <OutlineButton className="mt-2 h-9" onClick={() => setReloadKey((k) => k + 1)}>Retry</OutlineButton>
+    </div>
+  ) : (
+    <>
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className={`page-gutter flex h-full min-w-0 flex-col ${isTableView ? '' : 'pt-3'}`}>
+          <div
+            ref={scrollRef}
+            onScroll={onScroll}
+            onWheel={(e) => { if (e.currentTarget.scrollTop === 0 && e.deltaY < 0 && feed.hasPrev && !feed.loadingMore) void feed.loadPrev(); }}
+            className={`relative min-h-0 min-w-0 flex-1 ${isTableView ? 'table-scroll' : 'overflow-auto'}`}
+            aria-busy={listBusy || Boolean(feed.loadingMore)}
+          >
+            {pageLoading ? <PageLoader label={PAGE_COPY.pageLoading} /> : null}
+            {feed.loadingMore === 'prev' ? <div className="flex justify-center py-2"><Spinner label="Loading earlier" /></div> : null}
+            {feed.loading && feed.rows.length === 0 && !isTableView ? (
+              <div className="flex min-h-[200px] items-center justify-center"><Spinner label="Loading business entities" /></div>
+            ) : view === 'list' ? (
+              <EntityTable
+                rows={pageRows as EntityListRow[]}
+                loading={feed.loading && feed.rows.length === 0}
+                empty={emptyNode}
+                {...handlers}
+                {...sortProps}
+              />
+            ) : view === 'album' ? (
+              ordered.length === 0 && !feed.loading ? emptyNode : <EntityAlbum rows={pageRows as EntityListRow[]} {...handlers} />
+            ) : view === 'contact-list' ? (
+              <ContactTable
+                rows={pageRows as ContactListRow[]}
+                loading={feed.loading && feed.rows.length === 0}
+                empty={emptyNode}
+                onEdit={handlers.onEdit}
+                {...sortProps}
+              />
+            ) : view === 'contact-album' ? (
+              ordered.length === 0 && !feed.loading ? emptyNode : <ContactAlbum rows={pageRows as ContactListRow[]} onEdit={handlers.onEdit} />
+            ) : (
+              ordered.length === 0 && !feed.loading
+                ? emptyNode
+                : <AttachmentGroups rows={pageRows as AttachmentListRow[]} onEdit={handlers.onEdit} onPreview={setPreview} />
+            )}
+            {feed.loadingMore === 'next' ? <div className="flex justify-center py-3"><Spinner label="Loading more" /></div> : null}
+            {feed.error ? (
+              <div className="flex items-center justify-center gap-2 py-3 text-xs text-accent" role="alert">
+                <span>Failed to load more business entities: {feed.error}</span>
+                <button type="button" className="font-bold underline" onClick={() => void feed.loadNext()}>Retry</button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      <div className="page-gutter w-full border-t border-line bg-surface py-2.5 text-ink-muted">
+        <Pagination
+          page={safePage}
+          pageSize={PAGE_SIZE}
+          total={ordered.length}
+          onPageChange={handlePageChange}
+          disabled={pageLoading}
+        />
+      </div>
+    </>
+  );
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
-      <div className="page-gutter flex min-h-0 flex-1 flex-col gap-3 py-3">
-        <div className="flex shrink-0 flex-col items-stretch gap-2 lg:flex-row lg:items-center">
-          <label className="flex h-10 flex-1 items-center gap-2.5 rounded-lg border border-line bg-surface px-3 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.06)]">
-            <Icon d={ICON.search} size={16} className="shrink-0 text-ink-faint" />
-            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search"
-              placeholder="Search business entity records by name, code..."
-              className="h-full min-w-0 flex-1 border-none bg-transparent p-0 text-xs font-medium text-ink outline-none placeholder:text-ink-faint" />
-          </label>
-          <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5" role="tablist" aria-label="View">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PageHeader
+        bordered
+        title={`Business Entit${titleCount === 1 ? 'y' : 'ies'} - ${titleCount}`}
+        actions={
+          rights.isSave ? (
+            <Button variant="solid" onClick={onCreate}>
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Create Business Entity
+            </Button>
+          ) : null
+        }
+      >
+        <div className="flex w-full flex-wrap items-center gap-2.5 pb-3">
+          <div className="relative min-w-48 max-w-72 flex-1">
+            <svg
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
+              width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search business entities…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface-hover py-1.5 pl-8 pr-3 text-xs text-ink outline-none transition-colors focus:border-primary focus:bg-surface focus-visible:shadow-[var(--shadow-focus)]"
+              aria-label="Search business entities"
+            />
+          </div>
+          {searching ? (
+            <Button variant="secondary" className="!min-h-8 !px-3 !py-1.5 text-xs text-accent" onClick={() => setSearch('')}>
+              {PAGE_COPY.clearFilters}
+            </Button>
+          ) : null}
+          <Button
+            variant="secondary"
+            className="!min-h-8 !px-3 !py-1.5 text-xs"
+            disabled={ordered.length === 0}
+            onClick={() => downloadCsv('Business_Entity_Report.csv', exportRows(view, ordered))}
+          >
+            Export CSV
+          </Button>
+          <div className="ml-auto flex items-center overflow-hidden rounded-lg border border-line" role="tablist" aria-label="View">
             {VIEW_MODES.map((mode) => (
-              <button key={mode.id} type="button" role="tab" aria-selected={view === mode.id} onClick={() => setView(mode.id)}
-                className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors ${
-                  view === mode.id ? 'bg-primary text-surface' : 'text-ink-muted hover:bg-surface-hover hover:text-ink'
-                }`}>
-                <Icon d={mode.icon} size={12} />
-                <span>{mode.label}</span>
-              </button>
+              <IconTooltip key={mode.id} label={mode.label}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === mode.id}
+                  aria-label={mode.label}
+                  onClick={() => setView(mode.id)}
+                  className={`px-2.5 py-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${
+                    view === mode.id ? 'bg-primary text-surface' : 'bg-surface text-ink-soft hover:bg-surface-hover'
+                  }`}
+                >
+                  <Icon d={mode.icon} size={14} />
+                </button>
+              </IconTooltip>
             ))}
           </div>
-          {rights.isSave ? (
-            <SolidButton className="h-9 px-4" onClick={onCreate}>
-              <Icon d={ICON.plus} size={14} strokeWidth={2.5} /> Create Business Entity
-            </SolidButton>
-          ) : null}
         </div>
-
-        {!company.ready ? (
-          <div className="flex justify-center py-16"><Spinner label="Loading" /></div>
-        ) : !company.enabled ? (
-          <SpectrumRequiredNotice what="Business entities" />
-        ) : (
-          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-[0_8px_30px_-12px_rgba(15,23,42,0.06)]">
-            {feed.loading && feed.rows.length === 0 ? (
-              <div className="flex min-h-[200px] items-center justify-center p-10"><Spinner label="Loading business entities" /></div>
-            ) : feed.error && feed.rows.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 p-10 text-center">
-                <p className="text-sm font-semibold text-ink">Failed to load business entities</p>
-                <p className="text-xs text-ink-muted">Could not load this list. Retry runs the same search again.</p>
-                <p className="text-xs text-accent">{feed.error}</p>
-                <OutlineButton className="mt-2 h-9" onClick={() => setReloadKey((k) => k + 1)}>Retry</OutlineButton>
-              </div>
-            ) : ordered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 p-10 text-center">
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-soft text-primary"><Icon d={ICON.layers} size={20} /></span>
-                <p className="text-sm font-semibold text-ink">{searching ? 'No results match your search' : 'No Companies Found'}</p>
-                <p className="max-w-md text-xs text-ink-muted">
-                  {searching
-                    ? 'Try a different search term or clear the search to see all business entities.'
-                    : 'No companies match your criteria. Try adjusting filters or click the Add button above to create a new one.'}
-                </p>
-                {searching ? <OutlineButton className="mt-2 h-9" onClick={() => setSearch('')}>Clear search</OutlineButton> : null}
-              </div>
-            ) : (
-              <>
-                <div className="flex shrink-0 items-center justify-between border-b border-line bg-surface-muted/50 px-4 py-2">
-                  <span className="text-[11px] font-semibold text-ink-faint">Total {ordered.length} Records</span>
-                  <OutlineButton active className="h-7 px-3" onClick={() => downloadCsv('Business_Entity_Report.csv', exportRows(view, ordered))}>
-                    <Icon d={ICON.download} size={12} /> Export CSV
-                  </OutlineButton>
-                </div>
-                <div className="flex min-h-0 flex-1 overflow-hidden">
-                  <div ref={scrollRef} onScroll={onScroll}
-                    onWheel={(e) => { if (e.currentTarget.scrollTop === 0 && e.deltaY < 0 && feed.hasPrev && !feed.loadingMore) void feed.loadPrev(); }}
-                    className="relative min-h-0 min-w-0 flex-1 overflow-auto select-none"
-                    aria-busy={feed.loading || Boolean(feed.loadingMore)}>
-                    {feed.loadingMore === 'prev' ? <div className="flex justify-center py-2"><Spinner label="Loading earlier" /></div> : null}
-                    {view === 'list' ? (
-                      <EntityTable rows={pageRows as EntityListRow[]} {...handlers} {...sortProps} />
-                    ) : view === 'album' ? (
-                      <EntityAlbum rows={pageRows as EntityListRow[]} {...handlers} />
-                    ) : view === 'contact-list' ? (
-                      <ContactTable rows={pageRows as ContactListRow[]} onEdit={handlers.onEdit} {...sortProps} />
-                    ) : view === 'contact-album' ? (
-                      <ContactAlbum rows={pageRows as ContactListRow[]} onEdit={handlers.onEdit} />
-                    ) : (
-                      <AttachmentGroups rows={pageRows as AttachmentListRow[]} onEdit={handlers.onEdit} onPreview={setPreview} />
-                    )}
-                    {feed.loadingMore === 'next' ? <div className="flex justify-center py-3"><Spinner label="Loading more" /></div> : null}
-                    {feed.error ? (
-                      <div className="flex items-center justify-center gap-2 py-3 text-xs text-accent" role="alert">
-                        <span>Failed to load more business entities: {feed.error}</span>
-                        <button type="button" className="font-bold underline" onClick={() => void feed.loadNext()}>Retry</button>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* A–Z jump: letters with entries are enabled; picking the active letter again clears it. */}
-                  <nav aria-label="Jump to letter" className="flex w-7 shrink-0 flex-col items-center gap-px overflow-y-auto border-l border-line py-2">
-                    {LETTERS.map((l) => {
-                      const enabled = enabledLetters.has(l) || letter === l;
-                      return (
-                        <button key={l} type="button" disabled={!enabled || feed.loading} aria-pressed={letter === l} onClick={() => pickLetter(l)}
-                          className={`h-5 w-5 rounded text-[9px] font-semibold transition-colors ${
-                            letter === l ? 'bg-primary text-surface' : enabled ? 'text-primary hover:bg-primary-soft' : 'cursor-default text-ink-faint/50'
-                          }`}>
-                          {l}
-                        </button>
-                      );
-                    })}
-                  </nav>
-                </div>
-                <PaginationBar total={ordered.length} page={safePage} pageSize={pageSize} onPage={setPage}
-                  onPageSize={(size) => { setPageSize(size); setPage(1); }} />
-              </>
-            )}
-          </div>
-        )}
+      </PageHeader>
+      <div className="page-gutter pt-3 empty:hidden">
+        <SpectrumRequiredNotice what="Business entities" />
       </div>
+      {body}
 
       {confirmDelete ? (
         <ConfirmDialog

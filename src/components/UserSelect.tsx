@@ -15,9 +15,9 @@ interface UserPick {
 const SEARCH_DEBOUNCE_MS = 300
 
 const USER_COLUMNS: TableSearchColumn<UserPick>[] = [
-  { header: 'Name', getValue: (u) => u.name, truncate: true },
-  { header: 'Login ID', getValue: (u) => u.loginId || '—', width: '10rem', truncate: true },
-  { header: 'Email', getValue: (u) => u.email || '—', width: 'minmax(0,1.2fr)', truncate: true },
+  { header: 'Name', getValue: (u) => u.name, width: 'minmax(0,1.15fr)', truncate: true },
+  { header: 'Login ID', getValue: (u) => u.loginId || '—', width: 'minmax(0,0.9fr)', truncate: true },
+  { header: 'Email', getValue: (u) => u.email || '—', width: 'minmax(0,1.35fr)', truncate: true },
 ]
 
 /** The unfiltered list is shared by every picker on the page — one request, not one per field. */
@@ -121,13 +121,14 @@ export function UserSelect({ value, onValueChange, placeholder = 'Select user', 
       getKey={(o) => o.key}
       getLabel={(o) => o.name}
       columns={USER_COLUMNS}
+      menuWidth={680}
+      tableVariant="data-grid"
       // Users come from the server only — without a Spectrum login there is nothing to pick.
       placeholder={remote ? placeholder : 'Sign in with Spectrum to pick a user'}
       searchPlaceholder="Search user by name, login ID or email"
       emptyText="No matching users"
       invalid={invalid}
       disabled={disabled || !remote}
-      clearable={false}
       onQueryChange={search.setQuery}
       onOpenChange={search.onOpenChange}
       loading={search.loading}

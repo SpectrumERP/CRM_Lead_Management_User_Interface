@@ -2237,7 +2237,8 @@ export default function LeadDetail({
     const { date, time } = splitDateTime(dateTime)
     if (editingNoteId) {
       // Server notes → save-notes-detail with their number (an update), then the lead reloads.
-      patchNote(editingNoteId, { text, by, date: `${date} ${time}`.trim() })
+      // Failed → the error toast shows and the form stays open with the text.
+      if (!(await patchNote(editingNoteId, { text, by, date: `${date} ${time}`.trim() }))) return
       setNotes((prev) => prev.map((n) => (n.id === editingNoteId ? { ...n, text, by, date, time } : n)))
       setNoteDraft(EMPTY_NOTE_DRAFT)
       setNoteErrors({})
@@ -2255,7 +2256,7 @@ export default function LeadDetail({
       date: `${date} ${time}`.trim(),
       by,
     }
-    addNote(created)
+    if (!(await addNote(created))) return
     setNotes((n) => [
       {
         id: created.id,
@@ -2579,7 +2580,7 @@ export default function LeadDetail({
           )}
           {!loading && activeTab === "Internal Notes / Observations" && (
             <InternalNotesTab
-              readOnly={locked}
+              // Internal notes stay open on every lead, locked (converted / completed) ones included.
               notes={notes}
               adding={addingNote}
               draft={noteDraft}
@@ -2620,6 +2621,7 @@ export default function LeadDetail({
                 setAddingNote(true)
               }}
               editing={Boolean(editingNoteId)}
+              editingId={editingNoteId}
             />
           )}
         </div>

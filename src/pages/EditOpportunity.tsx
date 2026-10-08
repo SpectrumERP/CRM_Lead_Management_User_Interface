@@ -26,6 +26,7 @@ import { useOptionalToast } from '../contexts/ToastContext'
 import { useSpectrumCompany } from '../auth/useSpectrumCompany'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
 import { formatDate } from '../utils/dateFormat'
+import { BreadcrumbActions } from '../components/BreadcrumbActions'
 
 interface EditOpportunityProps {
   existing: Opportunity
@@ -395,14 +396,15 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          {/* Cancel / Save at the right of the breadcrumb line. */}
+          <BreadcrumbActions>
             <Button variant="secondary" onClick={onBack} disabled={saving}>
               Cancel
             </Button>
             <Button variant="solid" onClick={handleSave} disabled={saving || !serverMode}>
               {saving ? 'Saving…' : 'Save Changes'}
             </Button>
-          </div>
+          </BreadcrumbActions>
         </div>
       </div>
     </div>

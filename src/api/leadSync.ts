@@ -519,7 +519,6 @@ export async function saveServerLeadActivity(activity: Activity): Promise<void> 
 export async function saveServerLeadNote(note: CrmNote): Promise<void> {
   const leadNo = leadNoFromId(note.relatedLeadId)
   if (!leadNo) fail('VALIDATION', 'This note is not on a server lead.')
-  assertLeadUnlocked(note.relatedLeadId)
   await saveLeadNote({
     leadNo,
     leadNotesDetailNo: childNo(note.id, 'SN'),
@@ -545,7 +544,6 @@ export async function deleteServerLeadNote(note: Pick<CrmNote, 'id' | 'relatedLe
   const leadNo = leadNoFromId(note.relatedLeadId)
   const detailNo = childNo(note.id, 'SN')
   if (!leadNo || !detailNo) fail('VALIDATION', 'This note is not saved on the server.')
-  assertLeadUnlocked(note.relatedLeadId)
   await deleteLeadNotes([detailNo])
   await refreshServerLead(leadNo)
 }

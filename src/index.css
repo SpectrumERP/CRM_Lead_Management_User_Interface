@@ -1261,6 +1261,12 @@ select.active-filter {
   box-shadow: 4px 0 10px -4px rgba(12, 26, 58, 0.14);
 }
 
+/* Grids without a checkbox column pin the code at the left edge. */
+.crm-table th:first-child.sticky-col-id,
+.crm-table td:first-child.sticky-col-id {
+  left: 0;
+}
+
 /* Optional third left freeze (unused on leads/opps ID-only freeze). */
 .crm-table .sticky-col-id:has(+ .sticky-col-after-id) {
   width: 8.5rem;
@@ -1306,6 +1312,10 @@ select.active-filter {
 
 .crm-table.crm-table-leads {
   min-width: 96rem;
+}
+
+.crm-table.crm-table-entities {
+  min-width: 1290px;
 }
 
 .crm-table.crm-table-opps {
@@ -1890,4 +1900,12 @@ html.dark header img.client-logo {
 html.dark .client-logo-chip {
   background: #fff;
   padding: 2px 6px;
+}
+
+/* Clickable controls (incl. a dropdown's × clear and chip ×) show the hand cursor; disabled ones don't. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
 }

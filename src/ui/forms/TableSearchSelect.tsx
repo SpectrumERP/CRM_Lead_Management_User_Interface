@@ -4,6 +4,9 @@ import { IconTooltip } from '../IconTooltip'
 import { controlClass } from './controlClass'
 import { useFixedMenu } from './useFixedMenu'
 import { initialFocusIndex, scrollSelectedIntoView } from './selectedOption'
+import Pagination from '../../components/Pagination'
+
+const TABLE_PAGE_SIZE = 10
 
 export interface TableSearchColumn<T> {
   header: string
@@ -45,6 +48,10 @@ export interface TableSearchSelectProps<T> {
   /** `row`: the list spans the whole form row the field sits in (all its grid columns), for wide lookups
       in narrow places such as side drawers. Default `field`: as wide as the field. */
   menuSpan?: 'field' | 'row'
+  /** Optional wider menu for tables with several columns; capped to the viewport. */
+  menuWidth?: number
+  /** Grid-like table styling for lookup lists that need stronger row and column structure. */
+  tableVariant?: 'default' | 'data-grid'
 }
 
 function SearchGlyph() {
@@ -79,6 +86,8 @@ export function TableSearchSelect<T>({
   'aria-label': ariaLabel,
   inlineSearch = true,
   menuSpan = 'field',
+  menuWidth,
+  tableVariant = 'default',
 }: TableSearchSelectProps<T>) {
   const autoId = useId()
   const buttonId = id ?? autoId
@@ -88,9 +97,11 @@ export function TableSearchSelect<T>({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [focusIdx, setFocusIdx] = useState(0)
+  const [page, setPage] = useState(1)
   // Same width as the field (or its whole form row); the hook keeps it on screen.
   const menuStyle = useFixedMenu(open, rootRef, {
     maxHeight: 360,
+    width: menuWidth ? () => menuWidth : undefined,
     span: menuSpan === 'row' ? () => rootRef.current?.closest<HTMLElement>('.grid') ?? null : undefined,
   })
   const template = columns.map((column) => column.width ?? 'minmax(0,1fr)').join(' ')
@@ -102,6 +113,9 @@ export function TableSearchSelect<T>({
       filterItem ? filterItem(item, query) : getLabel(item).toLowerCase().includes(q.toLowerCase()),
     )
   }, [options, query, filterItem, getLabel, onQueryChange])
+  const visibleOptions = tableVariant === 'data-grid'
+    ? filtered.slice((page - 1) * TABLE_PAGE_SIZE, page * TABLE_PAGE_SIZE)
+    : filtered
 
   useEffect(() => {
     function onDoc(event: MouseEvent) {
@@ -117,7 +131,14 @@ export function TableSearchSelect<T>({
   const listRef = useRef<HTMLDivElement>(null)
   // Open on the selected option (not the first row); a search starts from the first match.
   useEffect(() => {
-    if (open) setFocusIdx(initialFocusIndex(filtered, selectedKey, getKey, Boolean(query.trim())))
+    if (open) {
+      const selectedIndex = filtered.findIndex((item) => selectedKey !== null && getKey(item) === selectedKey)
+      const nextPage = !query.trim() && selectedIndex >= 0 && tableVariant === 'data-grid'
+        ? Math.floor(selectedIndex / TABLE_PAGE_SIZE) + 1
+        : 1
+      setPage(nextPage)
+      setFocusIdx(initialFocusIndex(filtered, selectedKey, getKey, Boolean(query.trim())))
+    }
     // Only when the list opens or the search changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, query])
@@ -165,11 +186,19 @@ export function TableSearchSelect<T>({
     }
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      setFocusIdx((idx) => (idx + 1) % Math.max(filtered.length, 1))
+      setFocusIdx((idx) => {
+        const first = tableVariant === 'data-grid' ? (page - 1) * TABLE_PAGE_SIZE : 0
+        const end = tableVariant === 'data-grid' ? Math.min(page * TABLE_PAGE_SIZE, filtered.length) : filtered.length
+        return idx + 1 >= end ? first : Math.max(first, idx + 1)
+      })
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault()
-      setFocusIdx((idx) => (idx - 1 + Math.max(filtered.length, 1)) % Math.max(filtered.length, 1))
+      setFocusIdx((idx) => {
+        const first = tableVariant === 'data-grid' ? (page - 1) * TABLE_PAGE_SIZE : 0
+        const end = tableVariant === 'data-grid' ? Math.min(page * TABLE_PAGE_SIZE, filtered.length) : filtered.length
+        return idx - 1 < first ? Math.max(first, end - 1) : idx - 1
+      })
     }
     if (event.key === 'Enter' && filtered[focusIdx]) {
       event.preventDefault()
@@ -184,7 +213,7 @@ export function TableSearchSelect<T>({
           role="button"
           tabIndex={-1}
           aria-label="Clear"
-          className="text-base leading-none text-ink-faint"
+          className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded text-base leading-none text-ink-faint hover:bg-surface-hover hover:text-ink"
           onClick={(event) => {
             event.stopPropagation()
             select(null)
@@ -267,7 +296,7 @@ export function TableSearchSelect<T>({
               id={listId}
               ref={panelRef}
               role="listbox"
-              className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface"
+              className={`flex flex-col overflow-hidden border border-line bg-surface ${tableVariant === 'data-grid' ? 'rounded-md' : 'rounded-xl'}`}
               style={{
                 ...menuStyle,
                 boxShadow: 'var(--shadow-overlay)',
@@ -296,13 +325,14 @@ export function TableSearchSelect<T>({
                 </div>
               )}
               <div
-                className="grid shrink-0 border-b border-line-subtle px-3 py-2"
+                className={`grid shrink-0 ${tableVariant === 'data-grid' ? '' : 'gap-x-3 border-b border-line-subtle px-3 py-2'}`}
                 style={{ gridTemplateColumns: template }}
               >
                 {columns.map((column) => (
                   <span
                     key={column.header}
-                    className={`text-[11px] font-bold text-ink-muted ${column.align === 'right' ? 'text-right' : 'text-left'}`}
+                    className={`${tableVariant === 'data-grid' ? 'box-border border-r border-line border-t border-b border-line px-3 py-2.5 text-xs font-bold text-ink-soft last:border-r-0' : 'text-[11px] font-bold text-ink-muted'} ${column.align === 'right' ? 'text-right' : 'text-left'}`}
+                    style={tableVariant === 'data-grid' ? { background: 'var(--color-surface-hover)' } : undefined}
                   >
                     {column.header}
                   </span>
@@ -314,7 +344,8 @@ export function TableSearchSelect<T>({
                 ) : filtered.length === 0 ? (
                   <p className="py-4 text-center text-xs text-ink-faint">{emptyText}</p>
                 ) : (
-                  filtered.map((item, idx) => {
+                  visibleOptions.map((item, pageIdx) => {
+                    const idx = tableVariant === 'data-grid' ? (page - 1) * TABLE_PAGE_SIZE + pageIdx : pageIdx
                     const selected = selectedKey !== null && getKey(item) === selectedKey
                     return (
                     <button
@@ -323,7 +354,7 @@ export function TableSearchSelect<T>({
                       role="option"
                       aria-selected={selected}
                       // Selected: tinted, bold, with a primary bar; the row under the pointer / arrow keys: hover tint.
-                      className={`grid w-full items-center px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${
+                      className={`grid w-full items-center text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${tableVariant === 'data-grid' ? '' : 'gap-x-3 px-3 py-2'} ${
                         selected
                           ? 'bg-primary-soft shadow-[inset_3px_0_0_var(--color-primary)]'
                           : idx === focusIdx
@@ -334,11 +365,11 @@ export function TableSearchSelect<T>({
                       onMouseEnter={() => setFocusIdx(idx)}
                       onClick={() => select(item)}
                     >
-                      {columns.map((column) => {
+                      {columns.map((column, columnIdx) => {
                         const text = column.getValue(item)
                         const cell = (
                           <span
-                            className={`min-w-0 text-xs ${selected ? 'font-semibold text-primary' : 'text-ink'} ${column.truncate ? 'truncate whitespace-nowrap' : 'whitespace-nowrap'} ${
+                            className={`min-w-0 ${tableVariant === 'data-grid' ? 'text-[12.5px]' : 'text-xs'} ${selected ? 'font-semibold text-primary' : tableVariant === 'data-grid' && columnIdx === 0 ? 'font-semibold text-ink' : 'text-ink'} ${column.truncate ? 'truncate whitespace-nowrap' : 'whitespace-nowrap'} ${
                               column.align === 'right' ? 'text-right' : 'text-left'
                             }`}
                           >
@@ -346,7 +377,7 @@ export function TableSearchSelect<T>({
                           </span>
                         )
                         return (
-                          <span key={column.header} className="min-w-0">
+                          <span key={column.header} className={`min-w-0 ${tableVariant === 'data-grid' ? 'box-border border-r border-b border-line px-3 py-[9px] last:border-r-0' : ''}`}>
                             {column.truncate ? (
                               <IconTooltip label={text} overflowOnly className="w-full">
                                 {cell}
@@ -379,6 +410,19 @@ export function TableSearchSelect<T>({
               ) : null}
               {footer ? (
                 <div className="shrink-0 border-t border-line-subtle px-3 py-1.5 text-[11px] text-ink-faint">{footer}</div>
+              ) : null}
+              {tableVariant === 'data-grid' && filtered.length > 0 ? (
+                <div className="shrink-0 border-t border-line px-3 py-2.5">
+                  <Pagination
+                    page={page}
+                    pageSize={TABLE_PAGE_SIZE}
+                    total={filtered.length}
+                    onPageChange={(nextPage) => {
+                      setPage(nextPage)
+                      setFocusIdx((nextPage - 1) * TABLE_PAGE_SIZE)
+                    }}
+                  />
+                </div>
               ) : null}
             </div>,
             document.body,

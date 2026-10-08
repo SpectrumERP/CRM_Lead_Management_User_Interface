@@ -191,7 +191,6 @@ export default function EntityContactsFields({ value, onChange, errors = {}, ent
         columns={ENTITY_COLUMNS}
         searchPlaceholder="Search by name, code, type or location"
         emptyText="No matching business entities"
-        clearable={false}
         disabled={entityLocked}
         onQueryChange={entityField.onQueryChange}
         onOpenChange={entityField.onOpenChange}
@@ -215,7 +214,6 @@ export default function EntityContactsFields({ value, onChange, errors = {}, ent
         columns={CONTACT_COLUMNS}
         searchPlaceholder="Search contact person"
         emptyText="No contact persons for this business entity"
-        clearable={false}
         {...serverSearch}
       />
       <div className="lg:col-span-2">

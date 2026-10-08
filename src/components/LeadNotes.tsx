@@ -124,8 +124,11 @@ export function InternalNotesTab({
   onDelete,
   onEdit,
   editing = false,
+  editingId = null,
   readOnly = false,
 }: {
+  /** The note open in the form; it is left out of the list while edited. */
+  editingId?: string | null
   /** Locked lead: notes are shown only (no add / edit / delete). */
   readOnly?: boolean
   notes: LeadNote[]
@@ -164,7 +167,7 @@ export function InternalNotesTab({
         <p className="text-xs font-semibold text-ink-muted">
           {notes.length} internal note{notes.length !== 1 ? "s" : ""}
         </p>
-        {readOnly ? null : (
+        {readOnly || adding ? null : (
           <Button variant="solid" className="!px-3 !py-1.5 text-xs" onClick={onStartAdd}>
             Add Internal Note / Observation
           </Button>
@@ -215,9 +218,9 @@ export function InternalNotesTab({
           subtitle="Record date, author and discussion so the team has one internal thread."
           action={readOnly ? undefined : { label: "Add Internal Note / Observation", onClick: onStartAdd }}
         />
-      ) : notes.length > 0 ? (
+      ) : notes.some((note) => note.id !== editingId) ? (
         <ul className="overflow-hidden rounded-xl border border-line bg-surface" aria-label="Internal notes / observations">
-          {notes.map((note) => (
+          {notes.filter((note) => note.id !== editingId).map((note) => (
             <NoteCard
               key={note.id}
               note={note}
@@ -251,13 +254,16 @@ function splitDateTime(value: string) {
 }
 
 /** Stored note date (`DD-MM-YYYY HH:MM`, or ISO) → the `datetime-local` input value (`YYYY-MM-DDTHH:MM`). */
+/** A saved note date as the note form's date input value (`YYYY-MM-DD`). */
 export function noteDateToInput(value: string): string {
-  const m = /^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}):(\d{2}))?/.exec(value.trim())
-  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4] ?? "00"}:${m[5] ?? "00"}`
+  const m = /^(\d{2})-(\d{2})-(\d{4})/.exec(value.trim())
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim())
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return ""
   const pad = (n: number) => String(n).padStart(2, "0")
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function toLeadNote(n: CrmNote): LeadNote {
@@ -273,8 +279,8 @@ export interface LeadNotesPanelProps {
  * The lead view's internal notes as a self-contained block (lead form, edit mode). Adding and deleting
  * are saved straight away — server leads through `save-notes-detail` / `delete-notes-detail`.
  */
-export function LeadNotesPanel({ lead, onToast }: LeadNotesPanelProps) {
-  return <RecordNotesPanel recordId={lead.id} recordName={lead.companyName} noun="lead" onToast={onToast} />
+export function LeadNotesPanel({ lead, onToast, readOnly = false }: LeadNotesPanelProps & { readOnly?: boolean }) {
+  return <RecordNotesPanel recordId={lead.id} recordName={lead.companyName} noun="lead" onToast={onToast} readOnly={readOnly} />
 }
 
 export interface RecordNotesPanelProps {
@@ -284,13 +290,15 @@ export interface RecordNotesPanelProps {
   /** Used in the toasts ("saved on this lead"). */
   noun: "lead" | "opportunity"
   onToast?: (type: ToastType, title: string, message?: string) => void
+  /** Locked lead / closed opportunity: notes are shown only (no add / edit / delete). */
+  readOnly?: boolean
 }
 
 /**
  * Internal notes of one lead or opportunity (list + add / edit / delete), saved straight away —
  * server records through their `save-notes-detail` / `delete-notes-detail`.
  */
-export function RecordNotesPanel({ recordId, recordName, noun, onToast }: RecordNotesPanelProps) {
+export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly = false }: RecordNotesPanelProps) {
   const { addNote, patchNote, removeNote } = useCrmActions()
   const confirm = useConfirm()
   const stored = useCrmSelector((state) => state.notes.filter((n) => n.relatedLeadId === recordId), sameList)
@@ -322,7 +330,8 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast }: Record
     const { date, time } = splitDateTime(dateTime)
     if (editingId) {
       // Server notes → save-notes-detail with their number, then the lead / opportunity reloads.
-      patchNote(editingId, { text, by, date: `${date} ${time}`.trim() })
+      // Failed → the error toast shows and the form stays open with the text.
+      if (!(await patchNote(editingId, { text, by, date: `${date} ${time}`.trim() }))) return
       setDraft(EMPTY_DRAFT)
       setErrors({})
       setAdding(false)
@@ -339,7 +348,7 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast }: Record
       date: `${date} ${time}`.trim(),
       by,
     }
-    addNote(created)
+    if (!(await addNote(created))) return
     setPending((prev) => [{ id: created.id, text, date, time, by }, ...prev])
     setDraft(EMPTY_DRAFT)
     setErrors({})
@@ -376,6 +385,7 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast }: Record
 
   return (
     <InternalNotesTab
+      readOnly={readOnly}
       notes={notes}
       adding={adding}
       draft={draft}
@@ -404,6 +414,7 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast }: Record
       onDelete={(note) => void remove(note)}
       onEdit={(note) => edit(note)}
       editing={Boolean(editingId)}
+      editingId={editingId}
     />
   )
 }

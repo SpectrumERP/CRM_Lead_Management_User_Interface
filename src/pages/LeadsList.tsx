@@ -724,8 +724,9 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
         <NoteDrawer
           preselectedLead={{ id: noteLead.id, name: noteLead.companyName }}
           onClose={() => setNoteLead(null)}
-          onSave={(note) => {
-            addNote(note)
+          onSave={async (note) => {
+            // Toast only once saved; a failed save shows the error instead.
+            if (!(await addNote(note))) return
             onToast?.('success', 'Note Added', 'The note has been saved on this lead.')
           }}
         />

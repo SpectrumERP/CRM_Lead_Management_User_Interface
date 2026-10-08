@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from 'react'
+import { cloneElement, isValidElement, useId, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 
 type FieldControlProps = {
   id?: string
@@ -20,6 +20,12 @@ export interface FieldProps {
   layout?: 'stack' | 'inline'
   className?: string
   children: ReactNode
+}
+
+/** A dropdown opens from its own control only — clicking its label does not open it. */
+function keepDropdownClosed(event: MouseEvent<HTMLLabelElement>) {
+  const control = event.currentTarget.control
+  if (control?.matches('[aria-haspopup], [role="combobox"]')) event.preventDefault()
 }
 
 export function Field({
@@ -50,7 +56,7 @@ export function Field({
     : children
 
   const labelNode = (
-    <label htmlFor={controlId} className={layout === 'inline' ? 'text-xs font-semibold text-ink-muted pt-2' : 'form-label'}>
+    <label htmlFor={controlId} onClick={keepDropdownClosed} className={layout === 'inline' ? 'text-xs font-semibold text-ink-muted pt-2' : 'form-label'}>
       {label}
       {required ? <span className="form-required" aria-hidden="true">*</span> : null}
     </label>

@@ -50,7 +50,8 @@ export interface CrmStore {
   addContact: (contact: Contact) => void
   addActivity: (activity: Activity) => void
   addMeeting: (meeting: Meeting) => void
-  addNote: (note: CrmNote) => void
+  /** Resolves true once saved (server records: after the API call and reload); false when it failed. */
+  addNote: (note: CrmNote) => Promise<boolean>
   addEmail: (email: CrmEmail) => void
   addDocument: (doc: CRMDocument) => void
   /** Resolves true once saved (server records: after the API call and reload); false when it failed. */
@@ -59,7 +60,7 @@ export interface CrmStore {
   removeActivity: (id: string) => Promise<boolean>
   removeNote: (id: string) => Promise<boolean>
   /** Edit a note (server leads → save-notes-detail with its detail number). */
-  patchNote: (id: string, patch: Partial<CrmNote>) => void
+  patchNote: (id: string, patch: Partial<CrmNote>) => Promise<boolean>
   patchMeeting: (id: string, patch: Partial<Meeting>) => void
   convertLead: (
     leadId: string,
@@ -193,16 +194,12 @@ export function useCrmActions() {
         run(() => RAW_ACTIONS.addMeeting(meeting))
       },
       addNote: (note: CrmNote) => {
+        const saved = (save: Promise<void>) => runAsync(() => save.then(() => true)).then((ok) => ok === true)
         // Server opportunity → /api/crm/opportunities/save-notes-detail.
-        if (opportunityNoFromId(note.relatedLeadId)) {
-          void runAsync(() => saveServerOpportunityNote(note))
-          return
-        }
-        if (isServerLeadId(note.relatedLeadId)) {
-          void runAsync(() => saveServerLeadNote(note))
-          return
-        }
+        if (opportunityNoFromId(note.relatedLeadId)) return saved(saveServerOpportunityNote(note))
+        if (isServerLeadId(note.relatedLeadId)) return saved(saveServerLeadNote(note))
         run(() => RAW_ACTIONS.addNote(note))
+        return Promise.resolve(true)
       },
       addEmail: (email: CrmEmail) => {
         run(() => RAW_ACTIONS.addEmail(email))
@@ -238,18 +235,18 @@ export function useCrmActions() {
       },
       patchNote: (id: string, patch: Partial<CrmNote>) => {
         const current = api.crm.getState().notes.find((item) => item.id === id)
-        if (!current) return
+        if (!current) return Promise.resolve(false)
+        const saved = (save: Promise<void>) => runAsync(() => save.then(() => true)).then((ok) => ok === true)
         // Server opportunity note (SON-…) → its save-notes-detail with the number, then it reloads.
         if (current.id.startsWith('SON-') && opportunityNoFromId(current.relatedLeadId)) {
-          void runAsync(() => saveServerOpportunityNote({ ...current, ...patch, id: current.id }))
-          return
+          return saved(saveServerOpportunityNote({ ...current, ...patch, id: current.id }))
         }
         // Server note (SN-…) → save-notes-detail with its number (an update), then the lead reloads.
         if (current.id.startsWith('SN-') && isServerLeadId(current.relatedLeadId)) {
-          void runAsync(() => saveServerLeadNote({ ...current, ...patch, id: current.id }))
-          return
+          return saved(saveServerLeadNote({ ...current, ...patch, id: current.id }))
         }
         run(() => patchLocalNote(id, patch))
+        return Promise.resolve(true)
       },
       removeNote: async (id: string) => {
         const current = api.crm.getState().notes.find((item) => item.id === id)

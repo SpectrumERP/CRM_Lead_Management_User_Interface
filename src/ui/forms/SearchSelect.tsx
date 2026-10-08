@@ -163,7 +163,7 @@ export function SearchSelect<T>({
           role="button"
           tabIndex={-1}
           aria-label="Clear"
-          className="text-ink-faint text-base leading-none"
+          className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded text-base leading-none text-ink-faint hover:bg-surface-hover hover:text-ink"
           onClick={(event) => {
             event.stopPropagation()
             select(null)

@@ -169,8 +169,8 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
           options={typeOptions}
           value={type}
           onChange={(next) => {
-            if (!next) return
-            setType(next as ActivityType)
+            // Cleared → empty; Save then asks for a type.
+            setType((next ?? '') as ActivityType)
             clearErr('type')
           }}
           getKey={(item) => item}
@@ -178,7 +178,6 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
           placeholder="Search and select type…"
           searchPlaceholder="Search type…"
           emptyText="No matching types"
-          clearable={false}
         />
 
         <TextField

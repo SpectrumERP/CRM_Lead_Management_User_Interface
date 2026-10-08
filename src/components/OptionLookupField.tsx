@@ -65,9 +65,7 @@ export function OptionLookupField({
       fieldClassName={fieldClassName}
       options={items}
       value={selected}
-      onChange={(item) => {
-        if (item) onValueChange(item.value)
-      }}
+      onChange={(item) => onValueChange(item?.value ?? '')}
       getKey={(o) => o.value}
       getLabel={(o) => o.label}
       filterItem={(o, q) => `${o.code ?? ''} ${o.label} ${o.detail ?? ''}`.toLowerCase().includes(q.trim().toLowerCase())}
@@ -75,7 +73,6 @@ export function OptionLookupField({
       placeholder={placeholder}
       searchPlaceholder="Search…"
       emptyText="No matches"
-      clearable={false}
       disabled={disabled}
     />
   )

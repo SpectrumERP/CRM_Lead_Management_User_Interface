@@ -44,6 +44,7 @@ import { ContactCard, FollowUpNotesField, LocationCard, NameField, PortsField } 
 import LocationFields from './businessEntities/LocationFields'
 import FormDrawer from '../components/FormDrawer'
 import { BreadcrumbBar, EntitySection, ICON, Icon, OutlineButton, SolidButton, Subheading } from './businessEntities/ui'
+import { BreadcrumbActions } from '../components/BreadcrumbActions'
 
 // OpenCV and Tesseract (~12 MB) load only when the scanner opens.
 const BusinessCardScanner = lazy(() => import('../components/businessCard/BusinessCardScanner'))
@@ -372,25 +373,26 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
   const canAddCity = cityRights.isSave && Boolean(headOfficeNo)
   const blockSave = saving || loadingRecord || Boolean(loadError) || !company.enabled || !fill
 
-  const bar = (
-    <BreadcrumbBar
-      // The app header already shows the breadcrumb; this bar keeps the title and Cancel / Save in view.
-      items={embedded ? [] : [{ label: isEdit ? 'Edit Business Entity' : 'New Business Entity' }]}
-      actions={
-        <>
-          <OutlineButton onClick={onBack} disabled={saving} className="h-9">
-            <Icon d={ICON.x} />
-            <span className="hidden sm:inline">Cancel</span>
-          </OutlineButton>
-          {allowed || !rights.ready ? (
-            <SolidButton onClick={() => void handleSave()} disabled={blockSave} className="h-9 px-4">
-              {saving ? <Spinner label="Saving" /> : <Icon d={ICON.save} />}
-              <span className="hidden sm:inline">{saving ? 'Saving...' : isEdit ? 'Update' : 'Save'}</span>
-            </SolidButton>
-          ) : null}
-        </>
-      }
-    />
+  const actions = (
+    <>
+      <OutlineButton onClick={onBack} disabled={saving} className="h-9">
+        <Icon d={ICON.x} />
+        <span className="hidden sm:inline">Cancel</span>
+      </OutlineButton>
+      {allowed || !rights.ready ? (
+        <SolidButton onClick={() => void handleSave()} disabled={blockSave} className="h-9 px-4">
+          {saving ? <Spinner label="Saving" /> : <Icon d={ICON.save} />}
+          <span className="hidden sm:inline">{saving ? 'Saving...' : isEdit ? 'Update' : 'Save'}</span>
+        </SolidButton>
+      ) : null}
+    </>
+  )
+  // Full page: Cancel / Save at the right of the app header's breadcrumb line (which already names the page).
+  // Quick Create drawer: this form's own bar keeps them in view.
+  const bar = embedded ? (
+    <BreadcrumbBar items={[]} actions={actions} />
+  ) : (
+    <BreadcrumbActions>{actions}</BreadcrumbActions>
   )
 
   if (rights.ready && !allowed) {

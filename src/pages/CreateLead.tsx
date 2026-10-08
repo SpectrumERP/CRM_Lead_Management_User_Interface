@@ -38,6 +38,7 @@ import { LeadNotesPanel } from '../components/LeadNotes'
 import { useOptionalToast } from '../contexts/ToastContext'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
 import { formatDate, formatDateTime, toIsoDate } from '../utils/dateFormat'
+import { BreadcrumbActions } from '../components/BreadcrumbActions'
 
 const SPECTRUM_REQUIRED = 'Sign in with your Spectrum account to create or edit leads.'
 
@@ -1001,7 +1002,8 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          {/* Cancel / Save at the right of the breadcrumb line (in place inside the Quick Create drawer). */}
+          <BreadcrumbActions inline={embedded}>
             <Button variant="secondary" onClick={onBack}>Cancel</Button>
             <div className="flex items-center gap-2.5">
               {/* Save as Draft — hidden for now (no draft API yet).
@@ -1011,7 +1013,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Lead'}
               </Button>
             </div>
-          </div>
+          </BreadcrumbActions>
         </div>
       </div>
     </div>
