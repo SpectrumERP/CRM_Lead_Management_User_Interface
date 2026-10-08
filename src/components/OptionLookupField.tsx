@@ -77,7 +77,6 @@ export function OptionLookupField({
       emptyText="No matches"
       clearable={false}
       disabled={disabled}
-      panelWidth="field"
     />
   )
 }

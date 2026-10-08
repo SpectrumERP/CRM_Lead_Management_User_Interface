@@ -75,7 +75,7 @@ export default function QuickCreateMenu() {
             openMenu()
           }
         }}
-        className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-[background-color,border-color,color,transform] duration-200 ease-out lg:h-8 lg:w-8 hover:border-primary active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+        className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-[background-color,border-color,color,transform] duration-200 ease-out hover:border-primary active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
           menuOpen
             ? 'border-primary bg-primary text-surface hover:border-primary-hover hover:bg-primary-hover'
             : 'border-line-strong bg-primary-soft text-primary'

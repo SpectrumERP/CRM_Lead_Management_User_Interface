@@ -231,6 +231,8 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
           required
           error={errors.assignedTo}
           placeholder="Select assignee"
+          // Drawer is narrow: let the Name / Login ID / Email list span both columns (Due Date + Assigned To).
+          menuSpan="row"
           value={assignedTo}
           onValueChange={(value) => {
             setAssignedTo(value)

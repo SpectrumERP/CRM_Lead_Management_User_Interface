@@ -4,9 +4,14 @@ import { AppProviders } from './app/providers'
 import { AppRouter } from './app/routes'
 import { ErrorHandlerProvider, useErrorHandler } from './app/ErrorHandler'
 import { AppErrorBoundary } from './app/ErrorBoundary'
-import { FullPageSpinner } from './ui'
+import { BootShell, FullPageSpinner } from './ui'
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/'
+
+/** First route chunk: keep the app chrome painted (as index.html does) except on the login page. */
+function RouteFallback() {
+  return window.location.pathname.endsWith('/login') ? <FullPageSpinner /> : <BootShell />
+}
 
 function AppErrors({ children }: { children: ReactNode }) {
   const { handleError } = useErrorHandler()
@@ -19,7 +24,7 @@ export default function App() {
       <BrowserRouter basename={basename}>
         <ErrorHandlerProvider>
           <AppErrors>
-            <Suspense fallback={<FullPageSpinner />}>
+            <Suspense fallback={<RouteFallback />}>
               <AppRouter />
             </Suspense>
           </AppErrors>

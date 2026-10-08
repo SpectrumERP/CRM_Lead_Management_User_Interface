@@ -31,6 +31,8 @@ export interface SearchSelectProps<T> {
   footer?: ReactNode
   /** Fires when the list opens / closes — lets callers load options only once the user opens the field. */
   onOpenChange?: (open: boolean) => void
+  /** Type straight into the field (default); `false` keeps a separate search box at the top of the list. */
+  inlineSearch?: boolean
 }
 
 /**
@@ -57,6 +59,7 @@ export function SearchSelect<T>({
   loading = false,
   footer,
   onOpenChange,
+  inlineSearch = true,
 }: SearchSelectProps<T>) {
   const autoId = useId()
   const buttonId = id ?? autoId
@@ -108,6 +111,12 @@ export function SearchSelect<T>({
   useEffect(() => {
     onOpenChangeRef.current?.(open)
   }, [open])
+  // Inline search: closing (outside click, Escape, Tab) drops the typed text so the field shows the value again.
+  useEffect(() => {
+    if (inlineSearch && !open && query) updateQuery('')
+    // Only when the list closes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inlineSearch, open])
 
   function updateQuery(next: string) {
     setQuery(next)
@@ -127,7 +136,7 @@ export function SearchSelect<T>({
     }
   }
 
-  function onListKey(event: KeyboardEvent<HTMLDivElement>) {
+  function onListKey(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') {
       event.preventDefault()
       setOpen(false)
@@ -147,8 +156,70 @@ export function SearchSelect<T>({
     }
   }
 
+  const clearOrChevron =
+    value && clearable && !disabled ? (
+      <IconTooltip label="Clear">
+        <span
+          role="button"
+          tabIndex={-1}
+          aria-label="Clear"
+          className="text-ink-faint text-base leading-none"
+          onClick={(event) => {
+            event.stopPropagation()
+            select(null)
+          }}
+        >
+          ×
+        </span>
+      </IconTooltip>
+    ) : (
+      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="text-ink-faint shrink-0" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    )
+
   return (
     <div className="relative" ref={rootRef}>
+      {inlineSearch ? (
+        <div
+          className={controlClass({ invalid, className: 'flex items-center justify-between gap-2' })}
+          onClick={() => !disabled && setOpen(true)}
+        >
+          <input
+            id={buttonId}
+            type="text"
+            role="combobox"
+            autoComplete="off"
+            disabled={disabled}
+            aria-expanded={open}
+            aria-controls={open ? listId : undefined}
+            aria-autocomplete="list"
+            aria-invalid={invalid || undefined}
+            // Closed: the selected label; open: what is typed, with the selected label as the hint.
+            value={open ? query : value ? getLabel(value) : ''}
+            placeholder={value ? getLabel(value) : placeholder}
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-faint"
+            onFocus={() => !disabled && setOpen(true)}
+            onChange={(event) => {
+              updateQuery(event.target.value)
+              setOpen(true)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Tab') {
+                setOpen(false)
+                return
+              }
+              if (!open && (event.key === 'ArrowDown' || event.key === 'Enter')) {
+                event.preventDefault()
+                setOpen(true)
+                return
+              }
+              onListKey(event)
+            }}
+          />
+          {clearOrChevron}
+        </div>
+      ) : (
       <button
         id={buttonId}
         type="button"
@@ -164,27 +235,9 @@ export function SearchSelect<T>({
         <span className={value ? 'text-ink text-[13px] truncate' : 'text-ink-faint text-[13px] truncate'}>
           {value ? getLabel(value) : placeholder}
         </span>
-        {value && clearable && !disabled ? (
-          <IconTooltip label="Clear">
-            <span
-              role="button"
-              tabIndex={-1}
-              aria-label="Clear"
-              className="text-ink-faint text-base leading-none"
-              onClick={(event) => {
-                event.stopPropagation()
-                select(null)
-              }}
-            >
-              ×
-            </span>
-          </IconTooltip>
-        ) : (
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="text-ink-faint shrink-0" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        )}
+        {clearOrChevron}
       </button>
+      )}
       {open
         ? createPortal(
             <div
@@ -195,17 +248,19 @@ export function SearchSelect<T>({
               style={{ ...menuStyle, boxShadow: 'var(--shadow-overlay)' }}
               onKeyDown={onListKey}
             >
-              <div className="shrink-0 border-b border-line-subtle p-2">
-                <input
-                  autoFocus
-                  type="search"
-                  value={query}
-                  onChange={(event) => updateQuery(event.target.value)}
-                  placeholder={searchPlaceholder}
-                  className={controlClass({ className: 'text-xs' })}
-                  aria-label={searchPlaceholder}
-                />
-              </div>
+              {inlineSearch ? null : (
+                <div className="shrink-0 border-b border-line-subtle p-2">
+                  <input
+                    autoFocus
+                    type="search"
+                    value={query}
+                    onChange={(event) => updateQuery(event.target.value)}
+                    placeholder={searchPlaceholder}
+                    className={controlClass({ className: 'text-xs' })}
+                    aria-label={searchPlaceholder}
+                  />
+                </div>
+              )}
               <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
                 {loading && filtered.length === 0 ? (
                   <p className="text-xs text-center py-4 text-ink-faint" role="status">Searching…</p>

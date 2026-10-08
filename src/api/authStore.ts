@@ -1,6 +1,8 @@
 import { cookieVault } from './cookieVault'
+import { sessionContract } from '../app/microfrontends'
 
-const COOKIE_NAME = 'fi-crm-auth'
+/** Read by the remote apps too (shared sign-in) — name from microfrontends.json. */
+const COOKIE_NAME = sessionContract.authCookie
 const FALLBACK_TTL_SECONDS = 8 * 60 * 60
 
 export interface SpectrumCompany {

@@ -9,6 +9,7 @@
  */
 import { clearAuth } from './authStore'
 import { clearSession } from './session'
+import { sessionContract } from '../app/microfrontends'
 
 export type SessionEndReason = 'expired' | 'rejected' | 'other-tab'
 
@@ -18,7 +19,8 @@ const listeners = new Set<Listener>()
 let ended = false
 
 const channel: BroadcastChannel | null =
-  typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('fi-crm-session') : null
+  // Shared with the remote apps: a sign-out / expiry in either reaches the other's open tabs.
+  typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(sessionContract.channel) : null
 
 channel?.addEventListener('message', (event: MessageEvent<{ type?: string }>) => {
   if (event.data?.type === 'expired' || event.data?.type === 'logout') end('other-tab', false)

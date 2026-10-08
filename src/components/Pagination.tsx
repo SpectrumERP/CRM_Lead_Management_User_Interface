@@ -2,6 +2,13 @@ import type { ReactNode, SVGProps } from 'react'
 import { Button, IconTooltip } from '../ui'
 import { interpolate, PAGE_COPY } from '../constants/messages'
 
+/** Grids show the pager only when there are more than this many records. */
+export const PAGINATION_MIN_RECORDS = 10
+
+export function needsPagination(total: number) {
+  return total > PAGINATION_MIN_RECORDS
+}
+
 export interface PaginationProps {
   page: number
   pageSize: number
@@ -78,6 +85,8 @@ export default function Pagination({ page, pageSize, total, onPageChange, disabl
       <div className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
         {end ? <div className="text-xs leading-7 text-ink-muted">{end}</div> : null}
 
+        {/* Pager only when there is more than one screenful (> 10 records); the count always shows. */}
+        {needsPagination(total) ? (
         <nav className="inline-flex items-center gap-1" aria-label="Pagination">
           <NavButton label={copy.first} disabled={atStart} onClick={() => onPageChange(1)}>
             <span className="inline-flex -space-x-1.5">
@@ -117,6 +126,7 @@ export default function Pagination({ page, pageSize, total, onPageChange, disabl
             </span>
           </NavButton>
         </nav>
+        ) : null}
       </div>
       {/* ) : null } */}
     </div> 

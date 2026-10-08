@@ -1,3 +1,5 @@
+import { remoteAppUrl } from './microfrontends'
+
 export type AppPage =
   | 'dashboard'
   | 'business-entities'
@@ -48,16 +50,19 @@ function stripBase(pathname: string) {
 }
 
 /**
- * Task Management is a separate app on the same origin under /task (not a CRM route), so it is
- * opened with a full page load. It shares the CRM sign-in: its login sends users here with
- * `?next=/task/...` to come back after signing in.
+ * Task Management is a separate app (a micro-frontend, see microfrontends.json), opened with a full page
+ * load: on the same origin under its basePath (not a CRM route), or at `VITE_TASK_APP_URL` when it runs on
+ * its own. It shares the CRM sign-in: its login sends users here with `?next=<task URL>` to come back.
  */
-export const taskAppUrl = `${import.meta.env.BASE_URL.replace(/\/+$/, '')}/task/`
+export const taskAppUrl = remoteAppUrl('task')
 
-/** A `next` value that is a path inside the Task app (never another site), else null. */
+/** A `next` value inside the Task app (never another site), else null. */
 export function taskAppReturnPath(next: string | null | undefined): string | null {
-  if (!next || /[\\]|\/\/|^[a-z][a-z0-9+.-]*:/i.test(next)) return null
+  if (!next) return null
   const root = taskAppUrl.replace(/\/$/, '')
+  // Task app on its own origin: only URLs under that exact address.
+  if (/^https?:\/\//i.test(taskAppUrl)) return next === root || next.startsWith(taskAppUrl) ? next : null
+  if (/[\\]|\/\/|^[a-z][a-z0-9+.-]*:/i.test(next)) return null
   return next === root || next.startsWith(taskAppUrl) ? next : null
 }
 

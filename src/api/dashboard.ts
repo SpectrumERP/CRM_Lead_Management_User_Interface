@@ -188,7 +188,14 @@ export interface DashboardExpectedClosure {
   opportunityStage?: DashboardOpportunityStageRef | null
   weightedValue: number
   expectedClosureDate?: string | null
-  lastActivity?: { activityDetailNo: number; subject?: string | null; activityTypeName?: string | null; activityDate?: string | null } | null
+  lastActivity?: {
+    activityDetailNo: number
+    subject?: string | null
+    activityTypeName?: string | null
+    activityDate?: string | null
+    /** The last activity's remark — shown in the Remark column. */
+    notesOutcome?: string | null
+  } | null
   pendingActivityCount: number
   overdueActivityCount: number
   /** The opportunity's newest internal note (Remark column); null when it has none. */

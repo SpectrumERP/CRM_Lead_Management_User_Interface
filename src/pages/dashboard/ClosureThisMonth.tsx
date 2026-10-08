@@ -97,6 +97,15 @@ function LastActivityCard({ last, onOpen }: { last: DashboardExpectedClosure['la
 
 export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOpenOpportunity, onOpenActivity }: ClosureProps) {
   const remarks = useClosureRemarks(rows)
+  const remarkOf = useCallback(
+    (r: DashboardExpectedClosure): { text: string; date: string; by: string; fromActivity?: boolean } | undefined => {
+      const outcome = r.lastActivity?.notesOutcome?.trim()
+      // Its date is already in the Last Activity column — kept only for sorting.
+      if (outcome) return { text: outcome, date: r.lastActivity?.activityDate ?? '', by: '', fromActivity: true }
+      return remarks.get(r.opportunityNo)
+    },
+    [remarks],
+  )
   const [pendingFor, setPendingFor] = useState<{ row: DashboardExpectedClosure; list: DashboardOpenActivity[] } | null>(null)
   const [dueDir, setDueDir] = useState<'asc' | 'desc'>('asc')
 
@@ -207,22 +216,24 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
       {
         key: 'remark',
         label: 'Remark',
-        // The newest internal note (by date) of the opportunity and the lead it came from.
+        // The last activity's remark (`lastActivity.notesOutcome`); without one, the newest internal note.
         render: (r) => {
-          const note = remarks.get(r.opportunityNo)
+          const note = remarkOf(r)
           if (!note) return <span className="text-ink-faint">—</span>
           return (
             <span className="block max-w-[18rem]" title={note.text}>
               <span className="line-clamp-2">{note.text}</span>
-              <span className="block text-[11px] text-ink-muted">
-                {formatDate(note.date)}
-                {note.by ? ` · ${note.by}` : ''}
-              </span>
+              {note.fromActivity ? null : (
+                <span className="block text-[11px] text-ink-muted">
+                  {formatDate(note.date)}
+                  {note.by ? ` · ${note.by}` : ''}
+                </span>
+              )}
             </span>
           )
         },
-        sortValue: (r) => remarks.get(r.opportunityNo)?.date,
-        searchText: (r) => remarks.get(r.opportunityNo)?.text,
+        sortValue: (r) => remarkOf(r)?.date,
+        searchText: (r) => remarkOf(r)?.text,
       },
       {
         key: 'pending',
@@ -232,7 +243,7 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
         align: 'right',
       },
     ],
-    [onOpenOpportunity, remarks, showPending],
+    [onOpenOpportunity, remarkOf, showPending],
   )
 
   // Server totals; summed from the rows when the server sends none.

@@ -3,32 +3,60 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-/**
- * Task Management lives in ./task-management as its own app (own React / Tailwind 3 / router) and is
- * served under /task: in development this server forwards /task to its dev server (`npm run dev:task`,
- * port 5174, base /task/); a build puts it in dist/task (`npm run build:task`).
- */
-const TASK_BASE = '/task/'
-const TASK_DEV_PORT = 5174
-/** /task, /task/, /task/<route> — not /tasks or other CRM paths. */
-const TASK_PATH = '^/task(?:/|$)'
+import microfrontends from './microfrontends.json'
 
-/** Preview of the built app: /task/<route> (not a file) → dist/task/index.html, the task app's own SPA. */
-function taskAppPreviewFallback(): Plugin {
+/**
+ * Route-based micro-frontends (microfrontends.json): each remote app is its own repository, served under
+ * its basePath on this origin so it shares the CRM sign-in. In development this server forwards the
+ * basePath to the remote's dev server (devPort, started by `npm run dev`); a build puts the remote in
+ * dist/<basePath> (`npm run build:remotes`).
+ */
+const remotes = microfrontends.remotes.map((remote) => {
+  const segment = remote.basePath.replace(/^\/+|\/+$/g, '')
   return {
-    name: 'task-app-preview-fallback',
+    ...remote,
+    /** /task, /task/, /task/<route> — not /tasks or other CRM paths. */
+    pathPattern: `^/${segment}(?:/|$)`,
+  }
+})
+
+/** Preview of the built app: <basePath><route> (not a file) → dist/<basePath>index.html, the remote's own SPA. */
+function remoteAppsPreviewFallback(): Plugin {
+  return {
+    name: 'remote-apps-preview-fallback',
     configurePreviewServer(server) {
       server.middlewares.use((req, _res, next) => {
         const pathname = (req.url ?? '').split('?')[0] ?? ''
-        if (new RegExp(TASK_PATH).test(pathname) && !/\.[a-z0-9]+$/i.test(pathname)) req.url = `${TASK_BASE}index.html`
+        const remote = remotes.find((r) => new RegExp(r.pathPattern).test(pathname))
+        if (remote && !/\.[a-z0-9]+$/i.test(pathname)) req.url = `${remote.basePath}index.html`
         next()
       })
     },
   }
 }
 
+/** Dev proxy for one remote (pages, assets and HMR websocket); explains when its dev server is down. */
+function remoteProxy(remote: (typeof remotes)[number]) {
+  return {
+    target: `http://localhost:${remote.devPort}`,
+    ws: true,
+    configure(proxy: { on: (event: 'error', handler: (error: Error, req: unknown, res: unknown) => void) => void }) {
+      proxy.on('error', (_error, _req, res) => {
+        const out = res as { headersSent?: boolean; writeHead?: (code: number, headers: Record<string, string>) => void; end: (body: string) => void }
+        if (!out.writeHead || out.headersSent) return
+        out.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' })
+        out.end(
+          `<h2 style="font-family:system-ui">${remote.title} is not running</h2>` +
+            '<p style="font-family:system-ui">Start everything with <code>npm run dev</code> ' +
+            '(or the remote apps alone with <code>npm run dev:remotes</code>), then reload.</p>',
+        )
+      })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), taskAppPreviewFallback()],
+  plugins: [react(), tailwindcss(), remoteAppsPreviewFallback()],
     resolve: {
       alias: {
       '@': path.resolve(import.meta.dirname, './src'),
@@ -48,31 +76,13 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
-    proxy: {
-      // Task Management dev server (pages, assets and HMR websocket).
-      [TASK_PATH]: {
-        target: `http://localhost:${TASK_DEV_PORT}`,
-        ws: true,
-        // Task dev server not running (e.g. `npm run dev:crm`): explain instead of a bare 502.
-        configure(proxy) {
-          proxy.on('error', (_error, _req, res) => {
-            if (!('writeHead' in res) || res.headersSent) return
-            res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' })
-            res.end(
-              '<h2 style="font-family:system-ui">Task Management is not running</h2>' +
-                '<p style="font-family:system-ui">Start both apps with <code>npm run dev</code> ' +
-                '(or the task app alone with <code>npm run dev:task</code>), then reload.</p>',
-            )
-          })
-        },
-      },
-    },
+    proxy: Object.fromEntries(remotes.map((remote) => [remote.pathPattern, remoteProxy(remote)])),
   },
   preview: {
     host: true,
     port: 5173,
     strictPort: true,
-    // Serve the built dist/task (not the dev proxy, which preview would otherwise inherit).
+    // Serve the built dist/<basePath> remotes (not the dev proxy, which preview would otherwise inherit).
     proxy: {},
   },
 })

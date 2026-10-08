@@ -4,6 +4,8 @@ export {
   Spinner,
   PageLoader,
   FullPageSpinner,
+  BootShell,
+  type BootShellProps,
   type SpinnerProps,
   type PageLoaderProps,
   type FullPageSpinnerProps,

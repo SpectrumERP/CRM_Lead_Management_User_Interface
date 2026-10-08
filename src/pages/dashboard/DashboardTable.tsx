@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import Pagination from '../../components/Pagination'
-import { SortChevrons } from '../../ui'
+import { PageLoader, SortChevrons } from '../../ui'
+import { usePageChangeLoader } from '../../components/usePageChangeLoader'
 import { DASHBOARD_PAGE_SIZE, DASHBOARD_PAGE_SIZES } from '../../data/dashboard'
 import { matchesAny } from '../../utils/text'
 
@@ -53,6 +54,7 @@ export function DashboardTable<T>({
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState(defaultSort)
   const [page, setPage] = useState(1)
+  const pager = usePageChangeLoader()
   const [pageSize, setPageSize] = useState(DASHBOARD_PAGE_SIZE)
 
   const visible = useMemo(() => {
@@ -182,12 +184,14 @@ export function DashboardTable<T>({
           </tbody>
         </table>
       </div>
+      {pager.busy && <PageLoader label="Loading" />}
       {visible.length > DASHBOARD_PAGE_SIZES[0] ? (
         <Pagination
           page={current}
           pageSize={pageSize}
           total={visible.length}
-          onPageChange={setPage}
+          disabled={pager.busy}
+          onPageChange={(next) => pager.run(() => setPage(next))}
           end={
             <label className="inline-flex items-center gap-1.5">
               Rows per page

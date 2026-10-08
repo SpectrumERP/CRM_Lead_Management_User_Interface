@@ -6,7 +6,9 @@ import {
 } from '../data/auditLog';
 import { useCrmSelector } from '../contexts/CrmStoreContext';
 import Pagination from '../components/Pagination';
-import { Select, SortChevrons, sortAlpha } from '../ui';
+import { PageLoader, Select, SortChevrons, sortAlpha } from '../ui';
+import { usePageChangeLoader } from '../components/usePageChangeLoader';
+import { PAGE_COPY } from '../constants/messages';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -313,6 +315,7 @@ export default function AuditLog({
   const [filterDateTo, setFilterDateTo] = useState('');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
+  const pager = usePageChangeLoader();
   const [selectedEntry, setSelectedEntry] = useState<AuditEntry | null>(null);
 
   const filtered = useMemo(() => {
@@ -715,11 +718,13 @@ export default function AuditLog({
             </div>
 
             <div className="mt-4">
+              {pager.busy && <PageLoader label={PAGE_COPY.pageLoading} />}
               <Pagination
                 page={page}
                 pageSize={PAGE_SIZE}
                 total={filtered.length}
-                onPageChange={setPage}
+                disabled={pager.busy}
+                onPageChange={(next) => pager.run(() => setPage(next))}
               />
             </div>
           </>

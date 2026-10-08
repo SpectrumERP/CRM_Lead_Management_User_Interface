@@ -1,0 +1,25 @@
+{
+  "$comment": "Route-based micro-frontends: the CRM is the shell; each remote app is its own repository, served under its basePath on the CRM origin and sharing the CRM sign-in. Read by vite.config.ts (dev proxy, preview fallback), scripts/dev-all.mjs, scripts/build-remotes.mjs and src/app/microfrontends.ts. See docs/microfrontends.md.",
+  "session": {
+    "authCookie": "fi-crm-auth",
+    "sessionCookie": "fi-crm-session",
+    "channel": "fi-crm-session",
+    "secretEnv": "VITE_COOKIE_SECRET",
+    "remoteSecretEnv": "VITE_CRM_COOKIE_SECRET"
+  },
+  "remotes": [
+    {
+      "name": "task",
+      "title": "Task Management",
+      "basePath": "/task/",
+      "devPort": 5174,
+      "dirEnv": "TASK_APP_DIR",
+      "fallbackDirs": [
+        "../Task-Management-User-Interface",
+        "task-management",
+        "task-management/Task-Management-User-Interface"
+      ],
+      "urlEnv": "VITE_TASK_APP_URL"
+    }
+  ]
+}

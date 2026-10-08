@@ -94,13 +94,15 @@ export interface UserSelectProps {
   disabled?: boolean
   id?: string
   'aria-label'?: string
+  /** `row`: the user list spans the whole form row (Name / Login ID / Email need the room in drawers). */
+  menuSpan?: 'field' | 'row'
 }
 
 /**
  * User picker: table lookup (Name / Login ID / Email) searched via `/api/security/users?keywordSearch=`,
  * loaded when first opened. Server users only — disabled without a Spectrum login.
  */
-export function UserSelect({ value, onValueChange, placeholder = 'Select user', invalid, disabled, id, ...rest }: UserSelectProps) {
+export function UserSelect({ value, onValueChange, placeholder = 'Select user', invalid, disabled, id, menuSpan, ...rest }: UserSelectProps) {
   const company = useSpectrumCompany()
   const remote = company.enabled
   const search = useUserSearch(remote)
@@ -130,6 +132,7 @@ export function UserSelect({ value, onValueChange, placeholder = 'Select user', 
       onOpenChange={search.onOpenChange}
       loading={search.loading}
       footer={search.error ? `Could not load users: ${search.error}` : undefined}
+      menuSpan={menuSpan}
     />
   )
 }

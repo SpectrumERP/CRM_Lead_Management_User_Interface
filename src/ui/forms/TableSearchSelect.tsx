@@ -36,10 +36,13 @@ export interface TableSearchSelectProps<T> {
   footer?: ReactNode
   /** Fires when the list opens / closes — lets callers load options only once the user opens the field. */
   onOpenChange?: (open: boolean) => void
-  /** `wide` (default) for multi-column lookups; `field` matches the trigger width (min 18rem). */
-  panelWidth?: 'wide' | 'field'
   /** Accessible name when there is no visible label (e.g. a currency picker inside a combo). */
   'aria-label'?: string
+  /** Type straight into the field (default); `false` keeps a separate search box at the top of the list. */
+  inlineSearch?: boolean
+  /** `row`: the list spans the whole form row the field sits in (all its grid columns), for wide lookups
+      in narrow places such as side drawers. Default `field`: as wide as the field. */
+  menuSpan?: 'field' | 'row'
 }
 
 function SearchGlyph() {
@@ -70,8 +73,9 @@ export function TableSearchSelect<T>({
   loading = false,
   footer,
   onOpenChange,
-  panelWidth = 'wide',
   'aria-label': ariaLabel,
+  inlineSearch = true,
+  menuSpan = 'field',
 }: TableSearchSelectProps<T>) {
   const autoId = useId()
   const buttonId = id ?? autoId
@@ -81,10 +85,10 @@ export function TableSearchSelect<T>({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [focusIdx, setFocusIdx] = useState(0)
-  // Wide: up to 52rem; field: the field's width, at least 18rem. The hook keeps it on screen.
+  // Same width as the field (or its whole form row); the hook keeps it on screen.
   const menuStyle = useFixedMenu(open, rootRef, {
-    width: (fieldWidth) => (panelWidth === 'wide' ? 832 : Math.max(fieldWidth, 288)),
     maxHeight: 360,
+    span: menuSpan === 'row' ? () => rootRef.current?.closest<HTMLElement>('.grid') ?? null : undefined,
   })
   const template = columns.map((column) => column.width ?? 'minmax(0,1fr)').join(' ')
 
@@ -125,6 +129,12 @@ export function TableSearchSelect<T>({
   useEffect(() => {
     onOpenChangeRef.current?.(open)
   }, [open])
+  // Inline search: closing (outside click, Escape, Tab) drops the typed text so the field shows the value again.
+  useEffect(() => {
+    if (inlineSearch && !open && query) updateQuery('')
+    // Only when the list closes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inlineSearch, open])
 
   function updateQuery(next: string) {
     setQuery(next)
@@ -144,7 +154,7 @@ export function TableSearchSelect<T>({
     }
   }
 
-  function onListKey(event: KeyboardEvent<HTMLDivElement>) {
+  function onListKey(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') {
       event.preventDefault()
       setOpen(false)
@@ -164,8 +174,71 @@ export function TableSearchSelect<T>({
     }
   }
 
+  const clearOrChevron =
+    value && clearable && !disabled ? (
+      <IconTooltip label="Clear">
+        <span
+          role="button"
+          tabIndex={-1}
+          aria-label="Clear"
+          className="text-base leading-none text-ink-faint"
+          onClick={(event) => {
+            event.stopPropagation()
+            select(null)
+          }}
+        >
+          ×
+        </span>
+      </IconTooltip>
+    ) : (
+      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="shrink-0 text-ink-faint" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    )
+
   return (
     <div className="relative" ref={rootRef}>
+      {inlineSearch ? (
+        <div
+          className={controlClass({ invalid, className: 'flex items-center justify-between gap-2' })}
+          onClick={() => !disabled && setOpen(true)}
+        >
+          <input
+            id={buttonId}
+            type="text"
+            role="combobox"
+            autoComplete="off"
+            disabled={disabled}
+            aria-label={ariaLabel}
+            aria-expanded={open}
+            aria-controls={open ? listId : undefined}
+            aria-autocomplete="list"
+            aria-invalid={invalid || undefined}
+            // Closed: the selected label; open: what is typed, with the selected label as the hint.
+            value={open ? query : value ? getLabel(value) : ''}
+            placeholder={value ? getLabel(value) : placeholder}
+            className="min-w-0 flex-1 truncate bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-faint"
+            onFocus={() => !disabled && setOpen(true)}
+            onChange={(event) => {
+              updateQuery(event.target.value)
+              setOpen(true)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Tab') {
+                setOpen(false)
+                return
+              }
+              if (!open && (event.key === 'ArrowDown' || event.key === 'Enter')) {
+                event.preventDefault()
+                setOpen(true)
+                return
+              }
+              onListKey(event)
+            }}
+          />
+          {clearOrChevron}
+        </div>
+      ) : (
       <button
         id={buttonId}
         type="button"
@@ -182,27 +255,9 @@ export function TableSearchSelect<T>({
         <span className={value ? 'truncate text-[13px] text-ink' : 'truncate text-[13px] text-ink-faint'}>
           {value ? getLabel(value) : placeholder}
         </span>
-        {value && clearable && !disabled ? (
-          <IconTooltip label="Clear">
-            <span
-              role="button"
-              tabIndex={-1}
-              aria-label="Clear"
-              className="text-base leading-none text-ink-faint"
-              onClick={(event) => {
-                event.stopPropagation()
-                select(null)
-              }}
-            >
-              ×
-            </span>
-          </IconTooltip>
-        ) : (
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="shrink-0 text-ink-faint" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        )}
+        {clearOrChevron}
       </button>
+      )}
       {open
         ? createPortal(
             <div
@@ -216,25 +271,27 @@ export function TableSearchSelect<T>({
               }}
               onKeyDown={onListKey}
             >
-              {/* Search first, above the column headers. */}
-              <div className="shrink-0 border-b border-line-subtle p-2">
-                <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-0 flex w-9 items-center justify-center">
-                    <SearchGlyph />
-                  </span>
-                  {/* Inline padding: `.form-input` (unlayered CSS) would otherwise override a `pl-*` class. */}
-                  <input
-                    autoFocus
-                    type="search"
-                    value={query}
-                    onChange={(event) => updateQuery(event.target.value)}
-                    placeholder={searchPlaceholder}
-                    className={controlClass({ className: 'text-xs' })}
-                    style={{ paddingLeft: '2.25rem' }}
-                    aria-label={searchPlaceholder}
-                  />
+              {/* Search first, above the column headers (only without inline search). */}
+              {inlineSearch ? null : (
+                <div className="shrink-0 border-b border-line-subtle p-2">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex w-9 items-center justify-center">
+                      <SearchGlyph />
+                    </span>
+                    {/* Inline padding: `.form-input` (unlayered CSS) would otherwise override a `pl-*` class. */}
+                    <input
+                      autoFocus
+                      type="search"
+                      value={query}
+                      onChange={(event) => updateQuery(event.target.value)}
+                      placeholder={searchPlaceholder}
+                      className={controlClass({ className: 'text-xs' })}
+                      style={{ paddingLeft: '2.25rem' }}
+                      aria-label={searchPlaceholder}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
               <div
                 className="grid shrink-0 border-b border-line-subtle px-3 py-2"
                 style={{ gridTemplateColumns: template }}

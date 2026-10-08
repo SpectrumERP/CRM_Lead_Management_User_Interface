@@ -798,7 +798,6 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                   placeholder="Search activity type"
                   searchPlaceholder="Search"
                   emptyText="No matching types"
-                  panelWidth="field"
                 />
               </div>
               <TextField

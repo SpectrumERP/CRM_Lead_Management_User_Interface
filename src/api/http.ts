@@ -101,6 +101,46 @@ async function send<T>(initial: HttpRequestConfig): Promise<HttpResponse<T>> {
   }
 }
 
+/**
+ * One request per GET at a time: a GET for the same URL while one is already on its way joins it
+ * instead of calling the API again (React StrictMode effects, two panels loading the same list, a
+ * page and its hook asking at once). Followers get their own copy of the data. A request with its own
+ * abort signal is never shared; once a request settles the next GET calls the server again (refresh).
+ */
+const inFlightGets = new Map<string, Promise<HttpResponse<unknown>>>()
+
+function copyOf<T>(data: T): T {
+  if (data === null || typeof data !== 'object' || data instanceof Blob) return data
+  try {
+    return structuredClone(data)
+  } catch {
+    return data
+  }
+}
+
+/** Dev only: flag a GET that reaches the network again within a few seconds (a likely double load). */
+const lastGetAt = new Map<string, number>()
+function warnIfRepeated(url: string) {
+  if (!import.meta.env.DEV) return
+  const now = Date.now()
+  const before = lastGetAt.get(url)
+  lastGetAt.set(url, now)
+  if (before !== undefined && now - before < 3000) {
+    console.warn(`[duplicate API] GET ${url} again after ${now - before} ms`, new Error('called from').stack)
+  }
+}
+
+async function sharedGet<T>(config: HttpRequestConfig): Promise<T> {
+  if (config.signal) return (await send<T>(config)).data
+  const key = `${config.responseType ?? 'json'} ${config.skipAuth ? 'anon' : 'auth'} ${config.url}`
+  const pending = inFlightGets.get(key)
+  if (pending) return copyOf((await pending).data as T)
+  warnIfRepeated(config.url)
+  const request = send<unknown>(config).finally(() => inFlightGets.delete(key))
+  inFlightGets.set(key, request)
+  return (await request).data as T
+}
+
 function build(method: HttpVerb, url: string, body: unknown, options: RequestOptions = {}): HttpRequestConfig {
   const headers: Record<string, string> = { Accept: 'application/json', ...options.headers }
   if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json'
@@ -127,7 +167,7 @@ export const http = {
     return send<T>(config)
   },
   async get<T>(url: string, options?: RequestOptions): Promise<T> {
-    return (await send<T>(build('GET', url, undefined, options))).data
+    return sharedGet<T>(build('GET', url, undefined, options))
   },
   async post<T>(url: string, body?: unknown, options?: RequestOptions): Promise<T> {
     return (await send<T>(build('POST', url, body, options))).data

@@ -225,22 +225,53 @@ function typeLabel(entry: LeadTimelineEntry): string {
   return entry.title || entry.type.replace(/([a-z])([A-Z])/g, "$1 $2") || `Type ${entry.typeNo}`
 }
 
-const CREATED_TYPE = /created$/i
-const STATUS_OR_STAGE_TYPE = /(status|stage)$/i
-/** Status / stage entries within this long of the "… Created" entry were written by the create itself. */
-const CREATE_WINDOW_MS = 60_000
+const CREATED = /created/i
+const STATUS = /status/i
+const STAGE = /stage/i
+/** The first status / stage entries within this long of "… Created" were written by the create itself. */
+const CREATE_WINDOW_MS = 5 * 60_000
+
+/** Type and title together, so `LeadStatus`, "Lead Status", `OpportunityStageChanged`… all match. */
+function entryText(e: LeadTimelineEntry) {
+  return `${e.type} ${e.title}`
+}
 
 /**
- * Creating a lead / opportunity shows one entry (Lead Created / Opportunity Created): the status and
- * stage entries the server writes with it are dropped; later status / stage changes stay.
+ * Creating a lead / opportunity shows one entry (Lead Created / Opportunity Created). The initial status
+ * and stage the server writes with the create are hidden — only the first entry of each kind, and only
+ * when it sits at (or within a few minutes of) the create. Every later status / stage change stays.
  */
 export function withoutCreateEntries(entries: readonly LeadTimelineEntry[]): LeadTimelineEntry[] {
-  const createdAt = entries.filter((e) => CREATED_TYPE.test(e.type)).map((e) => Date.parse(e.at)).filter(Number.isFinite)
+  const createdAt = entries
+    .filter((e) => CREATED.test(entryText(e)))
+    .map((e) => Date.parse(e.at))
+    .filter(Number.isFinite)
   if (!createdAt.length) return [...entries]
+  const created = Math.min(...createdAt)
+
+  const hidden = new Set<LeadTimelineEntry>()
+  for (const kind of [STATUS, STAGE]) {
+    const firstOfKind = entries
+      .filter((e) => kind.test(entryText(e)) && !CREATED.test(entryText(e)))
+      .map((e) => ({ e, at: Date.parse(e.at) }))
+      .filter(({ at }) => Number.isFinite(at))
+      .sort((x, y) => x.at - y.at)[0]
+    if (firstOfKind && Math.abs(firstOfKind.at - created) <= CREATE_WINDOW_MS) hidden.add(firstOfKind.e)
+  }
+  return entries.filter((e) => !hidden.has(e))
+}
+
+/**
+ * The same entry twice (every field equal: type, title, text, time, user) shows once — the server can
+ * send a row twice, and pages can overlap when entries are added between page loads.
+ */
+export function withoutDuplicates(entries: readonly LeadTimelineEntry[]): LeadTimelineEntry[] {
+  const seen = new Set<string>()
   return entries.filter((e) => {
-    if (!STATUS_OR_STAGE_TYPE.test(e.type)) return true
-    const at = Date.parse(e.at)
-    return !Number.isFinite(at) || !createdAt.some((c) => Math.abs(at - c) <= CREATE_WINDOW_MS)
+    const key = [e.type, e.typeNo ?? '', e.title, e.description, e.at, e.by].join('\u0001')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
   })
 }
 
@@ -298,13 +329,18 @@ export function PagedTimeline({
     [record, recordNo, typeNo],
   )
 
-  // First page whenever the record, the filter or the refresh key changes.
+  // First page whenever the record, the filter or the refresh key changes — once per change: React's
+  // StrictMode (dev) runs effects twice, which sent the same page-1 request twice.
+  const firstPageKey = useRef("")
   useEffect(() => {
+    const key = `${record}:${recordNo}:${typeNo ?? ""}:${refreshKey ?? ""}`
+    if (firstPageKey.current === key) return
+    firstPageKey.current = key
     setEntries([])
     setPageNo(0)
     setTotalPages(1)
     void load(1, true)
-  }, [load, refreshKey])
+  }, [load, record, recordNo, typeNo, refreshKey])
 
   // A new record starts with no known types.
   useEffect(() => {
@@ -329,8 +365,9 @@ export function PagedTimeline({
     return () => observer.disconnect()
   }, [hasMore, loading, error, load, pageNo])
 
-  const shown = withoutCreateEntries(entries)
-  const hidden = entries.length - shown.length
+  const unique = withoutDuplicates(entries)
+  const shown = withoutCreateEntries(unique)
+  const hidden = unique.length - shown.length
   const rows = shown.map(serverTimelineEntry)
   const typeOptions = [
     { value: "", label: "All types" },
@@ -387,7 +424,7 @@ export function PagedTimeline({
       {/* Scroll sentinel: reaching it loads the next page. */}
       {hasMore ? <div ref={sentinelRef} className="h-px" aria-hidden="true" /> : null}
       {!hasMore && pageNo > 1 && !loading ? (
-        <p className="py-2 text-center text-[11px] text-ink-faint">All {entries.length} entries loaded</p>
+        <p className="py-2 text-center text-[11px] text-ink-faint">All {unique.length} entries loaded</p>
       ) : null}
     </div>
   )

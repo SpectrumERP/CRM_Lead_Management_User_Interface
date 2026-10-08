@@ -5,6 +5,8 @@ export interface FixedMenuOptions {
   width?: (triggerWidth: number) => number
   /** Tallest the menu may be (default 288px); always capped to the room on screen. */
   maxHeight?: number
+  /** Take the menu's width and left edge from this element instead of the trigger (e.g. the form row). */
+  span?: () => HTMLElement | null
 }
 
 /**
@@ -33,9 +35,11 @@ export function useFixedMenu(open: boolean, triggerRef: RefObject<HTMLElement | 
       const above = rect.top - gutter - 4
       const openUp = below < Math.min(wanted, 200) && above > below
       const maxH = Math.max(120, Math.min(wanted, openUp ? above : below))
-      const width = Math.min(optionsRef.current.width?.(rect.width) ?? rect.width, window.innerWidth - gutter * 2)
+      const spanRect = optionsRef.current.span?.()?.getBoundingClientRect()
+      const baseWidth = spanRect ? spanRect.width : rect.width
+      const width = Math.min(optionsRef.current.width?.(baseWidth) ?? baseWidth, window.innerWidth - gutter * 2)
       const fitsLeftAligned = rect.left + width <= window.innerWidth - gutter
-      const preferred = fitsLeftAligned ? rect.left : rect.right - width
+      const preferred = spanRect ? spanRect.left : fitsLeftAligned ? rect.left : rect.right - width
       setStyle({
         position: 'fixed',
         left: Math.max(gutter, Math.min(preferred, window.innerWidth - width - gutter)),

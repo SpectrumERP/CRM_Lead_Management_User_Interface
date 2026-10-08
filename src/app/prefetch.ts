@@ -50,3 +50,26 @@ export function onIdle(run: () => void) {
   const id = window.setTimeout(run, 280)
   return () => window.clearTimeout(id)
 }
+
+const prerendered = new Set<string>()
+
+/**
+ * Warm another same-origin app (e.g. Task Management) before the user clicks into it: Chromium
+ * prerenders it in the background (Speculation Rules), other browsers just prefetch the document.
+ * The switch then opens already painted — no blank page or loader jump.
+ */
+export function prerenderApp(url: string) {
+  if (prerendered.has(url) || typeof document === 'undefined') return
+  prerendered.add(url)
+  if (HTMLScriptElement.supports?.('speculationrules')) {
+    const rules = document.createElement('script')
+    rules.type = 'speculationrules'
+    rules.textContent = JSON.stringify({ prerender: [{ urls: [url], eagerness: 'immediate' }] })
+    document.head.appendChild(rules)
+    return
+  }
+  const link = document.createElement('link')
+  link.rel = 'prefetch'
+  link.href = url
+  document.head.appendChild(link)
+}

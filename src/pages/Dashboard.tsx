@@ -271,13 +271,13 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
   }
 
   return (
-    <div className="page-gutter space-y-4 py-4">
+    <div className="dash-animate page-gutter space-y-4 py-4">
       <PageHeader title="Sales Dashboard" subtitle={`Today: ${formatDate(today)}`} />
 
       <SpectrumRequiredNotice what="Dashboard figures" />
 
       {/* Key numbers */}
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+      <div className="dash-kpis grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
         {summary.map((s) => (
           <button
             key={s.label}

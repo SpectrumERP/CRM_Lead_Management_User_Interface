@@ -287,6 +287,7 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
           page={page}
           pageSize={PAGE_SIZE}
           total={total}
+          disabled={loading}
           onPageChange={(next) => {
             setPage(next)
             clearSelection()

@@ -615,8 +615,9 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
           </div>
         ) : (
           /* Kanban */
-          <div className="page-gutter h-full min-w-0 overflow-hidden">
-          <div className="relative flex h-full min-h-0 min-w-0 gap-3 overflow-x-auto overflow-y-hidden" aria-busy={listBusy}>
+          // Breathing room above the columns (toolbar line) and below them (horizontal scrollbar).
+          <div className="page-gutter h-full min-w-0 overflow-hidden pt-3 pb-2">
+          <div className="relative flex h-full min-h-0 min-w-0 gap-3 overflow-x-auto overflow-y-hidden pb-3" aria-busy={listBusy}>
             {pageLoading && <PageLoader label={PAGE_COPY.pageLoading} />}
             {activeLeadStageNames.map((stage) => {
               const stageLeads = filtered.filter((l) => l.leadStage === stage);

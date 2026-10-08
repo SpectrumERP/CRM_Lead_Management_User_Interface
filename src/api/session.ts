@@ -1,7 +1,8 @@
 import type { AuthUser } from '../auth/types'
 import { cookieVault } from './cookieVault'
+import { sessionContract } from '../app/microfrontends'
 
-const COOKIE_NAME = 'fi-crm-session'
+const COOKIE_NAME = sessionContract.sessionCookie
 const TTL_MS = 8 * 60 * 60 * 1000
 
 /** AES-GCM protects integrity, so a tampered cookie fails to decrypt and is dropped. */

@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* `dark:` = the html.dark class (theme toggle), as in Task Management — not the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Explicit scan — required when this CSS is loaded from Spectrum ERP Vite */
 @source "./**/*.{js,jsx,ts,tsx}";
 /* Task Management (./task-management) is a separate app with its own Tailwind 3 build. */
@@ -1076,26 +1079,112 @@ select.active-filter {
   max-width: min(100vw - 16px, 380px);
 }
 
+/* Tooltip — same look as Task Management (ActionTip): white bubble, sky border, arrow, soft shadow */
 .icon-tip-bubble {
   position: fixed;
   /* Above dialogs/drawers (z-90) and toasts (z-100) so portaled tips stay visible */
   z-index: 110;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-control);
-  background: var(--color-ink);
-  color: var(--color-surface);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  border-radius: 0.75rem;
+  background: #ffffff;
+  color: #2c3e50;
   font-size: 11px;
-  font-weight: 600;
-  line-height: 1.2;
+  font-weight: 500;
+  line-height: 1.625;
   white-space: nowrap;
+  text-align: center;
   pointer-events: none;
-  animation: fadeIn 0.12s ease;
+  filter: drop-shadow(0 10px 24px rgba(15, 23, 42, 0.28));
+  /* Task Management (tailwindcss-animate `animate-in fade-in-0 zoom-in-95 duration-150`) */
+  animation: icon-tip-in 150ms ease;
+}
+
+/* Above the trigger: also rises into place from below, as Task's `-translate-y-full` tip does */
+.icon-tip-bubble[data-placement='top'] {
+  animation-name: icon-tip-in-top;
+}
+
+/* Arrow: border colour (::before) under the fill (::after) */
+.icon-tip-bubble::before,
+.icon-tip-bubble::after {
+  content: '';
+  position: absolute;
+  left: var(--tip-arrow-x, 50%);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  transform: translateX(-50%);
+}
+
+.icon-tip-bubble[data-placement='top']::before {
+  top: 100%;
+  border-width: 7px 7px 0;
+  border-color: rgba(14, 165, 233, 0.4) transparent transparent;
+}
+
+.icon-tip-bubble[data-placement='top']::after {
+  top: calc(100% - 1px);
+  border-width: 6px 6px 0;
+  border-color: #ffffff transparent transparent;
+}
+
+.icon-tip-bubble[data-placement='bottom']::before {
+  bottom: 100%;
+  border-width: 0 7px 7px;
+  border-color: transparent transparent rgba(14, 165, 233, 0.4);
+}
+
+.icon-tip-bubble[data-placement='bottom']::after {
+  bottom: calc(100% - 1px);
+  border-width: 0 6px 6px;
+  border-color: transparent transparent #ffffff;
+}
+
+.icon-tip-bubble[data-placement='right']::before,
+.icon-tip-bubble[data-placement='right']::after {
+  top: var(--tip-arrow-y, 50%);
+  left: auto;
+  transform: translateY(-50%);
+}
+
+.icon-tip-bubble[data-placement='right']::before {
+  right: 100%;
+  border-width: 7px 7px 7px 0;
+  border-color: transparent rgba(14, 165, 233, 0.4) transparent transparent;
+}
+
+.icon-tip-bubble[data-placement='right']::after {
+  right: calc(100% - 1px);
+  border-width: 6px 6px 6px 0;
+  border-color: transparent #ffffff transparent transparent;
+}
+
+@keyframes icon-tip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes icon-tip-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(100%) scale(0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-tip-bubble {
+    animation: none;
+  }
 }
 
 .icon-tip-bubble-wrap {
-  max-width: min(20rem, calc(100vw - 16px));
+  max-width: min(20rem, calc(100vw - 1.5rem));
   white-space: normal;
-  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 @media (max-width: 1023px) {
@@ -1475,4 +1564,330 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .table-scroll:not(.is-scrolled-end) .crm-table :is(.sticky-col-end, .sticky-col-last) {
   box-shadow: none;
+}
+
+/* Account menu open / close — same as Task Management's dropdown (tailwindcss-animate:
+   fade + zoom-95 + slide-in-from-top-2 on open, fade + zoom-out-95 on close, 150ms) */
+.crm-menu-anim {
+  transform-origin: top right;
+}
+
+.crm-menu-anim[data-state='open'] {
+  animation: crm-menu-in 150ms ease;
+}
+
+.crm-menu-anim[data-state='closed'] {
+  pointer-events: none;
+  animation: crm-menu-out 150ms ease forwards;
+}
+
+@keyframes crm-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.95);
+  }
+}
+
+@keyframes crm-menu-out {
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crm-menu-anim[data-state='open'],
+  .crm-menu-anim[data-state='closed'] {
+    animation: none;
+  }
+
+  .crm-menu-anim[data-state='closed'] {
+    display: none;
+  }
+}
+
+/* ── Login ─────────────────────────────────────────────── */
+.login-dots {
+  background-image: radial-gradient(rgba(30, 86, 160, 0.14) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, #000 30%, transparent 85%);
+}
+
+.login-form .form-input {
+  height: 2.75rem;
+  font-size: 14px;
+  background: var(--color-surface-muted);
+}
+
+.login-form .form-input:focus {
+  background: var(--color-surface);
+}
+
+.login-btn {
+  height: 2.75rem;
+  font-size: 14px;
+}
+
+.login-btn-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+
+.login-rise {
+  animation: login-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.login-shake {
+  animation: login-shake 0.4s ease-in-out;
+}
+
+@keyframes login-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes login-shake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-rise,
+  .login-shake {
+    animation: none;
+  }
+}
+
+.login-dots-dark {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 75%);
+}
+
+/* Login brand panel: faint 48px grid, strongest top-left, fading out. */
+.login-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 70% at 20% 30%, #000 25%, transparent 80%);
+}
+
+/* ══ Dark theme (same switch + storage key as Task Management: html.dark, `steelmont-theme`) ══ */
+
+html.dark {
+  color-scheme: dark;
+  --color-canvas: #0B1220;
+  --color-surface: #121A2B;
+  --color-surface-muted: #151D2E;
+  --color-surface-hover: #1A2438;
+  --color-ink: #E2E8F0;
+  --color-ink-soft: #A9B8D0;
+  --color-ink-muted: #94A3B8;
+  --color-ink-faint: #64748B;
+  --color-line: #2A3548;
+  --color-line-subtle: #1F2A3D;
+  --color-line-strong: #3A4A63;
+  --color-primary: #3B74C4;
+  --color-primary-hover: #4F86D1;
+  --color-primary-soft: #17284A;
+  --color-accent: #F87171;
+  --color-accent-soft: rgba(196, 30, 30, 0.16);
+  --color-success: #4ADE80;
+  --color-success-strong: #34D399;
+  --color-success-soft: rgba(26, 128, 64, 0.18);
+  --color-success-line: rgba(26, 128, 64, 0.4);
+  --color-warning: #FBBF24;
+  --color-warning-soft: rgba(180, 83, 9, 0.18);
+  --color-warning-line: rgba(180, 83, 9, 0.45);
+  --color-purple: #A78BFA;
+  --color-purple-soft: rgba(124, 58, 237, 0.18);
+  --color-purple-line: rgba(124, 58, 237, 0.4);
+  --color-teal: #22D3EE;
+  --color-teal-soft: rgba(14, 116, 144, 0.2);
+  --color-teal-line: rgba(14, 116, 144, 0.45);
+  --color-primary-light: #17284A;
+  --color-border: #2A3548;
+  --color-muted: #94A3B8;
+  --color-fi-red-light: rgba(196, 30, 30, 0.16);
+  --shadow-card: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-focus: 0 0 0 3px rgba(79, 134, 209, 0.35);
+}
+
+/* Hard-coded light colours in CSS */
+html.dark ::-webkit-scrollbar-thumb { background: #2A3548; }
+html.dark .status-open { border-color: rgba(59, 116, 196, 0.45); }
+html.dark .status-onhold { color: #FBBF24; }
+html.dark .status-cold { background: #1A2438; color: #A9B8D0; border-color: #3A4A63; }
+html.dark .status-dropped { border-color: rgba(196, 30, 30, 0.4); }
+html.dark .skeleton { background: linear-gradient(90deg, #1A2438 25%, #222E44 50%, #1A2438 75%); background-size: 1200px 100%; }
+html.dark .bg-white { background-color: #121A2B; }
+
+/* Inline style colours (pages pass hex in style={{…}}; the browser serialises them as rgb()). */
+html.dark :is([style^="color: rgb(12, 26, 58)"], [style*="; color: rgb(12, 26, 58)"]) { color: #E2E8F0 !important; }
+html.dark :is([style^="color: rgb(122, 132, 148)"], [style*="; color: rgb(122, 132, 148)"]) { color: #94A3B8 !important; }
+html.dark :is([style^="color: rgb(74, 93, 130)"], [style*="; color: rgb(74, 93, 130)"]) { color: #A9B8D0 !important; }
+html.dark :is([style^="color: rgb(41, 85, 163)"], [style*="; color: rgb(41, 85, 163)"]) { color: #6B9BE0 !important; }
+html.dark :is([style^="color: rgb(154, 172, 204)"], [style*="; color: rgb(154, 172, 204)"]) { color: #7F8FAD !important; }
+html.dark :is([style^="color: rgb(148, 163, 184)"], [style*="; color: rgb(148, 163, 184)"]) { color: #7A8AA3 !important; }
+html.dark :is([style^="color: rgb(200, 212, 232)"], [style*="; color: rgb(200, 212, 232)"]) { color: #55657F !important; }
+html.dark :is([style^="color: rgb(160, 170, 184)"], [style*="; color: rgb(160, 170, 184)"]) { color: #7A8494 !important; }
+html.dark :is([style^="color: rgb(100, 116, 139)"], [style*="; color: rgb(100, 116, 139)"]) { color: #94A3B8 !important; }
+html.dark :is([style^="color: rgb(26, 128, 64)"], [style*="; color: rgb(26, 128, 64)"]) { color: #4ADE80 !important; }
+html.dark :is([style^="color: rgb(196, 30, 30)"], [style*="; color: rgb(196, 30, 30)"]) { color: #F87171 !important; }
+html.dark :is([style^="color: rgb(124, 58, 237)"], [style*="; color: rgb(124, 58, 237)"]) { color: #A78BFA !important; }
+html.dark :is([style^="color: rgb(180, 83, 9)"], [style*="; color: rgb(180, 83, 9)"]) { color: #FBBF24 !important; }
+html.dark :is([style^="color: rgb(15, 122, 80)"], [style*="; color: rgb(15, 122, 80)"]) { color: #34D399 !important; }
+html.dark :is([style^="color: rgb(30, 86, 160)"], [style*="; color: rgb(30, 86, 160)"]) { color: #6B9BE0 !important; }
+html.dark :is([style^="color: rgb(14, 116, 144)"], [style*="; color: rgb(14, 116, 144)"]) { color: #22D3EE !important; }
+html.dark :is([style*="background: rgb(255, 255, 255)"], [style*="background-color: rgb(255, 255, 255)"]) { background: #121A2B !important; }
+html.dark :is([style*="background: rgb(255, 255, 255)"], [style*="background-color: rgb(255, 255, 255)"]) { background: #121A2B !important; }
+html.dark :is([style*="background: rgb(240, 244, 251)"], [style*="background-color: rgb(240, 244, 251)"]) { background: #1A2438 !important; }
+html.dark :is([style*="background: rgb(248, 250, 255)"], [style*="background-color: rgb(248, 250, 255)"]) { background: #151D2E !important; }
+html.dark :is([style*="background: rgb(238, 242, 251)"], [style*="background-color: rgb(238, 242, 251)"]) { background: #1A2438 !important; }
+html.dark :is([style*="background: rgb(248, 250, 253)"], [style*="background-color: rgb(248, 250, 253)"]) { background: #151D2E !important; }
+html.dark :is([style*="background: rgb(238, 243, 252)"], [style*="background-color: rgb(238, 243, 252)"]) { background: #17284A !important; }
+html.dark :is([style*="background: rgb(237, 251, 241)"], [style*="background-color: rgb(237, 251, 241)"]) { background: rgba(26, 128, 64, 0.18) !important; }
+html.dark :is([style*="background: rgb(254, 242, 242)"], [style*="background-color: rgb(254, 242, 242)"]) { background: rgba(196, 30, 30, 0.16) !important; }
+html.dark :is([style*="background: rgb(241, 245, 249)"], [style*="background-color: rgb(241, 245, 249)"]) { background: #1A2438 !important; }
+html.dark :is([style*="background: rgb(248, 250, 252)"], [style*="background-color: rgb(248, 250, 252)"]) { background: #151D2E !important; }
+html.dark :is([style*="background: rgb(255, 240, 240)"], [style*="background-color: rgb(255, 240, 240)"]) { background: rgba(196, 30, 30, 0.16) !important; }
+html.dark :is([style*="background: rgb(255, 251, 235)"], [style*="background-color: rgb(255, 251, 235)"]) { background: rgba(180, 83, 9, 0.18) !important; }
+html.dark :is([style*="background: rgb(253, 244, 255)"], [style*="background-color: rgb(253, 244, 255)"]) { background: rgba(124, 58, 237, 0.18) !important; }
+html.dark :is([style*="background: rgb(236, 254, 255)"], [style*="background-color: rgb(236, 254, 255)"]) { background: rgba(14, 116, 144, 0.2) !important; }
+html.dark :is([style*="solid rgb(203, 213, 225)"], [style*="border-color: rgb(203, 213, 225)"]) { border-color: #3A4A63 !important; }
+html.dark :is([style*="solid rgb(220, 228, 242)"], [style*="border-color: rgb(220, 228, 242)"]) { border-color: #2A3548 !important; }
+html.dark :is([style*="solid rgb(194, 211, 245)"], [style*="border-color: rgb(194, 211, 245)"]) { border-color: #2F4672 !important; }
+html.dark :is([style*="solid rgb(226, 232, 240)"], [style*="border-color: rgb(226, 232, 240)"]) { border-color: #2A3548 !important; }
+html.dark :is([style*="solid rgb(238, 242, 246)"], [style*="border-color: rgb(238, 242, 246)"]) { border-color: #1F2A3D !important; }
+html.dark :is([style*="solid rgb(187, 240, 207)"], [style*="border-color: rgb(187, 240, 207)"]) { border-color: rgba(26, 128, 64, 0.4) !important; }
+html.dark :is([style*="solid rgb(253, 230, 138)"], [style*="border-color: rgb(253, 230, 138)"]) { border-color: rgba(180, 83, 9, 0.45) !important; }
+html.dark :is([style*="solid rgb(233, 213, 255)"], [style*="border-color: rgb(233, 213, 255)"]) { border-color: rgba(124, 58, 237, 0.4) !important; }
+html.dark :is([style*="solid rgb(252, 165, 165)"], [style*="border-color: rgb(252, 165, 165)"]) { border-color: rgba(196, 30, 30, 0.4) !important; }
+html.dark :is([style*="solid rgb(165, 243, 252)"], [style*="border-color: rgb(165, 243, 252)"]) { border-color: rgba(14, 116, 144, 0.45) !important; }
+
+/* Dark mode logo = Task Management's: header + sidebar logos in solid white. */
+html.dark header img,
+html.dark aside img {
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+}
+
+/* Dark mode sidebar = Task Management's dark left panel: white labels on #121A2B,
+   #1A2438 hover / active-hover (its chrome-muted), red active tile unchanged.
+   (Light rules mix with --color-surface, which turns dark in dark mode.) */
+html.dark .sidebar-item {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+html.dark .sidebar-item:hover,
+html.dark .sidebar-item.active:hover {
+  background: #1A2438;
+  color: #f8fafc;
+}
+
+html.dark .sidebar-item.active {
+  color: #fff;
+}
+
+/* Dark mode tooltip = Task Management's dark tip: #121A2B fill, #E2E8F0 text, faint sky ring, deep shadow;
+   the arrow fill follows the bubble (it is white in light mode). */
+html.dark .icon-tip-bubble {
+  background: #121A2B;
+  color: #E2E8F0;
+  border-color: rgba(14, 165, 233, 0.4);
+  border-radius: 10px;
+  font-weight: 600;
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.55));
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.18);
+}
+
+html.dark .icon-tip-bubble[data-placement='top']::after {
+  border-color: #121A2B transparent transparent;
+}
+
+html.dark .icon-tip-bubble[data-placement='bottom']::after {
+  border-color: transparent transparent #121A2B;
+}
+
+html.dark .icon-tip-bubble[data-placement='right']::after {
+  border-color: transparent #121A2B transparent transparent;
+}
+
+/* ── Dashboard entrance: sections fade up one after another, KPI cards stagger in.
+   `backwards` fill: no transform is left behind once done; fixed overlays (drawers) are skipped. ── */
+.dash-animate > :not(.fixed) {
+  animation: dash-rise 480ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.dash-animate > :nth-child(1) { animation-delay: 0ms; }
+.dash-animate > :nth-child(2) { animation-delay: 70ms; }
+.dash-animate > :nth-child(3) { animation-delay: 140ms; }
+.dash-animate > :nth-child(4) { animation-delay: 210ms; }
+.dash-animate > :nth-child(5) { animation-delay: 280ms; }
+.dash-animate > :nth-child(6) { animation-delay: 350ms; }
+.dash-animate > :nth-child(7) { animation-delay: 420ms; }
+.dash-animate > :nth-child(8) { animation-delay: 490ms; }
+.dash-animate > :nth-child(9) { animation-delay: 560ms; }
+.dash-animate > :nth-child(10) { animation-delay: 630ms; }
+
+.dash-animate > .dash-kpis {
+  animation: none;
+}
+
+.dash-kpis > * {
+  animation: dash-rise 420ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.dash-kpis > :nth-child(1) { animation-delay: 80ms; }
+.dash-kpis > :nth-child(2) { animation-delay: 135ms; }
+.dash-kpis > :nth-child(3) { animation-delay: 190ms; }
+.dash-kpis > :nth-child(4) { animation-delay: 245ms; }
+.dash-kpis > :nth-child(5) { animation-delay: 300ms; }
+.dash-kpis > :nth-child(6) { animation-delay: 355ms; }
+.dash-kpis > :nth-child(7) { animation-delay: 410ms; }
+.dash-kpis > :nth-child(8) { animation-delay: 465ms; }
+.dash-kpis > :nth-child(9) { animation-delay: 520ms; }
+.dash-kpis > :nth-child(10) { animation-delay: 575ms; }
+
+@keyframes dash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-animate > *,
+  .dash-kpis > * {
+    animation: none !important;
+  }
+}
+
+/* Client (SteelMont) logo in the header: keep its real colours (skip the dark-mode white logo filter);
+   on dark it sits on a small white chip so the navy mark stays readable. */
+html.dark header img.client-logo {
+  filter: none;
+  opacity: 1;
+}
+
+.client-logo-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+html.dark .client-logo-chip {
+  background: #fff;
+  padding: 2px 6px;
 }

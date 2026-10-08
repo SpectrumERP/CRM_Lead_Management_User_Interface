@@ -4,10 +4,12 @@ import GlobalSearchBar from './GlobalSearchBar';
 import QuickCreateMenu from './QuickCreateMenu';
 // import { useNotifications } from '../contexts/NotificationsContext';
 import { matchAppPage, navPaths, paths, taskAppUrl, type AppPage } from '../app/paths';
-import { prefetchPage } from '../app/prefetch';
+import { prefetchPage, prerenderApp } from '../app/prefetch';
+import ModuleLauncher from './ModuleLauncher';
+import { toggleTheme, useTheme } from '../app/theme';
 import { useAuth } from '../auth/AuthContext';
 import { isAdmin } from '../auth/users';
-import { getErrorTitle } from '../constants/messages';
+import { getErrorTitle, PAGE_COPY } from '../constants/messages';
 import { IconTooltip, CountBadge } from '../ui';
 
 /** Header global search is temporarily hidden. Flip to `true` to restore. */
@@ -28,6 +30,30 @@ function SidebarToggleIcon({ size = 16 }: { size?: number }) {
     >
       <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" />
       <path strokeLinecap="round" d="M9 3.5v17" />
+    </svg>
+  );
+}
+
+/** Full screen (lucide maximize-2 / minimize-2), as in Task Management. */
+function FullscreenIcon({ exit, size = 14 }: { exit?: boolean; size?: number }) {
+  return (
+    <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {exit ? (
+        <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+      ) : (
+        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+      )}
+    </svg>
+  );
+}
+
+/** Focus-mode menu toggle (lucide panel-left / panel-left-close), as in Task Management. */
+function PanelLeftIcon({ close, size = 15 }: { close?: boolean; size?: number }) {
+  return (
+    <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      {close ? <path d="m16 15-3-3 3-3" /> : null}
     </svg>
   );
 }
@@ -120,8 +146,8 @@ function SidebarHeader({
 }) {
   if (collapsed && onToggleCollapsed) {
     return (
-      <header className="flex flex-shrink-0 items-center justify-center border-b border-white/10 px-2 py-3">
-        <IconTooltip label="Expand menu">
+      <header className="flex h-[calc(3.5rem+1px)] flex-shrink-0 items-center justify-center border-b border-white/10 px-2">
+        <IconTooltip label="Expand menu" side="right">
           <button
             type="button"
             onClick={onToggleCollapsed}
@@ -142,7 +168,7 @@ function SidebarHeader({
   }
 
   return (
-    <header className="flex flex-shrink-0 items-center border-b border-white/10 px-3 py-3.5">
+    <header className="flex h-[calc(3.5rem+1px)] flex-shrink-0 items-center border-b border-white/10 px-3">
       <img
         src="/spectrum-erp-logo-on-dark.png"
         alt="Spectrum ERP"
@@ -198,7 +224,7 @@ function SidebarNavButton({
 
   if (collapsed) {
     return (
-      <IconTooltip label={label} className="w-full">
+      <IconTooltip label={label} className="w-full" side="right">
         {button}
       </IconTooltip>
     );
@@ -249,6 +275,7 @@ function AppSidebar({
             icon={taskNavItem.icon}
             collapsed={collapsed}
             onClick={() => window.location.assign(taskAppUrl)}
+            onPrefetch={() => prerenderApp(taskAppUrl)}
           />
         </div>
 
@@ -290,30 +317,37 @@ function AppSidebar({
       </nav>
 
       <div className={`flex-shrink-0 border-t border-white/10 ${collapsed ? 'p-1.5' : 'p-2.5'}`}>
-        <button
-          type="button"
-          onClick={() => onNavigate(paths.profile)}
-          onPointerEnter={() => prefetchPage('my-profile')}
-          className={`flex w-full items-center rounded-lg text-left transition-colors hover:bg-white/8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
-            collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-2 py-2'
-          }`}
-          aria-label={`Open profile, ${user?.name ?? 'User'}`}
+        {/* Collapsed: name / role in a right-side tip, as in Task Management */}
+        <IconTooltip
+          label={collapsed ? [user?.name ?? 'User', user?.role].filter(Boolean).join(' · ') : ''}
+          className="w-full"
+          side="right"
         >
-          <div className="bg-brand flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">
-            {user?.initials ?? '—'}
-          </div>
-          {!collapsed ? (
-            <>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-white">{user?.name ?? 'User'}</p>
-                <p className="truncate text-[11px] text-white/50">{user?.role ?? ''}</p>
-              </div>
-              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="shrink-0 text-white/40" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </>
-          ) : null}
-        </button>
+          <button
+            type="button"
+            onClick={() => onNavigate(paths.profile)}
+            onPointerEnter={() => prefetchPage('my-profile')}
+            className={`flex w-full items-center rounded-lg text-left transition-colors hover:bg-white/8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+              collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-2 py-2'
+            }`}
+            aria-label={`Open profile, ${user?.name ?? 'User'}`}
+          >
+            <div className="bg-brand flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">
+              {user?.initials ?? '—'}
+            </div>
+            {!collapsed ? (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-white">{user?.name ?? 'User'}</p>
+                  <p className="truncate text-[11px] text-white/50">{user?.role ?? ''}</p>
+                </div>
+                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="shrink-0 text-white/40" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </>
+            ) : null}
+          </button>
+        </IconTooltip>
       </div>
     </div>
   );
@@ -375,6 +409,11 @@ export default function Layout({ children, detailName }: LayoutProps) {
     onOpenResults: (query: string) => navigate(paths.search(query)),
   }), [navigate]);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  // Keeps the account menu mounted while its close animation runs (as Task Management's dropdown).
+  const [avatarMenuMounted, setAvatarMenuMounted] = useState(false);
+  useEffect(() => {
+    if (avatarOpen) setAvatarMenuMounted(true);
+  }, [avatarOpen]);
   const avatarRef = useRef<HTMLDivElement>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -396,6 +435,43 @@ export default function Layout({ children, detailName }: LayoutProps) {
       }
       return next;
     });
+  }
+
+  // Full screen / focus mode (as in Task Management): browser full screen, desktop sidebar hidden —
+  // a header button opens it fully (focusSidebarOpen). Leaving browser full screen (Esc) leaves focus mode too.
+  const [focusMode, setFocusMode] = useState(false);
+  const [focusSidebarOpen, setFocusSidebarOpen] = useState(false);
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setFocusMode(false);
+        setFocusSidebarOpen(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  async function toggleFocusMode() {
+    if (focusMode) {
+      setFocusMode(false);
+      setFocusSidebarOpen(false);
+      if (document.fullscreenElement) {
+        try {
+          await document.exitFullscreen();
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
+    setFocusMode(true);
+    setFocusSidebarOpen(false);
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+    } catch {
+      // Focus mode stays on when the browser blocks the Fullscreen API.
+    }
   }
 
   useEffect(() => {
@@ -498,20 +574,31 @@ export default function Layout({ children, detailName }: LayoutProps) {
     : [];
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-canvas">
+    <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
+    <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* ── Desktop sidebar ── */}
       <aside
-        className={`hidden h-full flex-shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[#1E56A0] transition-[width] duration-200 ease-out lg:flex ${
-          sidebarCollapsed ? 'w-[4.25rem]' : 'w-56'
+        className={`hidden h-full flex-shrink-0 flex-col overflow-hidden bg-[#1E56A0] dark:bg-[#121A2B] dark:border-[#2A3548] transition-[width] duration-300 ease-out lg:flex ${
+          focusMode
+            ? focusSidebarOpen
+              ? 'w-56 border-r border-white/10'
+              : 'w-0 border-r-0'
+            : `border-r border-white/10 ${sidebarCollapsed ? 'w-14' : 'w-56'}`
         }`}
+        aria-hidden={focusMode && !focusSidebarOpen ? true : undefined}
+        inert={focusMode && !focusSidebarOpen ? true : undefined}
       >
-        <AppSidebar
-          activePage={activePage}
-          currentPage={currentPage}
-          onNavigate={go}
-          collapsed={sidebarCollapsed}
-          onToggleCollapsed={toggleSidebarCollapsed}
-        />
+        {/* Focus mode (as in Task Management): fully open or hidden, sliding in / out — no icon rail.
+            Fixed width inside, so the items do not squeeze while the panel animates. */}
+        <div className={`flex h-full min-h-0 flex-col ${focusMode ? 'w-56 shrink-0' : 'w-full'}`}>
+          <AppSidebar
+            activePage={activePage}
+            currentPage={currentPage}
+            onNavigate={go}
+            collapsed={sidebarCollapsed && !focusMode}
+            onToggleCollapsed={focusMode ? undefined : toggleSidebarCollapsed}
+          />
+        </div>
       </aside>
 
       {/* ── Tablet/Mobile off-canvas drawer ── */}
@@ -525,7 +612,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
       )}
       <aside
         id="mobile-sidebar"
-        className={`fixed inset-y-0 left-0 z-[70] flex w-56 flex-col overflow-hidden bg-[#1E56A0] transition-transform duration-200 ease-out lg:hidden ${navOpen ? 'translate-x-0 shadow-overlay' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-[70] flex w-56 flex-col overflow-hidden bg-[#1E56A0] dark:bg-[#121A2B] dark:border-[#2A3548] transition-transform duration-200 ease-out lg:hidden ${navOpen ? 'translate-x-0 shadow-overlay' : '-translate-x-full'}`}
         aria-hidden={!navOpen}
       >
         <AppSidebar
@@ -540,12 +627,13 @@ export default function Layout({ children, detailName }: LayoutProps) {
         {/* Top header */}
         <header className="z-40 flex-shrink-0 border-b border-line bg-surface">
           <div className="page-gutter flex min-h-14 items-center justify-between gap-2 py-0">
-          {/* Menu */}
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <IconTooltip label="Open navigation">
+          {/* Menu — desktop: toggle / logo 1rem from the sidebar (gutter is 1.25rem), same as Task Management */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:-ml-1">
+            {/* lg:hidden on the wrapper too — an empty wrapper would still add the row gap before the toggle */}
+            <IconTooltip label="Open navigation" className="lg:hidden">
             <button
               type="button"
-              className="icon-hit flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-line-strong bg-primary-soft text-primary lg:hidden"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-line-strong bg-primary-soft text-primary lg:hidden"
               aria-label="Open navigation"
               aria-expanded={navOpen}
               aria-controls="mobile-sidebar"
@@ -556,7 +644,9 @@ export default function Layout({ children, detailName }: LayoutProps) {
               </svg>
             </button>
             </IconTooltip>
-            {sidebarCollapsed ? (
+            {sidebarCollapsed || focusMode ? (
+              // Focus mode with the sidebar open: the logo is in the sidebar, not twice.
+              focusMode && focusSidebarOpen ? null : (
               <Link
                 to={paths.dashboard}
                 className="hidden min-w-0 items-center lg:inline-flex"
@@ -568,6 +658,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
                   className="block h-8 w-auto max-w-[10.5rem] object-contain object-left"
                 />
               </Link>
+              )
             ) : (
               <IconTooltip label="Collapse menu">
                 <button
@@ -581,19 +672,62 @@ export default function Layout({ children, detailName }: LayoutProps) {
                 </button>
               </IconTooltip>
             )}
+            {/* Spectrum ERP │ client (SteelMont) logo — vertical line, then the client logo; desktop/tablet only */}
+            <div className="hidden shrink-0 items-center gap-3 md:flex">
+              <span aria-hidden className="h-8 w-px bg-line-strong" />
+              <span className="client-logo-chip">
+                <img src="/steelmont-logo.png" alt="SteelMont" className="client-logo block h-10 w-auto object-contain" />
+              </span>
+            </div>
+            {/* Standalone: our ERP module launcher. Inside Spectrum ERP the host injects its own into the slot. */}
+            {import.meta.env.VITE_CRM_ROUTE_BASE ? null : (
+              <ModuleLauncher activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} />
+            )}
             {/* Spectrum ERP injects module launcher after logo / toggle. */}
             <div id="spectrum-module-launcher-slot" className="flex shrink-0 items-center" />
           </div>
 
             {/* Right actions */}
           <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0 pointer-events-auto">
+            {/* Order (as Task Management): (Open menu) · Quick create · Full screen · (Search) · Theme · Account.
+                Desktop-only controls sit in their own wrappers, so no empty slot adds a gap on mobile. */}
+            {focusMode ? (
+              <div className="hidden items-center lg:flex">
+              <IconTooltip label={focusSidebarOpen ? 'Close menu' : 'Open menu'}>
+                <button
+                  type="button"
+                  onClick={() => setFocusSidebarOpen((open) => !open)}
+                  aria-label={focusSidebarOpen ? 'Close left menu' : 'Open left menu'}
+                  aria-expanded={focusSidebarOpen}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-primary-soft text-primary transition-[background-color,border-color,color,transform] duration-200 ease-out hover:border-primary active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <PanelLeftIcon close={focusSidebarOpen} />
+                </button>
+              </IconTooltip>
+              </div>
+            ) : null}
+
             <QuickCreateMenu />
+
+            <div className="hidden items-center lg:flex">
+            <IconTooltip label={focusMode ? 'Exit full screen' : 'Full screen'}>
+              <button
+                type="button"
+                onClick={() => void toggleFocusMode()}
+                aria-label={focusMode ? 'Exit full screen' : 'Full screen'}
+                aria-pressed={focusMode}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-primary-soft text-primary transition-[background-color,border-color,color,transform] duration-200 ease-out hover:border-primary active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                <FullscreenIcon exit={focusMode} />
+              </button>
+            </IconTooltip>
+            </div>
 
             {SHOW_HEADER_SEARCH && searchCallbacks && (
               <IconTooltip label="Search">
               <button
                 type="button"
-                className={`icon-hit flex h-10 w-10 items-center justify-center rounded-lg lg:hidden ${
+                className={`flex h-8 w-8 items-center justify-center rounded-lg lg:hidden ${
                   mobileSearchOpen ? 'bg-primary-soft text-primary' : 'text-ink-soft'
                 }`}
                 aria-label="Search"
@@ -629,6 +763,9 @@ export default function Layout({ children, detailName }: LayoutProps) {
               </div>
             )}
 
+            {/* Same order as Task Management: … Full screen, (Search), Theme, Account */}
+            <ThemeToggleButton />
+
             {/* Avatar menu */}
             <div className="relative" ref={avatarRef}>
               <button
@@ -636,21 +773,37 @@ export default function Layout({ children, detailName }: LayoutProps) {
                 aria-label="Account menu"
                 aria-expanded={avatarOpen}
                 onClick={() => setAvatarOpen((o) => !o)}
-                className={`flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-surface-hover ${
+                // Same as Task Management's account button: grey wash while open, chevron turns up.
+                className={`flex h-9 items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
                   avatarOpen ? 'bg-surface-hover' : ''
                 }`}
               >
-                <div className="bg-brand flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">
+                <div className="bg-brand flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">
                   {user?.initials ?? '—'}
                 </div>
-                <span className="hidden text-xs font-semibold text-ink md:block">{user?.name ?? 'User'}</span>
-                <svg className="text-ink-faint" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                <span className="hidden max-w-[140px] truncate text-[13px] font-semibold text-ink sm:block">{user?.name ?? 'User'}</span>
+                <svg
+                  className={`hidden shrink-0 text-ink-faint transition-transform duration-200 sm:block ${avatarOpen ? 'rotate-180' : ''}`}
+                  width="13"
+                  height="13"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.2}
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
                 </svg>
               </button>
 
-              {avatarOpen && (
-                <div className="absolute top-full right-0 z-50 mt-1.5 w-56 overflow-hidden rounded-xl border border-line bg-surface shadow-overlay">
+              {(avatarOpen || avatarMenuMounted) && (
+                <div
+                  data-state={avatarOpen ? 'open' : 'closed'}
+                  onAnimationEnd={(e) => {
+                    if (e.target === e.currentTarget && !avatarOpen) setAvatarMenuMounted(false);
+                  }}
+                  className="crm-menu-anim absolute top-full right-0 z-50 mt-1.5 w-56 overflow-hidden rounded-xl border border-line bg-surface shadow-overlay"
+                >
                   <div className="flex items-center gap-3 border-b border-line-subtle px-4 py-3">
                     <div className="bg-brand flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white">
                       {user?.initials ?? '—'}
@@ -663,12 +816,13 @@ export default function Layout({ children, detailName }: LayoutProps) {
 
                   {([
                     {
-                      icon: <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
+                      // lucide icons, as in Task Management's account menu
+                      icon: <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
                       label: 'My Profile',
                       action: () => { setAvatarOpen(false); navigate(paths.profile); },
                     },
                     ...(admin ? [{
-                      icon: <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+                      icon: <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>,
                       label: 'Account Settings',
                       action: () => { setAvatarOpen(false); navigate(paths.settings); },
                     }] : []),
@@ -684,9 +838,9 @@ export default function Layout({ children, detailName }: LayoutProps) {
                       key={item.label}
                       type="button"
                       onClick={item.action}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-soft transition-colors hover:bg-surface-hover"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-soft outline-none transition-colors hover:bg-surface-hover focus-visible:bg-surface-hover"
                     >
-                      <span className="text-ink-faint">{item.icon}</span>
+                      <span className="shrink-0 text-ink-faint">{item.icon}</span>
                       <span className="flex-1 text-xs font-medium">{item.label}</span>
                       {item.badge && (
                         <CountBadge value={item.badge} size="sm" tone="accent" />
@@ -698,10 +852,12 @@ export default function Layout({ children, detailName }: LayoutProps) {
                     <button
                       type="button"
                       onClick={() => { setAvatarOpen(false); logout(); navigate(paths.login); }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-accent transition-colors hover:bg-accent-soft"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-accent outline-none transition-colors hover:bg-accent-soft focus-visible:bg-accent-soft"
                     >
-                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <path d="m16 17 5-5-5-5" />
+                        <path d="M21 12H9" />
                       </svg>
                       <span className="text-xs font-semibold">Sign Out</span>
                     </button>
@@ -757,5 +913,50 @@ export default function Layout({ children, detailName }: LayoutProps) {
         </main>
       </div>
     </div>
+
+      <AppFooter />
+    </div>
+  );
+}
+
+/** Copyright strip under the whole app (sidebar + content), same as Task Management. */
+function AppFooter() {
+  return (
+    <footer className="flex h-8 shrink-0 items-center justify-between gap-4 border-t border-line bg-surface px-5 text-[11px] text-ink-faint">
+      <p className="truncate">
+        © {new Date().getFullYear()} {PAGE_COPY.login.rights}
+      </p>
+      <p className="hidden shrink-0 font-semibold sm:block">Spectrum ERP</p>
+    </footer>
+  );
+}
+
+/** Light / dark switch — shows the theme you will switch to (as in Task Management). */
+function ThemeToggleButton() {
+  const theme = useTheme();
+  const isDark = theme === 'dark';
+  const label = isDark ? 'Light theme' : 'Dark theme';
+  return (
+    <IconTooltip label={label}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isDark}
+        aria-label={label}
+        onClick={toggleTheme}
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-primary-soft text-primary transition-[background-color,border-color,color,transform] duration-200 ease-out hover:border-primary active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        {isDark ? (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+          </svg>
+        ) : (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+          </svg>
+        )}
+      </button>
+    </IconTooltip>
   );
 }
