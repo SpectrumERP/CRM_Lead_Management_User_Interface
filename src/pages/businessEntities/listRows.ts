@@ -187,9 +187,9 @@ export function formatFileSize(bytes: number | null | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-/** Credit insurance limit as Task Management shows it (`$12,500`), or "No Limit". */
+/** Credit insurance limit as Task Management shows it (`$12,500`); blank when there is none. */
 export function formatCreditLimit(limit: number | null): string {
-  return limit && limit > 0 ? `$${limit.toLocaleString()}` : 'No Limit'
+  return limit && limit > 0 ? `$${limit.toLocaleString()}` : ''
 }
 
 /** "No. 350, Hebbal…, Mysuru, Karnataka, India" — the list's Primary Address column. */

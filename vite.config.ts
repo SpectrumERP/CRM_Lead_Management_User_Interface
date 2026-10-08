@@ -80,7 +80,17 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
-    proxy: Object.fromEntries(remotes.map((remote) => [remote.pathPattern, remoteProxy(remote)])),
+    proxy: Object.fromEntries(
+      remotes.flatMap((remote) => [
+        [remote.pathPattern, remoteProxy(remote)],
+        // A remote's root-relative API calls (e.g. /api/...) land on this origin in dev; send them to its
+        // dev server, whose own proxy forwards them to the backend in its .env.
+        ...(remote.devApiPaths ?? []).map((apiPath) => [
+          `^${apiPath.replace(/\/+$/, '')}(?:/|$)`,
+          remoteProxy(remote),
+        ]),
+      ]),
+    ),
   },
   preview: {
     host: true,

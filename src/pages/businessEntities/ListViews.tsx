@@ -32,7 +32,6 @@ export interface SortProps {
   onSort: (field: string) => void
 }
 
-const na = (v: string) => v || 'N/A'
 
 // ─── Shared bits ─────────────────────────────────────────────────────────────
 
@@ -188,7 +187,7 @@ export function EntityTable({
                 <span className="mt-0.5 block truncate text-sm font-semibold text-ink">{row.name}</span>
                 <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-muted">
                   {row.typeName ? <TypeBadge name={row.typeName} small /> : null}
-                  <span className="truncate">{[row.city, row.state, row.country].filter(Boolean).join(', ') || '—'}</span>
+                  <span className="truncate">{[row.city, row.state, row.country].filter(Boolean).join(', ')}</span>
                 </span>
               </button>
               <div className="flex shrink-0 items-center gap-0.5">
@@ -262,20 +261,20 @@ export function EntityTable({
               )}
               {show('address') && (
                 <td>
-                  <Truncated text={fullAddress(row) || 'N/A'} className="text-xs text-ink-soft" />
+                  <Truncated text={fullAddress(row)} className="text-xs text-ink-soft" />
                 </td>
               )}
               {show('city') && (
-                <td><Truncated text={na(row.city)} className="text-xs text-ink-soft" /></td>
+                <td><Truncated text={row.city} className="text-xs text-ink-soft" /></td>
               )}
               {show('state') && (
-                <td><Truncated text={na(row.state)} className="text-xs text-ink-soft" /></td>
+                <td><Truncated text={row.state} className="text-xs text-ink-soft" /></td>
               )}
               {show('country') && (
-                <td><Truncated text={na(row.country)} className="text-xs text-ink-soft" /></td>
+                <td><Truncated text={row.country} className="text-xs text-ink-soft" /></td>
               )}
               {show('vatGst') && (
-                <td><Truncated text={na(row.vatGst)} className="font-mono text-xs text-ink-soft" /></td>
+                <td><Truncated text={row.vatGst} className="font-mono text-xs text-ink-soft" /></td>
               )}
               {show('creditLimit') && (
                 <td><Truncated text={formatCreditLimit(row.creditLimit)} className="text-xs text-ink-soft" /></td>
@@ -333,10 +332,10 @@ export function EntityAlbum({ rows, onEdit, onDelete }: { rows: EntityListRow[] 
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 border-y border-line py-1.5 text-[11px]">
-                  <Detail wide label="Primary Location" text={na(row.address)} />
-                  <Detail label="City & PIN Code" text={[row.city, row.pinCode].filter(Boolean).join(' - ') || 'N/A'} />
-                  <Detail label="State & Country" text={[row.state, row.country].filter(Boolean).join(', ') || 'N/A'} />
-                  <Detail wide label="Credit limit & GST" text={`${formatCreditLimit(row.creditLimit)}${row.vatGst ? ` | GST: ${row.vatGst}` : ''}`} />
+                  <Detail wide label="Primary Location" text={row.address} />
+                  <Detail label="City & PIN Code" text={[row.city, row.pinCode].filter(Boolean).join(' - ')} />
+                  <Detail label="State & Country" text={[row.state, row.country].filter(Boolean).join(', ')} />
+                  <Detail wide label="Credit limit & GST" text={[formatCreditLimit(row.creditLimit), row.vatGst && `GST: ${row.vatGst}`].filter(Boolean).join(' | ')} />
                 </div>
                 <div className="mt-auto flex items-center justify-between gap-2 pt-0.5 text-[10px] font-medium text-ink-faint">
                   <span className="flex min-w-0 items-center gap-1">
@@ -427,16 +426,16 @@ export function ContactTable({
               <td><Truncated text={row.entityName} className="text-xs font-semibold text-ink-soft" /></td>
             )}
             {show('designation') && (
-              <td><Truncated text={na(row.designation)} className="text-xs text-ink-soft" /></td>
+              <td><Truncated text={row.designation} className="text-xs text-ink-soft" /></td>
             )}
             {show('department') && (
-              <td><Truncated text={na(row.department)} className="text-xs text-ink-soft" /></td>
+              <td><Truncated text={row.department} className="text-xs text-ink-soft" /></td>
             )}
             {show('phone') && (
-              <td><Truncated text={na(row.phone)} className="font-mono text-xs text-ink-soft" /></td>
+              <td><Truncated text={row.phone} className="font-mono text-xs text-ink-soft" /></td>
             )}
             {show('email') && (
-              <td><Truncated text={na(row.email)} className="text-xs text-ink-soft" /></td>
+              <td><Truncated text={row.email} className="text-xs text-ink-soft" /></td>
             )}
             {show('status') && (
               <td><StatusChip status={row.status} /></td>
@@ -481,10 +480,10 @@ export function ContactAlbum({ rows, onEdit }: { rows: ContactListRow[] } & RowH
                 <div className="space-y-1 border-t border-line pt-2 text-[11px] font-medium text-ink-muted">
                   <span className={`block truncate font-semibold text-ink ${onEdit ? 'cursor-pointer hover:text-primary' : ''}`}
                     onClick={() => onEdit?.(row.businessEntityNo)}>{row.entityName}</span>
-                  <div className="flex justify-between gap-2"><span className="text-ink-faint">Phone:</span><span className="font-mono text-ink-soft">{na(row.phone)}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-ink-faint">Phone:</span><span className="font-mono text-ink-soft">{row.phone}</span></div>
                   <div className="flex min-w-0 justify-between gap-2">
                     <span className="shrink-0 text-ink-faint">Email:</span>
-                    <div className="min-w-0 max-w-[170px]"><Truncated text={na(row.email)} className="text-right text-ink-soft" /></div>
+                    <div className="min-w-0 max-w-[170px]"><Truncated text={row.email} className="text-right text-ink-soft" /></div>
                   </div>
                 </div>
                 <div className="mt-auto flex items-center justify-between border-t border-line pt-2">

@@ -13,6 +13,7 @@
       "title": "Task Management",
       "basePath": "/task/",
       "devPort": 5174,
+      "devApiPaths": ["/api"],
       "dirEnv": "TASK_APP_DIR",
       "fallbackDirs": [
         "../Task-Management-User-Interface",
