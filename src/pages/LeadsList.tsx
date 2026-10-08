@@ -566,24 +566,24 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                     {/* search-data `lastActivityDate` */}
                     {show('lastActivityOn') && (
                       <td className="whitespace-nowrap text-xs text-ink-soft">
-                        {lead.lastActivityAt ? formatAuditStamp(lead.lastActivityAt) : '—'}
+                        {lead.lastActivityAt ? formatAuditStamp(lead.lastActivityAt, '') : ''}
                       </td>
                     )}
                     {/* Server leads: who / when from search-data. In-app leads only know their dates. */}
                     {show('createdBy') && (
-                      <td className="whitespace-nowrap text-xs text-ink-soft">{lead.audit?.createdBy || '—'}</td>
+                      <td className="whitespace-nowrap text-xs text-ink-soft">{lead.audit?.createdBy || ''}</td>
                     )}
                     {show('createdOn') && (
                       <td className="whitespace-nowrap text-xs" style={{ color: '#94a3b8' }}>
-                        {lead.audit ? formatAuditStamp(lead.audit.createdAt) : formatLeadDate(lead.createdAt)}
+                        {lead.audit ? formatAuditStamp(lead.audit.createdAt, '') : formatLeadDate(lead.createdAt, '')}
                       </td>
                     )}
                     {show('modifiedBy') && (
-                      <td className="whitespace-nowrap text-xs text-ink-soft">{lead.audit?.modifiedBy || '—'}</td>
+                      <td className="whitespace-nowrap text-xs text-ink-soft">{lead.audit?.modifiedBy || ''}</td>
                     )}
                     {show('modifiedOn') && (
                       <td className="whitespace-nowrap text-xs" style={{ color: '#94a3b8' }}>
-                        {lead.audit ? formatAuditStamp(lead.audit.modifiedAt) : lead.lastActivity}
+                        {lead.audit ? formatAuditStamp(lead.audit.modifiedAt, '') : lead.lastActivity}
                       </td>
                     )}
                     <td className="sticky-col-end" onClick={(e) => e.stopPropagation()}>

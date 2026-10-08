@@ -71,15 +71,15 @@ export function contactDetailNos(value: EntityContactsValue): number[] {
 
 const ENTITY_COLUMNS: TableSearchColumn<EntityOption>[] = [
   { header: 'Business Entity', getValue: (o) => o.name, truncate: true },
-  { header: 'Code', getValue: (o) => o.code || '—', width: '6.5rem' },
-  { header: 'Type', getValue: (o) => o.type || '—', width: '9rem', truncate: true },
-  { header: 'Location', getValue: (o) => o.city || '—', width: '12rem', truncate: true },
+  { header: 'Code', getValue: (o) => o.code || '', width: '6.5rem' },
+  { header: 'Type', getValue: (o) => o.type || '', width: '9rem', truncate: true },
+  { header: 'Location', getValue: (o) => o.city || '', width: '12rem', truncate: true },
 ]
 
 const CONTACT_COLUMNS: TableSearchColumn<ContactPick>[] = [
   { header: 'Contact Person', getValue: (c) => c.name, truncate: true },
-  { header: 'Designation', getValue: (c) => c.designation || '—', width: '11rem', truncate: true },
-  { header: 'Email', getValue: (c) => c.email || '—', width: 'minmax(0,1fr)', truncate: true },
+  { header: 'Designation', getValue: (c) => c.designation || '', width: '11rem', truncate: true },
+  { header: 'Email', getValue: (c) => c.email || '', width: 'minmax(0,1fr)', truncate: true },
 ]
 
 export interface EntityContactsFieldsProps {

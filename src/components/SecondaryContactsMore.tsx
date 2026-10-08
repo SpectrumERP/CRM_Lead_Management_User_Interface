@@ -123,7 +123,7 @@ export function SecondaryContactsMore({ items }: { items: SecondaryContactView[]
     }
   }, [open])
 
-  if (!items.length) return <span className="text-xs text-ink-faint">—</span>
+  if (!items.length) return null
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">

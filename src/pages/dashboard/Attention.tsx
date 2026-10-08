@@ -15,7 +15,7 @@ const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
 
 /** Stage badge in the stage's server colour (neutral when it has none). */
 function StageBadge({ stage, color }: { stage?: string | null; color?: string | null }) {
-  if (!stage) return <span className="text-ink-faint">—</span>
+  if (!stage) return null
   const hex = color?.trim()
   return hex && HEX.test(hex) ? (
     <span className={badge} style={stageBadgeStyle(hex)}>
@@ -27,11 +27,11 @@ function StageBadge({ stage, color }: { stage?: string | null; color?: string | 
 }
 
 function NextAction({ next, todayIso }: { next?: DashboardNextActivity | null; todayIso: string }) {
-  if (!next?.subject && !next?.dueDate) return <span className="text-ink-faint">—</span>
+  if (!next?.subject && !next?.dueDate) return null
   return (
     <span className="flex max-w-[14rem] flex-col">
       <span className="truncate" title={next.subject ?? undefined}>
-        {next.subject || '—'}
+        {next.subject || ''}
       </span>
       <span className="text-[11px]">
         <DueDate date={next.dueDate} todayIso={todayIso} overdue={next.isOverdue} />
@@ -44,7 +44,7 @@ const stageDaysHint = (stagnantDays: number) => `Days since the stage last chang
 
 /** Entity name with its type (Customer / Prospect …) underneath. */
 function EntityCell({ name, type }: { name?: string | null; type?: string }) {
-  if (!name) return <span className="text-ink-faint">—</span>
+  if (!name) return null
   return (
     <span className="flex max-w-[14rem] flex-col">
       <span className="truncate" title={name}>
@@ -63,7 +63,7 @@ const reasonsOf = (row: { reasons?: string[] | null }) => (row.reasons ?? []).ma
 function ProductCell({ text }: { text: string }) {
   return (
     <span className="block max-w-[12rem] truncate" title={text}>
-      {text || '—'}
+      {text || ''}
     </span>
   )
 }
@@ -110,13 +110,13 @@ export function LeadsAttentionTable({ rows, stagnantDays, todayIso, onOpenLead }
       {
         key: 'status',
         label: 'Lead Status',
-        render: (r) => (r.leadStatus?.leadStatusName ? <span className={neutral}>{r.leadStatus.leadStatusName}</span> : '—'),
+        render: (r) => (r.leadStatus?.leadStatusName ? <span className={neutral}>{r.leadStatus.leadStatusName}</span> : ''),
         searchText: (r) => r.leadStatus?.leadStatusName,
       },
       {
         key: 'owner',
         label: 'Lead Owner',
-        render: (r) => r.leadOwner?.printingName || '—',
+        render: (r) => r.leadOwner?.printingName || '',
         sortValue: (r) => r.leadOwner?.printingName,
         searchText: (r) => r.leadOwner?.printingName,
       },
@@ -128,7 +128,7 @@ export function LeadsAttentionTable({ rows, stagnantDays, todayIso, onOpenLead }
         sortValue: (r) => r.daysInStage,
         align: 'right',
       },
-      { key: 'last', label: 'Last Activity Date', render: (r) => formatDate(r.lastActivityDate), sortValue: (r) => r.lastActivityDate },
+      { key: 'last', label: 'Last Activity Date', render: (r) => formatDate(r.lastActivityDate, ''), sortValue: (r) => r.lastActivityDate },
       {
         key: 'next',
         label: 'Pending Activity / Due Date',
@@ -183,7 +183,7 @@ export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, onOp
       {
         key: 'entity',
         label: 'Business Entity',
-        render: (r) => r.businessEntity?.businessEntityName || '—',
+        render: (r) => r.businessEntity?.businessEntityName || '',
         sortValue: (r) => r.businessEntity?.businessEntityName,
         searchText: (r) => r.businessEntity?.businessEntityName,
       },
@@ -191,7 +191,7 @@ export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, onOp
       {
         key: 'value',
         label: 'Opportunity Value',
-        render: (r) => (r.opportunityValue == null ? '—' : formatMoney(r.opportunityValue, r.currency?.currencyCode || undefined)),
+        render: (r) => (r.opportunityValue == null ? '' : formatMoney(r.opportunityValue, r.currency?.currencyCode || undefined)),
         sortValue: (r) => r.opportunityValue,
         align: 'right',
       },
@@ -205,7 +205,7 @@ export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, onOp
       {
         key: 'weight',
         label: 'Weightage',
-        render: (r) => (r.opportunityStage?.weightage == null ? '—' : `${r.opportunityStage.weightage}%`),
+        render: (r) => (r.opportunityStage?.weightage == null ? '' : `${r.opportunityStage.weightage}%`),
         sortValue: (r) => r.opportunityStage?.weightage,
         align: 'right',
       },
@@ -213,13 +213,13 @@ export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, onOp
         key: 'status',
         label: 'Opportunity Status',
         render: (r) =>
-          r.opportunityStatus?.opportunityStatusName ? <span className={neutral}>{r.opportunityStatus.opportunityStatusName}</span> : '—',
+          r.opportunityStatus?.opportunityStatusName ? <span className={neutral}>{r.opportunityStatus.opportunityStatusName}</span> : '',
         searchText: (r) => r.opportunityStatus?.opportunityStatusName,
       },
       {
         key: 'closing',
         label: 'Expected Closure Date',
-        render: (r) => formatDate(r.expectedClosureDate),
+        render: (r) => formatDate(r.expectedClosureDate, ''),
         sortValue: (r) => r.expectedClosureDate,
       },
       {
@@ -229,7 +229,7 @@ export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, onOp
         sortValue: (r) => r.daysInStage,
         align: 'right',
       },
-      { key: 'last', label: 'Last Activity Date', render: (r) => formatDate(r.lastActivityDate), sortValue: (r) => r.lastActivityDate },
+      { key: 'last', label: 'Last Activity Date', render: (r) => formatDate(r.lastActivityDate, ''), sortValue: (r) => r.lastActivityDate },
       {
         key: 'next',
         label: 'Pending Activity / Due',

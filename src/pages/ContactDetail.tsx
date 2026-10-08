@@ -346,7 +346,7 @@ function LeadsTab({ leads, onViewLead }: { leads: Lead[]; onViewLead?: (id: stri
                 </span>
               </td>
               <td><span className="text-sm font-semibold" style={{ color: '#0c1a3a' }}>₹{(l.opportunityValue / 10000000).toFixed(2)} Cr</span></td>
-              <td><span className="text-sm" style={{ color: '#7a8494' }}>{formatDate(l.expectedClosureDate)}</span></td>
+              <td><span className="text-sm" style={{ color: '#7a8494' }}>{formatDate(l.expectedClosureDate, '')}</span></td>
               <td>
                 <button
                   onClick={() => onViewLead?.(l.id)}

@@ -106,8 +106,8 @@ const SECTION_ICONS = {
 const LEAD_COLUMNS: TableSearchColumn<Lead>[] = [
   { header: 'Code', getValue: (l) => l.spectrum?.code || l.id, width: '7rem' },
   { header: 'Lead', getValue: (l) => l.leadName, truncate: true },
-  { header: 'Business Entity', getValue: (l) => l.companyName || '—', truncate: true },
-  { header: 'Owner', getValue: (l) => l.assignedSalesperson || '—', width: '10rem', truncate: true },
+  { header: 'Business Entity', getValue: (l) => l.companyName || '', truncate: true },
+  { header: 'Owner', getValue: (l) => l.assignedSalesperson || '', width: '10rem', truncate: true },
 ]
 
 export default function CreateOpportunity({ onBack, onSuccess, embedded }: CreateOpportunityProps) {

@@ -97,7 +97,7 @@ export function reasonLabel(reason: string, record: 'lead' | 'opportunity') {
 
 /** Same colours for a reason in the Lead and Opportunity sections. */
 export function ReasonBadges({ reasons, record = 'opportunity' }: { reasons: readonly string[]; record?: 'lead' | 'opportunity' }) {
-  if (reasons.length === 0) return <span className="text-ink-faint">—</span>
+  if (reasons.length === 0) return null
   return (
     <span className="inline-flex flex-wrap gap-1">
       {reasons.map((r) => (
@@ -139,14 +139,14 @@ export function RecordLink({ label, onClick }: { label: string; onClick: () => v
 
 /** Date of a pending activity, red when it is past (or when the server marks it overdue). */
 export function DueDate({ date, todayIso, overdue: flagged }: { date?: string | null; todayIso: string; overdue?: boolean }) {
-  if (!date) return <span className="text-ink-faint">—</span>
+  if (!date) return null
   const overdue = flagged ?? date.slice(0, 10) < todayIso
-  return <span className={overdue ? 'font-semibold text-accent' : undefined}>{formatDate(date)}</span>
+  return <span className={overdue ? 'font-semibold text-accent' : undefined}>{formatDate(date, '')}</span>
 }
 
 /** `Today`, `1 day`, `2 days`. */
 export function days(n: number | null) {
-  if (n === null) return '—'
+  if (n === null) return ''
   if (n === 0) return 'Today'
   return `${n} ${n === 1 ? 'day' : 'days'}`
 }

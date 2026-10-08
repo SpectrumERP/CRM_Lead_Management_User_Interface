@@ -84,12 +84,12 @@ function LastActivityCard({ last, onOpen }: { last: DashboardExpectedClosure['la
       <span className="min-w-0">
         <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Last activity · No. {last.activityDetailNo}</span>
         <span className="block truncate text-sm font-semibold text-primary" title={last.subject ?? undefined}>
-          {last.subject || '—'}
+          {last.subject || ''}
         </span>
       </span>
       <span className="shrink-0 text-right text-xs text-ink-muted">
-        <span className="block">{last.activityTypeName || '—'}</span>
-        <span className="block">{formatDate(last.activityDate)}</span>
+        <span className="block">{last.activityTypeName || ''}</span>
+        <span className="block">{formatDate(last.activityDate, '')}</span>
       </span>
     </button>
   )
@@ -158,14 +158,14 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
       {
         key: 'entity',
         label: 'Business Entity Name',
-        render: (r) => r.businessEntity?.businessEntityName || '—',
+        render: (r) => r.businessEntity?.businessEntityName || '',
         sortValue: (r) => r.businessEntity?.businessEntityName,
         searchText: (r) => r.businessEntity?.businessEntityName,
       },
       {
         key: 'value',
         label: 'Opportunity Value',
-        render: (r) => (r.opportunityValue == null ? '—' : formatMoney(r.opportunityValue, currencyOf(r))),
+        render: (r) => (r.opportunityValue == null ? '' : formatMoney(r.opportunityValue, currencyOf(r))),
         sortValue: (r) => r.opportunityValue,
         align: 'right',
       },
@@ -174,7 +174,7 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
         label: 'Stage',
         render: (r) => (
           <span>
-            {r.opportunityStage?.opportunityStageName || '—'}
+            {r.opportunityStage?.opportunityStageName || ''}
             {r.opportunityStage?.weightage != null ? (
               <span className="text-[11px] text-ink-muted"> ({r.opportunityStage.weightage}%)</span>
             ) : null}
@@ -193,7 +193,7 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
       {
         key: 'closing',
         label: 'Expected Closure Date',
-        render: (r) => formatDate(r.expectedClosureDate),
+        render: (r) => formatDate(r.expectedClosureDate, ''),
         sortValue: (r) => r.expectedClosureDate,
       },
       {
@@ -202,11 +202,11 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
         render: (r) => {
           const last = r.lastActivity
           const label = last?.subject || last?.activityTypeName
-          if (!last) return <span className="text-ink-faint">—</span>
+          if (!last) return null
           return (
             <span className="block max-w-[16rem] truncate" title={label ?? undefined}>
               {label ? `${label}, ` : ''}
-              {formatDate(last.activityDate)}
+              {formatDate(last.activityDate, '')}
             </span>
           )
         },
@@ -219,13 +219,13 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
         // The last activity's remark (`lastActivity.notesOutcome`); without one, the newest internal note.
         render: (r) => {
           const note = remarkOf(r)
-          if (!note) return <span className="text-ink-faint">—</span>
+          if (!note) return null
           return (
             <span className="block max-w-[18rem]" title={note.text}>
               <span className="line-clamp-2">{note.text}</span>
               {note.fromActivity ? null : (
                 <span className="block text-[11px] text-ink-muted">
-                  {formatDate(note.date)}
+                  {formatDate(note.date, '')}
                   {note.by ? ` · ${note.by}` : ''}
                 </span>
               )}
@@ -322,8 +322,8 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
                       <td className="max-w-48 truncate px-3 py-2.5 font-semibold text-primary" title={activityLabel(a)}>
                         {activityLabel(a)}
                       </td>
-                      <td className="px-3 py-2.5 text-ink-muted">{a.activityType?.activityTypeName || '—'}</td>
-                      <td className="px-3 py-2.5 text-ink-muted">{a.assignTo?.printingName || a.assignTo?.loginId || '—'}</td>
+                      <td className="px-3 py-2.5 text-ink-muted">{a.activityType?.activityTypeName || ''}</td>
+                      <td className="px-3 py-2.5 text-ink-muted">{a.assignTo?.printingName || a.assignTo?.loginId || ''}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-xs">
                         <DueDate date={a.dueDate} todayIso={todayIso} overdue={a.isOverdue} />
                       </td>

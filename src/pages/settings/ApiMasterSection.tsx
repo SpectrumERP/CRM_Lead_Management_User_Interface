@@ -246,24 +246,24 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
               {hasSequence ? (
                 <Td narrow>
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold" style={{ background: C.blueBg, color: C.blue }}>
-                    {item.sequence ?? '—'}
+                    {item.sequence ?? ''}
                   </div>
                 </Td>
               ) : null}
-              <Td narrow><span className="font-mono text-xs" style={{ color: C.sub }}>{item.code || '—'}</span></Td>
+              <Td narrow><span className="font-mono text-xs" style={{ color: C.sub }}>{item.code || ''}</span></Td>
               <Td><span className="text-sm font-semibold" style={{ color: C.text }}>{item.name}</span></Td>
-              {hasDescription ? <Td><span className="text-xs" style={{ color: C.sub }}>{item.description || '—'}</span></Td> : null}
+              {hasDescription ? <Td><span className="text-xs" style={{ color: C.sub }}>{item.description || ''}</span></Td> : null}
               {listedNumbers.map((n) => (
                 <Td key={n.key} narrow>
                   <span className="text-xs font-semibold" style={{ color: C.sub }}>
-                    {item.numbers?.[n.key] ?? '—'}{item.numbers?.[n.key] !== undefined && n.suffix ? n.suffix : ''}
+                    {item.numbers?.[n.key] ?? ''}{item.numbers?.[n.key] !== undefined && n.suffix ? n.suffix : ''}
                   </span>
                 </Td>
               ))}
               <Td><StatusBadge status={item.inactive ? 'Inactive' : 'Active'} /></Td>
               <Td>
                 <span className="text-xs" style={{ color: '#94a3b8' }}>
-                  {formatDate(item.modifiedDate ?? item.createdDate)}
+                  {formatDate(item.modifiedDate ?? item.createdDate, '')}
                   {item.modifiedBy || item.createdBy ? ` · ${item.modifiedBy ?? item.createdBy}` : ''}
                 </span>
               </Td>

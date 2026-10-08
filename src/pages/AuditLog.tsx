@@ -93,7 +93,7 @@ function UserAvatar({ name }: { name: string }) {
 }
 
 function ValueCell({ value }: { value?: string }) {
-  if (!value) return <span style={{ color: '#c8d4e8' }}>—</span>;
+  if (!value) return null;
   return (
     <span
       className="text-xs px-2 py-0.5 rounded font-mono"
@@ -682,7 +682,7 @@ export default function AuditLog({
                         <td className="px-4 py-3">
                           {entry.field
                             ? <span className="text-xs font-medium" style={{ color: '#4a5d82' }}>{entry.field}</span>
-                            : <span style={{ color: '#dce4f2' }}>—</span>}
+                            : null}
                         </td>
 
                         {/* Previous Value */}

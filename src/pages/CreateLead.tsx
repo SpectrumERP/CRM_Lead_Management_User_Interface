@@ -43,7 +43,7 @@ import { BreadcrumbActions } from '../components/BreadcrumbActions'
 const SPECTRUM_REQUIRED = 'Sign in with your Spectrum account to create or edit leads.'
 
 const ACTIVITY_TYPE_COLUMNS: TableSearchColumn<OperTaskType>[] = [
-  { header: 'Code', getValue: (t) => t.Code || '—', width: '6.5rem' },
+  { header: 'Code', getValue: (t) => t.Code || '', width: '6.5rem' },
   { header: 'Activity Type', getValue: (t) => t['Task Type'], truncate: true },
 ]
 

@@ -227,7 +227,7 @@ export default function LocationMasterSection({ api, state, title, subtitle, nam
   const selectedCountry = countries.find((c) => c.countryNo === form.countryNo) ?? null;
   const selectedState = states.find((s) => s.stateNo === form.stateNo) ?? null;
   const selectedCity = cities.find((c) => c.cityNo === form.cityNo) ?? null;
-  const countryOf = (r: LocationMasterRow) => r.countryName || countryName.get(r.countryNo ?? 0) || '—';
+  const countryOf = (r: LocationMasterRow) => r.countryName || countryName.get(r.countryNo ?? 0) || '';
 
   return (
     <div>
@@ -261,20 +261,20 @@ export default function LocationMasterSection({ api, state, title, subtitle, nam
             error ? null : <EmptyRows onAdd={rights.canAdd && !query ? openAdd : undefined} />
           ) : pageRows.map((row) => (
             <tr key={row.no}>
-              <Td narrow><span className="font-mono text-xs" style={{ color: C.sub }}>{row.code || '—'}</span></Td>
+              <Td narrow><span className="font-mono text-xs" style={{ color: C.sub }}>{row.code || ''}</span></Td>
               <Td><span className="text-sm font-semibold" style={{ color: C.text }}>{row.name}</span></Td>
-              {kind === 'port' ? <Td narrow><span className="text-xs" style={{ color: C.sub }}>{row.alias || '—'}</span></Td> : null}
+              {kind === 'port' ? <Td narrow><span className="text-xs" style={{ color: C.sub }}>{row.alias || ''}</span></Td> : null}
               {kind === 'state' ? (
                 <Td narrow>
-                  <span className="text-xs" style={{ color: C.sub }}>{row.gstStateCode || '—'}{row.isUnionTerritory ? ' · UT' : ''}</span>
+                  <span className="text-xs" style={{ color: C.sub }}>{row.gstStateCode || ''}{row.isUnionTerritory ? ' · UT' : ''}</span>
                 </Td>
               ) : null}
-              {kind === 'port' ? <Td><span className="text-xs" style={{ color: C.sub }}>{row.cityName || '—'}</span></Td> : null}
-              {kind !== 'state' ? <Td><span className="text-xs" style={{ color: C.sub }}>{row.stateName || '—'}</span></Td> : null}
+              {kind === 'port' ? <Td><span className="text-xs" style={{ color: C.sub }}>{row.cityName || ''}</span></Td> : null}
+              {kind !== 'state' ? <Td><span className="text-xs" style={{ color: C.sub }}>{row.stateName || ''}</span></Td> : null}
               <Td><span className="text-xs" style={{ color: C.sub }}>{countryOf(row)}</span></Td>
               <Td>
                 <span className="text-xs" style={{ color: '#94a3b8' }}>
-                  {formatDate(row.createdDate)}{row.createdBy ? ` · ${row.createdBy}` : ''}
+                  {formatDate(row.createdDate, '')}{row.createdBy ? ` · ${row.createdBy}` : ''}
                 </span>
               </Td>
               <Td right narrow>

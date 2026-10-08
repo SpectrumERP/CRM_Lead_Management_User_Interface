@@ -8,7 +8,7 @@ All of it is described in [`microfrontends.json`](../microfrontends.json), the s
 
 | Used by | Reads |
 |---|---|
-| `vite.config.ts` | dev proxy (`basePath` → `localhost:devPort`) and the preview fallback for each remote |
+| `vite.config.ts` | dev proxy (`basePath` and any `devApiPaths` → `localhost:devPort`) and the preview fallback for each remote |
 | `scripts/dev-all.mjs` | which remotes to start, from where (`dirEnv` / `fallbackDirs`), with which base and port |
 | `scripts/build-remotes.mjs` | which remotes to build into `dist/<basePath>` |
 | `src/app/microfrontends.ts` | session cookie and channel names; the URL each remote opens at |
@@ -53,7 +53,9 @@ Without it, the first of its `fallbackDirs` that has a `package.json` is used.
 ## Adding a remote
 
 1. Add an entry to `remotes` in `microfrontends.json` (`name`, `title`, `basePath`, a free `devPort`,
-   `dirEnv`, `fallbackDirs`, `urlEnv`).
+   `dirEnv`, `fallbackDirs`, `urlEnv`). If the remote calls its API with root-relative paths in dev
+   (Task Management: `/api/...`), list them in `devApiPaths` so the CRM dev server forwards them to
+   the remote's dev server instead of answering with its own `index.html`.
 2. Point its `dirEnv` at the checkout in `.env`.
 3. In the remote, implement the contract above.
 4. Link to it from the CRM with `remoteAppUrl('<name>')` (full page load — it is a separate app).

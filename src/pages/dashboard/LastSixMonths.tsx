@@ -5,9 +5,9 @@ import type { MonthSales } from '../../data/dashboard'
 const ROWS: Array<{ label: string; cell: (m: MonthSales) => ReactNode; tone?: string }> = [
   { label: 'No of Opportunity Created', cell: (m) => m.created },
   { label: 'No of Opportunity Lost', cell: (m) => m.lost, tone: 'text-accent' },
-  { label: 'Lost Opportunity Value', cell: (m) => (m.lostValue.length ? formatMoneyTotals(m.lostValue) : '—'), tone: 'text-accent' },
+  { label: 'Lost Opportunity Value', cell: (m) => (m.lostValue.length ? formatMoneyTotals(m.lostValue) : ''), tone: 'text-accent' },
   { label: 'No of Opportunity Won', cell: (m) => m.won, tone: 'text-success' },
-  { label: 'Total Order Value', cell: (m) => (m.wonValue.length ? formatMoneyTotals(m.wonValue) : '—'), tone: 'text-success' },
+  { label: 'Total Order Value', cell: (m) => (m.wonValue.length ? formatMoneyTotals(m.wonValue) : ''), tone: 'text-success' },
 ]
 
 /** Metrics down the side, months across (oldest → current). */

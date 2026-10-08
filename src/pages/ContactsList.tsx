@@ -276,7 +276,7 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
                           Primary
                         </span>
                       ) : (
-                        <span className="text-xs text-line-strong">—</span>
+                        null
                       )}
                     </td>
                     {/* Status */}
@@ -291,7 +291,7 @@ export default function ContactsList({ onCreate, onView, onEdit }: Props) {
                     </td>
                     {/* Last Activity */}
                     <td>
-                      <span className="text-xs text-ink-muted">{formatDate(c.lastActivity)}</span>
+                      <span className="text-xs text-ink-muted">{formatDate(c.lastActivity, '')}</span>
                     </td>
                     {/* Actions */}
                     <td onClick={stopPropagation}>

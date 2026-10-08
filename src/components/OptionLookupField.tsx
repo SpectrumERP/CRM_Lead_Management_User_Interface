@@ -48,7 +48,7 @@ export function OptionLookupField({
   const items = useMemo(() => options.map(toOption), [options])
   const columns = useMemo(() => {
     const cols: TableSearchColumn<LookupOption>[] = []
-    if (items.some((o) => o.code)) cols.push({ header: 'Code', getValue: (o) => o.code || '—', width: '6.5rem' })
+    if (items.some((o) => o.code)) cols.push({ header: 'Code', getValue: (o) => o.code || '', width: '6.5rem' })
     cols.push({ header: 'Name', getValue: (o) => o.label, truncate: true })
     if (detailHeader && items.some((o) => o.detail)) cols.push({ header: detailHeader, getValue: (o) => o.detail ?? '', width: '5rem' })
     return cols

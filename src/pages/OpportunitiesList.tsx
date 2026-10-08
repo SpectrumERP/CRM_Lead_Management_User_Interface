@@ -481,7 +481,7 @@ function OpportunityRow({
       )}
       {show('closing') && (
         <td>
-          <span className="text-xs text-ink-soft">{formatLeadDate(item.closingDate)}</span>
+          <span className="text-xs text-ink-soft">{formatLeadDate(item.closingDate, '')}</span>
         </td>
       )}
       {show('owner') && (
@@ -493,32 +493,32 @@ function OpportunityRow({
       {show('lastActivityOn') && (
         <td>
           <span className="whitespace-nowrap text-xs text-ink-soft">
-            {item.lastActivityAt ? formatAuditStamp(item.lastActivityAt) : '—'}
+            {item.lastActivityAt ? formatAuditStamp(item.lastActivityAt, '') : ''}
           </span>
         </td>
       )}
       {/* Server opportunities: who / when from search-data. In-app ones only know their dates. */}
       {show('createdBy') && (
         <td>
-          <span className="whitespace-nowrap text-xs text-ink-soft">{item.audit?.createdBy || item.createdBy || '—'}</span>
+          <span className="whitespace-nowrap text-xs text-ink-soft">{item.audit?.createdBy || item.createdBy || ''}</span>
         </td>
       )}
       {show('createdOn') && (
         <td>
           <span className="whitespace-nowrap text-xs text-ink-faint">
-            {item.audit ? formatAuditStamp(item.audit.createdAt) : formatLeadDate(item.createdAt)}
+            {item.audit ? formatAuditStamp(item.audit.createdAt, '') : formatLeadDate(item.createdAt, '')}
           </span>
         </td>
       )}
       {show('modifiedBy') && (
         <td>
-          <span className="whitespace-nowrap text-xs text-ink-soft">{item.audit?.modifiedBy || '—'}</span>
+          <span className="whitespace-nowrap text-xs text-ink-soft">{item.audit?.modifiedBy || ''}</span>
         </td>
       )}
       {show('modifiedOn') && (
         <td>
           <span className="whitespace-nowrap text-xs text-ink-faint">
-            {item.audit ? formatAuditStamp(item.audit.modifiedAt) : item.lastActivity}
+            {item.audit ? formatAuditStamp(item.audit.modifiedAt, '') : item.lastActivity}
           </span>
         </td>
       )}

@@ -339,14 +339,14 @@ export default function MeetingsPage({ onViewLead, onToast }: MeetingsPageProps)
                         </button>
                         <p className="text-xs text-ink-faint">{meeting.leadId}</p>
                       </td>
-                      <td className="text-xs text-ink-soft">{meeting.contactPerson || '—'}</td>
+                      <td className="text-xs text-ink-soft">{meeting.contactPerson || ''}</td>
                       <td className="text-xs tabular-nums text-ink">
                         {formatMeetingDateTime(meeting.date, meeting.time, meeting.endTime)}
                       </td>
                       <td><ModeBadge mode={meeting.mode} /></td>
                       <td>
                         <p className="text-xs truncate max-w-36 text-ink-soft">
-                          {meeting.location || '—'}
+                          {meeting.location || ''}
                         </p>
                       </td>
                       <td>
@@ -369,7 +369,7 @@ export default function MeetingsPage({ onViewLead, onToast }: MeetingsPageProps)
                             )}
                           </div>
                         ) : (
-                          <span className="text-[11px] text-line">—</span>
+                          null
                         )}
                       </td>
                       <td><StatusBadge status={meeting.status} /></td>
@@ -379,7 +379,7 @@ export default function MeetingsPage({ onViewLead, onToast }: MeetingsPageProps)
                             {meeting.outcome}
                           </p>
                         ) : (
-                          <span className="text-[11px] text-line-strong">—</span>
+                          null
                         )}
                       </td>
                       <td>

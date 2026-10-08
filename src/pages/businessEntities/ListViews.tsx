@@ -56,7 +56,7 @@ function ActionButton({ label, d, tone, onClick, size = 'md' }: { label: string;
 }
 
 function TypeBadge({ name, small }: { name: string; small?: boolean }) {
-  if (!name) return <span className="text-ink-faint">—</span>
+  if (!name) return null
   const tone = name === 'Buy' ? 'border-primary/30 bg-primary-soft text-primary' : 'border-success-line bg-success-soft text-success'
   return (
     <span title={name} className={`inline-flex max-w-full truncate rounded-md border font-semibold leading-none ${small ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'} ${tone}`}>

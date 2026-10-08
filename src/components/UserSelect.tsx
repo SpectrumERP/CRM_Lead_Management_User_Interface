@@ -16,8 +16,8 @@ const SEARCH_DEBOUNCE_MS = 300
 
 const USER_COLUMNS: TableSearchColumn<UserPick>[] = [
   { header: 'Name', getValue: (u) => u.name, width: 'minmax(0,1.15fr)', truncate: true },
-  { header: 'Login ID', getValue: (u) => u.loginId || '—', width: 'minmax(0,0.9fr)', truncate: true },
-  { header: 'Email', getValue: (u) => u.email || '—', width: 'minmax(0,1.35fr)', truncate: true },
+  { header: 'Login ID', getValue: (u) => u.loginId || '', width: 'minmax(0,0.9fr)', truncate: true },
+  { header: 'Email', getValue: (u) => u.email || '', width: 'minmax(0,1.35fr)', truncate: true },
 ]
 
 /** The unfiltered list is shared by every picker on the page — one request, not one per field. */

@@ -115,8 +115,8 @@ export function leadTouchedToday(lead: Pick<Lead, 'audit' | 'createdAt'>, now: D
 }
 
 /** Date and time of an audit stamp (created / modified) — see utils/dateFormat. */
-export function formatAuditStamp(iso?: string | null): string {
-  return formatDateTime(iso)
+export function formatAuditStamp(iso?: string | null, empty?: string): string {
+  return formatDateTime(iso, empty)
 }
 
 /** Server numbers for a lead that lives in Spectrum (`/api/crm/leads`). */
@@ -877,8 +877,8 @@ export function formatLeadValue(lead: Lead): string {
 }
 
 /** A date (no time) — see utils/dateFormat. */
-export function formatLeadDate(iso: string): string {
-  return formatDate(iso)
+export function formatLeadDate(iso: string, empty?: string): string {
+  return formatDate(iso, empty)
 }
 
 export function normalizeOrgName(name: string): string {

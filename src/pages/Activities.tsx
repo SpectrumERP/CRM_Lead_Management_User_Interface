@@ -267,7 +267,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                         </button>
                         <p className="text-xs text-ink-faint">{activity.leadId}</p>
                       </td>
-                      <td className="text-xs text-ink-soft">{activity.contactPerson || '—'}</td>
+                      <td className="text-xs text-ink-soft">{activity.contactPerson || ''}</td>
                       <td>
                         <div className="flex items-center gap-1.5">
                           <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 h-6 w-6 bg-primary text-[8px] text-surface">
@@ -279,7 +279,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                       <td className="text-xs tabular-nums text-ink">
                         {formatDateTime(activity.scheduleDate, activity.scheduleTime)}
                       </td>
-                      <td className="text-xs text-ink-muted">{activity.reminder !== 'None' ? activity.reminder : '—'}</td>
+                      <td className="text-xs text-ink-muted">{activity.reminder !== 'None' ? activity.reminder : ''}</td>
                       <td><StatusBadge status={activity.status} /></td>
                       <td>
                         {activity.status === 'Completed' ? (
@@ -294,7 +294,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                             )}
                           </div>
                         ) : (
-                          <span className="text-xs text-line-strong">—</span>
+                          null
                         )}
                       </td>
                       <td>
@@ -306,7 +306,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                             <span className="truncate max-w-20">{activity.attachmentName}</span>
                           </div>
                         ) : (
-                          <span className="text-[11px] text-line">—</span>
+                          null
                         )}
                       </td>
                       <td>

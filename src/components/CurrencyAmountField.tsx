@@ -10,9 +10,9 @@ export interface ServerCurrency {
 }
 
 const COLUMNS: TableSearchColumn<ServerCurrency>[] = [
-  { header: 'Code', getValue: (c) => c.currencyCode || '—', width: '6.5rem' },
+  { header: 'Code', getValue: (c) => c.currencyCode || '', width: '6.5rem' },
   { header: 'Currency', getValue: (c) => c.currencyName, truncate: true },
-  { header: 'Symbol', getValue: (c) => c.symbol || '—', width: '4.5rem' },
+  { header: 'Symbol', getValue: (c) => c.symbol || '', width: '4.5rem' },
 ]
 
 export interface CurrencyAmountFieldProps {
