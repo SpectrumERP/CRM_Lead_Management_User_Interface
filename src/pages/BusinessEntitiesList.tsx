@@ -44,9 +44,8 @@ const PAGE_SIZE = 10;
 const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
 
 type SortState = { field: string; dir: SortDir };
-/** Task Management sorts the list by code by default. */
-const DEFAULT_SORT: SortState = { field: 'code', dir: 'asc' };
-const SORT_FIELD: Record<ListViewMode, string> = { list: 'code', album: 'code', 'contact-list': 'name', 'contact-album': 'name', attachment: 'code' };
+/** No column is sorted until one is clicked; rows keep the server's order. */
+const DEFAULT_SORT: SortState = { field: '', dir: 'asc' };
 
 function sortRows<T>(rows: T[], sort: SortState): T[] {
   if (!sort.field) return rows;
@@ -105,10 +104,10 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
     reloadKey: `${reloadKey}:${company.companyNo ?? ''}`,
   });
 
-  // A new view starts from the top, sorted by its default column.
+  // A new view starts from the top, unsorted.
   useEffect(() => {
     setLetter('');
-    setSort({ field: SORT_FIELD[view], dir: 'asc' });
+    setSort(DEFAULT_SORT);
     setPage(1);
     scrollRef.current?.scrollTo({ top: 0 });
   }, [view]);
