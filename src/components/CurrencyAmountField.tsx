@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { TableSearchSelect, TextInput, type TableSearchColumn } from '../ui'
 import { clampMoneyInput } from '../constants/fieldLimits'
 
@@ -47,6 +48,16 @@ export default function CurrencyAmountField({
   hideLabel,
 }: CurrencyAmountFieldProps) {
   const selected = currencies.find((c) => c.currencyNo === currencyNo) ?? null
+  // In code order (CM0001, CM0002, …), then by name for currencies without a code.
+  const sorted = useMemo(
+    () =>
+      [...currencies].sort(
+        (a, b) =>
+          (a.currencyCode ?? '').localeCompare(b.currencyCode ?? '', undefined, { numeric: true, sensitivity: 'base' }) ||
+          a.currencyName.localeCompare(b.currencyName, undefined, { sensitivity: 'base' }),
+      ),
+    [currencies],
+  )
 
   return (
     <div role="group" aria-label={label}>
@@ -59,13 +70,15 @@ export default function CurrencyAmountField({
         <div className="form-input-combo-picker">
           <TableSearchSelect
             aria-label="Currency"
-            options={currencies}
+            options={sorted}
             value={selected}
             onChange={(c) => { if (c) onCurrencyNoChange(c.currencyNo) }}
             getKey={(c) => String(c.currencyNo)}
             getLabel={(c) => c.currencyName}
             filterItem={(c, q) => `${c.currencyCode ?? ''} ${c.currencyName} ${c.symbol ?? ''}`.toLowerCase().includes(q.trim().toLowerCase())}
             columns={COLUMNS}
+            // Wider than the small currency box beside the amount, so Code, Currency and Symbol all show.
+            menuWidth={380}
             placeholder="Currency"
             searchPlaceholder="Search currency"
             emptyText="No currencies"

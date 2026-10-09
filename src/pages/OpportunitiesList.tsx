@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { GRID_SEARCH_INPUT } from '../components/InlineFilterRow';
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/crm'
 import { useApiQuery } from '../api/useApiQuery'
@@ -16,7 +17,7 @@ import { EmptyIcons, EmptyState, NoResults, SkeletonTableRows } from '../compone
 import { useCrmActions } from '../contexts/CrmStoreContext'
 import { formatAuditStamp, formatLeadDate, formatMoneyTotals } from '../data/leads'
 import { formatDealValue, dealStageClass, type Opportunity } from '../data/opportunities'
-import { Button, IconTooltip, MultiSelect, PageHeader, PageLoader } from '../ui'
+import { Button, IconTooltip, MultiSelect, PageHeader, PageLoader, SortChevrons, nextSort } from '../ui'
 import { PersonContactCard } from '../components/PersonContactCard'
 import type { ToastType } from '../components/Toast'
 import { PAGE_COPY } from '../constants/messages'
@@ -41,6 +42,8 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
   const [searchParams] = useSearchParams()
   const [stageFilter, setStageFilter] = useState<string[]>(() => searchParams.getAll('stage'))
   const [page, setPage] = useState(1)
+  // Column sort, as in the leads grid: asc → desc → back to the default order.
+  const [sort, setSort] = useState<{ field: OpportunityColumnKey | ''; dir: 'asc' | 'desc' }>({ field: '', dir: 'asc' })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   // Show / hide grid columns (Actions header menu); remembered in this browser.
   const columns = useColumnVisibility('crm.opportunities.hiddenColumns', OPPORTUNITY_COLUMNS)
@@ -56,10 +59,12 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
         q: search,
         stages: stageFilter,
         source: 'server',
+        sort: sort.field || undefined,
+        dir: sort.dir,
         page,
         pageSize: PAGE_SIZE,
       }),
-    [search, stageFilter, page],
+    [search, stageFilter, page, sort.field, sort.dir],
   )
   const loading = localLoading || serverSync.loading
   const paged = data?.items ?? []
@@ -75,6 +80,11 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
   const stageOptions = oppFill ? bySequence(oppFill.opportunityStages).map((item) => item.opportunityStageName) : []
   const hasFilters = Boolean(search || stageFilter.length)
   const allOnPageSelected = paged.length > 0 && paged.every((item) => selected.has(item.id))
+
+  function toggleSort(field: OpportunityColumnKey) {
+    setSort((current) => nextSort(current, field, { field: '', dir: 'asc' }))
+    setPage(1)
+  }
 
   function clearFilters() {
     setSearch('')
@@ -125,7 +135,7 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
         <div className="flex flex-wrap items-center gap-2 pb-4">
           <div className="relative min-w-48 max-w-72 flex-1">
             <svg
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
               width="13"
               height="13"
               fill="none"
@@ -146,7 +156,7 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
                 setPage(1)
                 clearSelection()
               }}
-              className="form-input w-full !pl-9 text-xs"
+              className={GRID_SEARCH_INPUT}
               aria-label="Search opportunities"
             />
           </div>
@@ -236,7 +246,17 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
                         </span>
                       </th>
                     ) : (
-                      <th key={column.key} className={column.key === 'code' ? 'sticky-col-id' : undefined}>{column.label}</th>
+                      <th
+                        key={column.key}
+                        onClick={() => toggleSort(column.key)}
+                        aria-sort={sort.field === column.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                        className={`cursor-pointer select-none ${column.key === 'code' ? 'sticky-col-id' : ''}`.trim()}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          {column.label}
+                          <SortChevrons active={sort.field === column.key} dir={sort.dir} />
+                        </span>
+                      </th>
                     ),
                   )}
                 </tr>

@@ -257,6 +257,8 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
   return (
     <>
       <DashboardTable
+        // The count always shows; the page buttons once there are more than 10 opportunities.
+        showPager
         label="Expected closure this month"
         rows={rows}
         columns={columns}

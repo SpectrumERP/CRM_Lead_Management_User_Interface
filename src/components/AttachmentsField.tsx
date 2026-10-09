@@ -348,7 +348,7 @@ export default function AttachmentsField({
                   {isRenaming ? (
                     <div className="flex items-center gap-1.5">
                       <input
-                        className="form-input !py-1 text-xs"
+                        className="form-input !h-8 !min-h-8 !py-0 text-xs"
                         value={renaming.base}
                         maxLength={200}
                         autoFocus
@@ -366,14 +366,15 @@ export default function AttachmentsField({
                       {a.name}
                     </button>
                   )}
-                  <p className="text-xs text-ink-faint">{formatUploadSize(a.size) || 'Uploaded'}</p>
+                  {/* While renaming the row is one line (icon, name, extension, Save, Cancel), so no size line. */}
+                  {isRenaming ? null : <p className="text-xs text-ink-faint">{formatUploadSize(a.size) || 'Uploaded'}</p>}
                 </div>
                 {rowBusy ? (
                   <Spinner label="Working" />
                 ) : isRenaming ? (
-                  <div className="flex shrink-0 gap-1.5">
-                    <Button variant="solid" className="!min-h-7 !px-2.5 !py-1 text-xs" onClick={() => void saveRename()}>Save</Button>
-                    <Button variant="secondary" className="!min-h-7 !px-2.5 !py-1 text-xs" onClick={() => setRenaming(null)}>Cancel</Button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button variant="solid" className="!h-8 !min-h-8 !px-3 !py-0 text-xs" onClick={() => void saveRename()}>Save</Button>
+                    <Button variant="secondary" className="!h-8 !min-h-8 !px-3 !py-0 text-xs" onClick={() => setRenaming(null)}>Cancel</Button>
                   </div>
                 ) : (
                   <div className="flex shrink-0 items-center gap-1">

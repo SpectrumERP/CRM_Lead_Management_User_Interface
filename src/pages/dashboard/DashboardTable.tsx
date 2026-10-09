@@ -1,8 +1,9 @@
+import { GridSearch } from '../../components/InlineFilterRow'
 import { useMemo, useState, type ReactNode } from 'react'
 import Pagination from '../../components/Pagination'
 import { PageLoader, SortChevrons } from '../../ui'
 import { usePageChangeLoader } from '../../components/usePageChangeLoader'
-import { DASHBOARD_PAGE_SIZE, DASHBOARD_PAGE_SIZES } from '../../data/dashboard'
+import { DASHBOARD_PAGE_SIZE } from '../../data/dashboard'
 import { matchesAny } from '../../utils/text'
 
 export interface DashboardColumn<T> {
@@ -29,6 +30,8 @@ interface DashboardTableProps<T> {
   onRowClick?: (row: T) => void
   rowLabel?: (row: T) => string
   empty: ReactNode
+  /** Always show the count under the table ("Showing 1–8 of 8"); the page buttons appear once there are more than 10 rows. */
+  showPager?: boolean
 }
 
 function compare(a: string | number | null | undefined, b: string | number | null | undefined) {
@@ -50,12 +53,14 @@ export function DashboardTable<T>({
   onRowClick,
   rowLabel,
   empty,
+  showPager = false,
 }: DashboardTableProps<T>) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState(defaultSort)
   const [page, setPage] = useState(1)
   const pager = usePageChangeLoader()
-  const [pageSize, setPageSize] = useState(DASHBOARD_PAGE_SIZE)
+  // Fixed page size, as on the list pages.
+  const pageSize = DASHBOARD_PAGE_SIZE
 
   const visible = useMemo(() => {
     let list = [...rows]
@@ -101,16 +106,15 @@ export function DashboardTable<T>({
   return (
     <div className="space-y-3">
       {searchable ? (
-        <input
-          type="search"
+        <GridSearch
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
+          onChange={(value) => {
+            setSearch(value)
             setPage(1)
           }}
           placeholder={searchPlaceholder}
           aria-label={`Search ${label}`}
-          className="h-8 w-full max-w-72 rounded-lg border border-line bg-surface px-3 text-xs text-ink placeholder:text-ink-faint focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-primary/30"
+          className="w-full max-w-72"
         />
       ) : null}
       <div className="table-scroll">
@@ -185,33 +189,18 @@ export function DashboardTable<T>({
         </table>
       </div>
       {pager.busy && <PageLoader label="Loading" />}
-      {visible.length > DASHBOARD_PAGE_SIZES[0] ? (
-        <Pagination
-          page={current}
-          pageSize={pageSize}
-          total={visible.length}
-          disabled={pager.busy}
-          onPageChange={(next) => pager.run(() => setPage(next))}
-          end={
-            <label className="inline-flex items-center gap-1.5">
-              Rows per page
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value))
-                  setPage(1)
-                }}
-                className="h-7 rounded-md border border-line bg-surface px-1.5 text-xs text-ink focus-visible:outline-2 focus-visible:outline-primary"
-              >
-                {DASHBOARD_PAGE_SIZES.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-          }
-        />
+      {/* The list pages' pager (business entities, leads): "Showing 1–10 of 14" left, page buttons right,
+          on a line of its own under the table. */}
+      {(showPager && visible.length > 0) || visible.length > pageSize ? (
+        <div className="border-t border-line pt-3">
+          <Pagination
+            page={current}
+            pageSize={pageSize}
+            total={visible.length}
+            disabled={pager.busy}
+            onPageChange={(next) => pager.run(() => setPage(next))}
+          />
+        </div>
       ) : null}
     </div>
   )

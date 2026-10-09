@@ -1,4 +1,5 @@
 import { nextSort } from '../ui';
+import { GRID_SEARCH_INPUT } from '../components/InlineFilterRow';
 import { useState, useMemo, useDeferredValue, useEffect, memo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../components/Pagination';
@@ -35,26 +36,52 @@ type LeadColumnKey =
   | 'code' | 'leadName' | 'entity' | 'primaryContact' | 'secondaryContact' | 'products' | 'value'
   | 'stage' | 'status' | 'owner' | 'source' | 'lastActivityOn' | 'createdBy' | 'createdOn' | 'modifiedBy' | 'modifiedOn' | 'actions';
 
-/** Grid columns in order; `sort` = sortable field. Code and Actions cannot be hidden. */
-const LEAD_COLUMNS: (GridColumn<LeadColumnKey> & { sort?: keyof Lead })[] = [
-  { key: 'code', label: 'Lead Code', sort: 'id', locked: true },
-  { key: 'leadName', label: 'Lead Name', sort: 'leadName' },
-  { key: 'entity', label: 'Business Entity Name', sort: 'companyName' },
-  { key: 'primaryContact', label: 'Primary Contact', sort: 'contactPerson' },
+/** Grid columns in order. Code and Actions cannot be hidden. */
+const LEAD_COLUMNS: GridColumn<LeadColumnKey>[] = [
+  { key: 'code', label: 'Lead Code', locked: true },
+  { key: 'leadName', label: 'Lead Name' },
+  { key: 'entity', label: 'Business Entity Name' },
+  { key: 'primaryContact', label: 'Primary Contact' },
   { key: 'secondaryContact', label: 'Secondary Contact' },
-  { key: 'products', label: 'Products Required', sort: 'productsRequired' },
-  { key: 'value', label: 'Lead Value', sort: 'opportunityValue' },
-  { key: 'stage', label: 'Lead Stage', sort: 'leadStage' },
-  { key: 'status', label: 'Lead Status', sort: 'leadStatus' },
-  { key: 'owner', label: 'Lead Owner', sort: 'assignedSalesperson' },
-  { key: 'source', label: 'Lead Source', sort: 'leadSource' },
-  { key: 'lastActivityOn', label: 'Last Activity On', sort: 'lastActivityAt' },
+  { key: 'products', label: 'Products Required' },
+  { key: 'value', label: 'Lead Value' },
+  { key: 'stage', label: 'Lead Stage' },
+  { key: 'status', label: 'Lead Status' },
+  { key: 'owner', label: 'Lead Owner' },
+  { key: 'source', label: 'Lead Source' },
+  { key: 'lastActivityOn', label: 'Last Activity On' },
   { key: 'createdBy', label: 'Created By' },
   { key: 'createdOn', label: 'Created On' },
   { key: 'modifiedBy', label: 'Modified By' },
   { key: 'modifiedOn', label: 'Modified On' },
   { key: 'actions', label: 'Actions', locked: true },
 ];
+
+type SortableLeadColumn = Exclude<LeadColumnKey, 'actions'>;
+
+/**
+ * What each column sorts by: the value its cell shows. Every column but Actions sorts. Missing values
+ * sort as empty; ISO date-times sort correctly as text.
+ */
+const LEAD_SORT: Record<SortableLeadColumn, (lead: Lead) => string | number> = {
+  code: (l) => l.id,
+  leadName: (l) => displayLeadName(l),
+  entity: (l) => l.companyName,
+  primaryContact: (l) => l.contactPerson,
+  secondaryContact: (l) => secondaryLeadContacts(l).map((item) => item.name).join(', '),
+  products: (l) => l.productsRequired,
+  value: (l) => l.opportunityValue,
+  stage: (l) => l.leadStage,
+  status: (l) => l.leadStatus,
+  owner: (l) => l.assignedSalesperson,
+  source: (l) => l.leadSource,
+  lastActivityOn: (l) => l.lastActivityAt ?? '',
+  createdBy: (l) => l.audit?.createdBy ?? '',
+  createdOn: (l) => l.audit?.createdAt ?? l.createdAt ?? '',
+  modifiedBy: (l) => l.audit?.modifiedBy ?? '',
+  modifiedOn: (l) => l.audit?.modifiedAt ?? '',
+};
+
 const PAGE_SIZE = 10;
 
 interface LeadsListProps {
@@ -146,7 +173,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
   const [stageFilter, setStageFilter] = useState(() => searchParams.get('stage') ?? '');
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') ?? '');
   const [sourceFilter, setSourceFilter] = useState('');
-  const [sortField, setSortField] = useState<keyof Lead | ''>('');
+  const [sortField, setSortField] = useState<SortableLeadColumn | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Show / hide grid columns (Actions header menu); remembered in this browser.
@@ -192,10 +219,13 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
     if (sourceFilter) data = data.filter((l) => l.leadSource === sourceFilter);
     if (sortField) {
       data.sort((a, b) => {
-        // Missing values (e.g. no last activity) sort as empty; ISO dates sort correctly as text.
-        const av = sortField === 'leadName' ? displayLeadName(a) : ((a[sortField as keyof Lead] ?? '') as string | number);
-        const bv = sortField === 'leadName' ? displayLeadName(b) : ((b[sortField as keyof Lead] ?? '') as string | number);
-        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+        const value = LEAD_SORT[sortField];
+        const av = value(a);
+        const bv = value(b);
+        const cmp =
+          typeof av === 'number' && typeof bv === 'number'
+            ? av - bv
+            : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
         return sortDir === 'asc' ? cmp : -cmp;
       });
     }
@@ -244,7 +274,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
     setDateFilter('all');
   }
 
-  function toggleSort(field: keyof Lead) {
+  function toggleSort(field: SortableLeadColumn) {
     const next = nextSort({ field: sortField, dir: sortDir }, field, { field: '', dir: 'asc' });
     setSortField(next.field);
     setSortDir(next.dir);
@@ -265,7 +295,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
     });
   }
 
-  function SortIcon({ field }: { field: keyof Lead }) {
+  function SortIcon({ field }: { field: SortableLeadColumn }) {
     return <SortChevrons active={sortField === field} dir={sortDir} />;
   }
 
@@ -317,7 +347,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
               placeholder="Search leads…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface-hover py-1.5 pl-8 pr-3 text-xs text-ink outline-none transition-colors focus:border-primary focus:bg-surface focus-visible:shadow-[var(--shadow-focus)]"
+              className={GRID_SEARCH_INPUT}
             />
           </div>
 
@@ -420,12 +450,13 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                     />
                   </th>
                   {columns.visibleColumns.map((column) => {
-                    const field = column.sort
+                    const field = column.key === 'actions' ? undefined : column.key
                     const sticky = column.key === 'actions' ? 'sticky-col-end' : column.key === 'code' ? 'sticky-col-id' : ''
                     return (
                       <th
                         key={column.key}
                         onClick={field ? () => toggleSort(field) : undefined}
+                        aria-sort={field && sortField === field ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                         className={`${field ? 'cursor-pointer select-none' : ''} ${sticky}`.trim()}
                       >
                         {column.key === 'actions' ? (

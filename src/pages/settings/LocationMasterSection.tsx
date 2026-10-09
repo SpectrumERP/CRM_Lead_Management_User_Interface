@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { toApiError } from '../../api/errors';
 import {
   clearBusinessEntityFillValuesCache,
@@ -13,16 +13,16 @@ import {
   type LocationMasterRow,
 } from '../../api/locationMasters';
 import ConfirmDialog from '../../components/ConfirmDialog';
-import { FilterSearch } from '../../components/InlineFilterRow';
 import Pagination from '../../components/Pagination';
 import type { ToastType } from '../../components/Toast';
 import { saveConfirm, useConfirm } from '../../contexts/ConfirmContext';
 import { Checkbox, IconTooltip, SearchSelectField, Spinner, TextField } from '../../ui';
 import { formatDate } from '../../utils/dateFormat';
-import { C, EmptyRows, MasterTable, Modal, SectionHeader, Td, Th } from './atoms';
+import { C, EmptyRows, GridSearch, MasterTable, Modal, SectionHeader, Td, Th, useColumnSort } from './atoms';
 import type { LocationMasterState } from './useLocationMaster';
 
-const PAGE_SIZE = 25;
+/** Rows per page, as in the leads and opportunities grids. */
+const PAGE_SIZE = 10;
 
 interface Props {
   api: LocationMasterApi;
@@ -32,6 +32,8 @@ interface Props {
   namePlaceholder: string;
   rights: { canAdd: boolean; canEdit: boolean; canDelete: boolean };
   onToast?: (type: ToastType, title: string, message?: string) => void;
+  /** Page controls in the header, before Add New (the company picker). */
+  toolbar?: ReactNode;
 }
 
 interface FormState {
@@ -64,13 +66,14 @@ const EDIT_ICON = 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-
 const DELETE_ICON = 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16';
 
 /** State, City and Port masters: list + add / edit drawer with the country → state → city cascade. */
-export default function LocationMasterSection({ api, state, title, subtitle, namePlaceholder, rights, onToast }: Props) {
+export default function LocationMasterSection({ api, state, title, subtitle, namePlaceholder, rights, onToast, toolbar }: Props) {
   const confirm = useConfirm();
   const kind = api.kind;
   const noun = api.label;
   const { rows, loading, error, reload, companyNo } = state;
 
   const [search, setSearch] = useState('');
+  const pageSize = PAGE_SIZE;
   const [page, setPage] = useState(1);
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [editing, setEditing] = useState<LocationMasterRow | null>(null);
@@ -96,17 +99,35 @@ export default function LocationMasterSection({ api, state, title, subtitle, nam
 
   const countryName = useMemo(() => new Map(countries.map((c) => [c.countryNo, c.countryName])), [countries]);
 
+  const countryOfRow = (r: LocationMasterRow) => r.countryName || countryName.get(r.countryNo ?? 0) || '';
+  // A column sort applies to the whole list, before paging; a new sort starts again at page 1.
+  const columnSort = useColumnSort<LocationMasterRow>(
+    {
+      code: (r) => r.code,
+      name: (r) => r.name,
+      alias: (r) => r.alias,
+      gst: (r) => r.gstStateCode,
+      city: (r) => r.cityName,
+      state: (r) => r.stateName,
+      country: countryOfRow,
+      // ISO date-times sort correctly as text.
+      created: (r) => r.createdDate,
+    },
+    () => setPage(1),
+  );
+
   const query = search.trim().toLowerCase();
   const filtered = useMemo(() => {
     const list = query
       ? rows.filter((r) => [r.name, r.code, r.alias, r.countryName || countryName.get(r.countryNo ?? 0), r.stateName, r.cityName]
           .some((v) => v?.toLowerCase().includes(query)))
       : rows;
-    return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows, query, countryName]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    return columnSort.apply([...list].sort((a, b) => a.name.localeCompare(b.name)));
+    // columnSort.apply is new each render but only depends on columnSort.sort.
+  }, [rows, query, countryName, columnSort.sort]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   useEffect(() => { setPage(1); }, [query]);
 
@@ -230,29 +251,32 @@ export default function LocationMasterSection({ api, state, title, subtitle, nam
   const countryOf = (r: LocationMasterRow) => r.countryName || countryName.get(r.countryNo ?? 0) || '';
 
   return (
-    <div>
-      <SectionHeader title={title} subtitle={subtitle} count={rows.length} onAdd={rights.canAdd ? openAdd : undefined} />
-      <div className="mb-4 w-full min-w-0">
-        <FilterSearch value={search} onChange={setSearch} placeholder={`Search ${title.toLowerCase()}…`} />
-      </div>
+    // Leads page layout: header with the search on top, the grid fills the rest and scrolls, the pager at the bottom.
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SectionHeader title={title} subtitle={subtitle} count={rows.length} toolbar={toolbar} onAdd={rights.canAdd ? openAdd : undefined}>
+        <GridSearch value={search} onChange={setSearch} placeholder={`Search ${title.toLowerCase()}…`} />
+      </SectionHeader>
 
       {error ? (
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs" role="alert"
+        <div className="page-gutter pt-3">
+        <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs" role="alert"
           style={{ background: '#fdf0f0', border: '1px solid #f5c2c2', color: C.red }}>
           <span>Could not load {title.toLowerCase()}: {error.message}</span>
           <button type="button" onClick={() => void reload()} className="font-bold underline">Retry</button>
         </div>
+        </div>
       ) : null}
 
+      <div className="page-gutter flex min-h-0 flex-1 flex-col">
       <MasterTable>
         <thead><tr>
-          <Th narrow>Code</Th><Th>Name</Th>
-          {kind === 'port' ? <Th narrow>Alias</Th> : null}
-          {kind === 'state' ? <Th narrow>GST Code</Th> : null}
-          {kind === 'port' ? <Th>City</Th> : null}
-          {kind !== 'state' ? <Th>State</Th> : null}
-          <Th>Country</Th>
-          <Th>Created</Th><Th right narrow>Actions</Th>
+          <Th narrow {...columnSort.th('code')}>Code</Th><Th {...columnSort.th('name')}>Name</Th>
+          {kind === 'port' ? <Th narrow {...columnSort.th('alias')}>Alias</Th> : null}
+          {kind === 'state' ? <Th narrow {...columnSort.th('gst')}>GST Code</Th> : null}
+          {kind === 'port' ? <Th {...columnSort.th('city')}>City</Th> : null}
+          {kind !== 'state' ? <Th {...columnSort.th('state')}>State</Th> : null}
+          <Th {...columnSort.th('country')}>Country</Th>
+          <Th {...columnSort.th('created')}>Created</Th><Th right narrow>Actions</Th>
         </tr></thead>
         <tbody>
           {loading && rows.length === 0 ? (
@@ -287,11 +311,12 @@ export default function LocationMasterSection({ api, state, title, subtitle, nam
           ))}
         </tbody>
       </MasterTable>
-      {filtered.length > PAGE_SIZE ? (
-        <div className="mt-3">
-          <Pagination page={safePage} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
-        </div>
-      ) : null}
+      </div>
+
+      {/* Footer bar with the pager, as on the leads page. */}
+      <div className="page-gutter w-full shrink-0 border-t border-line bg-surface py-2.5 text-ink-muted">
+        <Pagination page={safePage} pageSize={pageSize} total={filtered.length} onPageChange={setPage} disabled={loading} />
+      </div>
 
       {(isNew || editing) && (
         <Modal title={isNew ? `Add ${noun}` : `Edit ${noun}`} onClose={closeModal} onSave={() => void save()} saving={saving || loadingDetail}>

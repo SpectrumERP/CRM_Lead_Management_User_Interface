@@ -14,6 +14,7 @@ import { getErrorTitle, PAGE_COPY } from '../constants/messages';
 import { IconTooltip, CountBadge } from '../ui';
 import { useFormRights } from '@/contexts/FormRightsContext';
 import { FORM_NO } from '@/api/formRights';
+import { watchTableHeadScrollbars } from '@/utils/tableHeadScrollbar';
 
 /** Running inside the Spectrum ERP shell (its /crm/ route). */
 const IN_SPECTRUM = Boolean(import.meta.env.VITE_CRM_ROUTE_BASE)
@@ -398,6 +399,8 @@ function CrumbHere({ children, className = '' }: { children: ReactNode; classNam
 
 
 export default function Layout({ children, detailName }: LayoutProps) {
+  // Grid scrollbars run beside the rows, not the header row (utils/tableHeadScrollbar.ts).
+  useEffect(() => watchTableHeadScrollbars(), []);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { user, logout } = useAuth();

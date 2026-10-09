@@ -319,6 +319,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
               />
               <OptionLookupField
                 label="Opportunity Status"
+                sortByCode
                 required
                 error={errors.status}
                 placeholder="Select status"

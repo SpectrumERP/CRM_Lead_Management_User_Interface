@@ -2,7 +2,9 @@
  * Which files may be attached (same rules as the Task Management app, so both write the same store).
  * Extensions are always checked; the MIME type only when the browser reports one.
  */
-export const MAX_UPLOAD_FILE_BYTES = 10 * 1024 * 1024
+/** Same limit as Task Management (one attachment API for both apps). */
+export const MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024
+const MAX_UPLOAD_MB = MAX_UPLOAD_FILE_BYTES / (1024 * 1024)
 
 export const ALLOWED_UPLOAD_EXTENSIONS = [
   'png', 'jpg', 'jpeg', 'webp', 'avif', 'tiff', 'tif', 'pdf', 'doc', 'docx', 'xlsx', 'csv', 'txt',
@@ -30,7 +32,7 @@ const EXTRA_MIME_TYPES = ['application/vnd.ms-excel', 'application/csv', 'text/x
 const ALLOWED_MIME_TYPES = new Set([...Object.values(MIME_BY_EXTENSION), ...EXTRA_MIME_TYPES])
 
 export const UPLOAD_TYPES_LABEL = 'PNG, JPG, JPEG, WebP, AVIF, TIFF, PDF, DOC, DOCX, XLSX, CSV, TXT'
-export const UPLOAD_HELP_TEXT = `${UPLOAD_TYPES_LABEL} · Max 10MB each`
+export const UPLOAD_HELP_TEXT = `${UPLOAD_TYPES_LABEL} · Max ${MAX_UPLOAD_MB}MB each`
 
 /** `accept` attribute for the file input. */
 export const UPLOAD_ACCEPT_ATTR = [
@@ -60,7 +62,7 @@ export type UploadValidation = { ok: true } | { ok: false; reason: string }
 
 export function validateUploadFile(file: File | null | undefined): UploadValidation {
   if (!file || !file.name) return { ok: false, reason: 'Invalid file.' }
-  if (file.size > MAX_UPLOAD_FILE_BYTES) return { ok: false, reason: 'File size exceeds the 10MB limit.' }
+  if (file.size > MAX_UPLOAD_FILE_BYTES) return { ok: false, reason: `File size exceeds the ${MAX_UPLOAD_MB}MB limit.` }
   const ext = getFileExtension(file.name)
   if (!(ALLOWED_UPLOAD_EXTENSIONS as readonly string[]).includes(ext)) {
     return { ok: false, reason: `Unsupported file type. Allowed: ${UPLOAD_TYPES_LABEL}.` }

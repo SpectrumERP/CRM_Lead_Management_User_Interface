@@ -60,7 +60,8 @@ function useUserSearch(enabled: boolean) {
       loadUsers(query.trim())
         .then((users) => {
           if (id !== requestId.current) return
-          setOptions(users.map(toPick))
+          // Names A–Z (as the server returns them in no particular order).
+          setOptions(users.map(toPick).sort((x, y) => x.name.localeCompare(y.name, undefined, { sensitivity: 'base', numeric: true })))
           setError(null)
         })
         .catch((err: unknown) => {

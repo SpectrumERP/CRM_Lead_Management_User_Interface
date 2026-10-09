@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ToastType } from '../components/Toast';
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
-import { SelectField, CountBadge, Spinner } from '../ui';
+import { Select, CountBadge, IconTooltip, PageHeader, Spinner } from '../ui';
 import { masterApis } from '../api/masters';
 import { FORM_NO, type FormRights } from '../api/formRights';
 import { locationMasterApis } from '../api/locationMasters';
@@ -63,7 +63,21 @@ function sectionRights(rights: FormRights) {
   return { canAdd: rights.isSave, canEdit: rights.isUpdate, canDelete: rights.isDelete };
 }
 
+/** Settings menu collapsed to icons (wide screens). */
+const NAV_COLLAPSED_KEY = 'crm.settings.navCollapsed';
+
 export default function Settings({ onToast }: Props) {
+  // Collapsed to an icon rail on wide screens (as the main left panel); remembered in this browser.
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try { return localStorage.getItem(NAV_COLLAPSED_KEY) === '1'; } catch { return false; }
+  });
+  function toggleNav() {
+    setNavCollapsed((current) => {
+      const next = !current;
+      try { localStorage.setItem(NAV_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* storage blocked: this visit only */ }
+      return next;
+    });
+  }
   const [activeTab, setActiveTab] = useState<SettingTab>('sources');
   const company = useSpectrumCompany();
   // Masters are kept per head office, like every other Spectrum call.
@@ -116,139 +130,182 @@ export default function Settings({ onToast }: Props) {
     ...(portsApi.loaded ? [] : (['ports'] as const)),
   ];
 
+  // In each section's header, before Add New (only when the user has several companies).
+  const companyControl = apiCompany && company.companies.length > 1 ? (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <label htmlFor="settings-company" className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-ink-muted">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="4" y="3" width="16" height="18" rx="2" />
+          <path d="M9 21v-4h6v4M8 7h.01M12 7h.01M16 7h.01M8 11h.01M12 11h.01M16 11h.01" />
+        </svg>
+        Company
+      </label>
+      <Select
+        id="settings-company"
+        preserveOrder
+        size="compact"
+        rootClassName="w-56 max-w-full"
+        options={company.companies.map((c) => ({ value: String(c.CompanyNo), label: c.CompanyName }))}
+        value={String(company.companyNo)}
+        onValueChange={(v) => company.setCompanyNo(Number(v))}
+      />
+    </div>
+  ) : null;
+
   return (
-    <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col lg:flex-row" style={{ background: C.bg }}>
+    // bg-canvas: the app's page background, dark in the dark theme (a fixed colour stayed light).
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas lg:flex-row">
       {/* Left settings nav */}
-      <aside className="w-full lg:w-56 flex-shrink-0 flex flex-col"
-        style={{ background: '#fff', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
-        <div className="px-4 py-4 lg:py-5" style={{ borderBottom: `1px solid ${C.border}` }}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#f0f4fb' }}>
+      {/* Same line as the app's other panels (border-line); only a right edge on wide screens, and on
+          phones (menu above the page) a line under it. */}
+      <aside className={`w-full ${navCollapsed ? 'lg:w-14' : 'lg:w-56'} lg:min-h-0 flex-shrink-0 flex flex-col border-b border-line bg-surface transition-[width] duration-200 lg:border-b-0 lg:border-r`}>
+        <div className={`border-b border-line py-4 lg:py-5 ${navCollapsed ? 'px-4 lg:px-2' : 'px-4'}`}>
+          <div className={`flex items-center gap-2.5 ${navCollapsed ? 'lg:justify-center' : ''}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${navCollapsed ? 'lg:hidden' : ''}`} style={{ background: '#f0f4fb' }}>
               <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={C.blue} strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <div>
+            <div className={`min-w-0 flex-1 ${navCollapsed ? 'lg:hidden' : ''}`}>
               <p className="text-sm font-bold" style={{ fontFamily: 'DM Sans, sans-serif', color: C.text }}>Settings</p>
               <p className="text-xs" style={{ color: C.muted }}>Master Data</p>
             </div>
+            {/* Collapse / expand (wide screens; on phones the menu is a row of tabs). */}
+            <IconTooltip label={navCollapsed ? 'Expand settings menu' : 'Collapse settings menu'} side={navCollapsed ? 'right' : 'top'}>
+              <button
+                type="button"
+                onClick={toggleNav}
+                aria-label={navCollapsed ? 'Expand settings menu' : 'Collapse settings menu'}
+                aria-expanded={!navCollapsed}
+                className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line text-ink-soft transition-colors hover:border-primary hover:bg-primary-soft hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:inline-flex"
+              >
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                  className={`transition-transform ${navCollapsed ? 'rotate-180' : ''}`}>
+                  <path d="m11 17-5-5 5-5M18 17l-5-5 5-5" />
+                </svg>
+              </button>
+            </IconTooltip>
           </div>
         </div>
-        <nav className="flex lg:flex-col flex-1 px-2 py-2 lg:py-3 gap-1 lg:space-y-0.5 overflow-x-auto">
+        {/* Scrolls without a visible scrollbar, as the main left panel (.sidebar-scroll). */}
+        <nav className={`sidebar-scroll flex lg:flex-col flex-1 py-2 lg:py-3 gap-1 lg:space-y-0.5 overflow-x-auto ${navCollapsed ? 'px-2 lg:px-1.5' : 'px-2'}`}>
           {TAB_GROUPS.map((group, groupIndex) => (
             <div key={group.id} className="contents">
-              <p className={`hidden lg:block text-xs font-bold px-3 mb-2.5 tracking-widest ${groupIndex > 0 ? 'mt-4' : ''}`}
-                style={{ color: '#94a3b8', fontSize: 9.5 }}>{group.label}</p>
-              {visibleTabs.filter((tab) => tab.group === group.id).map((tab) => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-left transition-all whitespace-nowrap flex-shrink-0 lg:w-full"
-                  style={{
-                    background: activeTab === tab.id ? C.blueBg : 'transparent',
-                    color: activeTab === tab.id ? C.blue : C.sub,
-                    border: activeTab === tab.id ? `1px solid ${C.blueBorder}` : '1px solid transparent',
-                  }}>
-                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{tab.icon}</svg>
-                  <span className="flex-1">{tab.label}</span>
-                  {noCount.includes(tab.id) ? null : <CountBadge value={counts[tab.id]} tone={activeTab === tab.id ? 'primary' : 'muted'} />}
-                </button>
-              ))}
+              {navCollapsed ? (
+                // Collapsed: a short line between groups instead of their names.
+                groupIndex > 0 ? <span aria-hidden className="mx-auto my-2 hidden h-px w-6 bg-line lg:block" /> : null
+              ) : (
+                <p className={`hidden lg:block text-xs font-bold px-3 mb-2.5 tracking-widest ${groupIndex > 0 ? 'mt-4' : ''}`}
+                  style={{ color: '#94a3b8', fontSize: 9.5 }}>{group.label}</p>
+              )}
+              {visibleTabs.filter((tab) => tab.group === group.id).map((tab) => {
+                const button = (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                    aria-label={navCollapsed ? tab.label : undefined}
+                    aria-current={activeTab === tab.id ? 'page' : undefined}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-left transition-all whitespace-nowrap flex-shrink-0 lg:w-full ${navCollapsed ? 'lg:justify-center lg:px-0' : ''}`}
+                    style={{
+                      background: activeTab === tab.id ? C.blueBg : 'transparent',
+                      color: activeTab === tab.id ? C.blue : C.sub,
+                      border: activeTab === tab.id ? `1px solid ${C.blueBorder}` : '1px solid transparent',
+                    }}>
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="shrink-0">{tab.icon}</svg>
+                    <span className={`flex-1 ${navCollapsed ? 'lg:hidden' : ''}`}>{tab.label}</span>
+                    {noCount.includes(tab.id) ? null : (
+                      <span className={navCollapsed ? 'lg:hidden' : ''}>
+                        <CountBadge value={counts[tab.id]} tone={activeTab === tab.id ? 'primary' : 'muted'} />
+                      </span>
+                    )}
+                  </button>
+                );
+                // Collapsed: the name in a tip beside the icon.
+                return navCollapsed ? (
+                  <IconTooltip key={tab.id} label={tab.label} side="right" className="flex-shrink-0 lg:w-full">
+                    {button}
+                  </IconTooltip>
+                ) : button;
+              })}
             </div>
           ))}
         </nav>
-        <div className="hidden lg:block px-4 py-3" style={{ borderTop: `1px solid ${C.border}` }}>
-          <p className="text-xs" style={{ color: '#c8d2e2' }}>Phase 1 · Lead Management</p>
-        </div>
       </aside>
 
       {/* Main content */}
-      <div className="page-gutter min-h-0 min-w-0 flex-1 overflow-y-auto py-4">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold" style={{ fontFamily: 'DM Sans, sans-serif', color: C.text }}>
-              Master Data Configuration
-            </h1>
-            <p className="text-sm mt-0.5" style={{ color: C.muted }}>
-              Manage the lookup values used across all lead management screens.
-            </p>
-          </div>
-          {apiCompany && company.companies.length > 1 ? (
-            <div className="w-64 max-w-full">
-              <SelectField
-                label="Company"
-                preserveOrder
-                options={company.companies.map((c) => ({ value: String(c.CompanyNo), label: c.CompanyName }))}
-                value={String(company.companyNo)}
-                onValueChange={(v) => company.setCompanyNo(Number(v))}
-              />
-            </div>
-          ) : null}
-        </div>
-
+      {/* Page header on top; a master grid fills the rest (it scrolls inside, pager at the bottom). */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {!company.ready ? (
           <div className="flex justify-center py-16"><Spinner label="Loading master data" /></div>
         ) : !apiCompany ? (
-          <SpectrumRequiredNotice what="Master data" />
+          <div className="page-gutter"><SpectrumRequiredNotice what="Master data" /></div>
         ) : (
           <>
             {activeTab === 'sources' && (
-              <ApiMasterSection api={masterApis.leadSources} state={sourcesApi} title="Lead Sources"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.leadSources} state={sourcesApi} title="Lead Sources"
                 subtitle="Where your leads originate" noun="Lead Source" namePlaceholder="e.g. LinkedIn" onToast={onToast} />
             )}
             {activeTab === 'stages' && (
-              <ApiMasterSection api={masterApis.leadStages} state={stagesApi} title="Lead Stages"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.leadStages} state={stagesApi} title="Lead Stages"
                 subtitle="Sales pipeline progression steps" noun="Lead Stage" namePlaceholder="e.g. Proposal Sent" onToast={onToast} />
             )}
             {activeTab === 'statuses' && (
-              <ApiMasterSection api={masterApis.leadStatuses} state={statusesApi} title="Lead Statuses"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.leadStatuses} state={statusesApi} title="Lead Statuses"
                 subtitle="Disposition states for a lead record" noun="Lead Status" namePlaceholder="e.g. Nurturing" onToast={onToast} />
             )}
             {activeTab === 'priorities' && (
-              <ApiMasterSection api={masterApis.leadPriorities} state={prioritiesApi} title="Lead Priorities"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.leadPriorities} state={prioritiesApi} title="Lead Priorities"
                 subtitle="Urgency levels for leads" noun="Lead Priority" namePlaceholder="e.g. High" onToast={onToast} />
             )}
             {activeTab === 'oppStages' && (
-              <ApiMasterSection api={masterApis.opportunityStages} state={oppStagesApi} title="Opportunity Stages"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.opportunityStages} state={oppStagesApi} title="Opportunity Stages"
                 subtitle="Deal progression and win probability" noun="Opportunity Stage" namePlaceholder="e.g. Negotiation" onToast={onToast} />
             )}
             {activeTab === 'oppStatuses' && (
-              <ApiMasterSection api={masterApis.opportunityStatuses} state={oppStatusesApi} title="Opportunity Statuses"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.opportunityStatuses} state={oppStatusesApi} title="Opportunity Statuses"
                 subtitle="Overall disposition of an opportunity" noun="Opportunity Status" namePlaceholder="e.g. On Hold" onToast={onToast} />
             )}
             {activeTab === 'products' && (
-              <ApiMasterSection api={masterApis.crmProducts} state={productsApi} title="Products"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.crmProducts} state={productsApi} title="Products"
                 subtitle="Items that can be quoted on leads and opportunities" noun="Product" namePlaceholder="e.g. Hot Rolled Coils" onToast={onToast} />
             )}
             {activeTab === 'activityTypes' && (
-              <ApiMasterSection api={masterApis.leadActivityTypes} state={activityTypesApi} title="Activity Types"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.leadActivityTypes} state={activityTypesApi} title="Activity Types"
                 subtitle="Types of sales activities that can be logged" noun="Activity Type" namePlaceholder="e.g. Demo Call" onToast={onToast} />
             )}
             {activeTab === 'entityTypes' && rights.entityTypes?.isOpen && (
-              <ApiMasterSection api={masterApis.businessEntityTypes} state={entityTypesApi} title="Business Entity Types"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.businessEntityTypes} state={entityTypesApi} title="Business Entity Types"
                 subtitle="How business entities are classified" noun="Business Entity Type" namePlaceholder="e.g. Customer"
                 rights={sectionRights(rights.entityTypes)} onToast={onToast} />
             )}
             {activeTab === 'countries' && rights.countries?.isOpen && (
-              <ApiMasterSection api={masterApis.countries} state={countriesApi} title="Countries"
+              <ApiMasterSection toolbar={companyControl} api={masterApis.countries} state={countriesApi} title="Countries"
                 subtitle="Countries used in addresses and ports" noun="Country" namePlaceholder="e.g. India"
                 rights={sectionRights(rights.countries)} onToast={onToast} />
             )}
             {activeTab === 'states' && rights.states?.isOpen && (
-              <LocationMasterSection api={locationMasterApis.state} state={statesApi} title="States"
+              <LocationMasterSection toolbar={companyControl} api={locationMasterApis.state} state={statesApi} title="States"
                 subtitle="States and provinces within each country" namePlaceholder="e.g. Maharashtra"
                 rights={sectionRights(rights.states)} onToast={onToast} />
             )}
             {activeTab === 'cities' && rights.cities?.isOpen && (
-              <LocationMasterSection api={locationMasterApis.city} state={citiesApi} title="Cities"
+              <LocationMasterSection toolbar={companyControl} api={locationMasterApis.city} state={citiesApi} title="Cities"
                 subtitle="Cities within each state" namePlaceholder="e.g. Mumbai"
                 rights={sectionRights(rights.cities)} onToast={onToast} />
             )}
             {activeTab === 'ports' && rights.ports?.isOpen && (
-              <LocationMasterSection api={locationMasterApis.port} state={portsApi} title="Ports"
+              <LocationMasterSection toolbar={companyControl} api={locationMasterApis.port} state={portsApi} title="Ports"
                 subtitle="Ports a business entity can prefer" namePlaceholder="e.g. Nhava Sheva"
                 rights={sectionRights(rights.ports)} onToast={onToast} />
             )}
-            {activeTab === 'dashboard' && <DashboardSettingsSection onToast={onToast} />}
+            {activeTab === 'dashboard' && (
+              <>
+                {/* pb-4: no filters row under the title here, so the header's own bottom spacing. */}
+                <PageHeader bordered className="pb-4" title="Dashboard" subtitle="Rules for the Requiring Attention sections of the dashboard." actions={companyControl ?? undefined} />
+                <div className="page-gutter min-h-0 flex-1 overflow-y-auto py-4">
+                  <DashboardSettingsSection onToast={onToast} />
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

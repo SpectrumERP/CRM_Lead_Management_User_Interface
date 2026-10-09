@@ -22,6 +22,11 @@ export interface OptionLookupFieldProps {
   detailHeader?: string
   disabled?: boolean
   fieldClassName?: string
+  /**
+   * List the options by code (CODE0001, CODE0002, …; then by name). Leave off for lists whose order
+   * means something, e.g. stages in pipeline sequence.
+   */
+  sortByCode?: boolean
 }
 
 function toOption(option: string | LookupOption): LookupOption {
@@ -44,8 +49,17 @@ export function OptionLookupField({
   detailHeader,
   disabled,
   fieldClassName,
+  sortByCode = false,
 }: OptionLookupFieldProps) {
-  const items = useMemo(() => options.map(toOption), [options])
+  const items = useMemo(() => {
+    const list = options.map(toOption)
+    if (!sortByCode) return list
+    return list.sort(
+      (a, b) =>
+        (a.code ?? '').localeCompare(b.code ?? '', undefined, { numeric: true, sensitivity: 'base' }) ||
+        a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
+    )
+  }, [options, sortByCode])
   const columns = useMemo(() => {
     const cols: TableSearchColumn<LookupOption>[] = []
     if (items.some((o) => o.code)) cols.push({ header: 'Code', getValue: (o) => o.code || '', width: '6.5rem' })

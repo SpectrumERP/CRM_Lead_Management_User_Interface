@@ -148,6 +148,8 @@ export function LeadsAttentionTable({ rows, stagnantDays, todayIso, onOpenLead }
 
   return (
     <DashboardTable
+      // The count always shows; the page buttons once there are more than 10 leads.
+      showPager
       label="Leads requiring attention"
       rows={rows}
       columns={columns}
@@ -249,6 +251,8 @@ export function OpportunitiesAttentionTable({ rows, stagnantDays, todayIso, onOp
 
   return (
     <DashboardTable
+      // The count always shows; the page buttons once there are more than 10 opportunities.
+      showPager
       label="Opportunities requiring attention"
       rows={rows}
       columns={columns}

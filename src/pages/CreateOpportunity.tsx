@@ -367,6 +367,7 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
               />
               <OptionLookupField
                 label="Opportunity Status"
+                sortByCode
                 required
                 error={errors.status}
                 placeholder="Select status"

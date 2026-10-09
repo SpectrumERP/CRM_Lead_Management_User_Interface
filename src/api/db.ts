@@ -900,6 +900,27 @@ export function removeOpportunity(id: string) {
   )
 }
 
+/** What each sortable grid column of the opportunities list sorts by (the value the cell shows). */
+const OPPORTUNITY_SORT_KEYS: Record<string, (item: Opportunity) => string | number> = {
+  code: (item) => item.id,
+  name: (item) => item.name,
+  entity: (item) => item.companyName,
+  primaryContact: (item) => item.contactPerson,
+  products: (item) => item.productsRequired,
+  value: (item) => item.dealValue,
+  stage: (item) => item.dealStage,
+  weight: (item) => item.weightPercent,
+  weighted: (item) => item.weightedValue,
+  closing: (item) => item.closingDate,
+  owner: (item) => item.owner,
+  // Missing values (no activity yet) sort as empty; ISO date-times sort correctly as text.
+  lastActivityOn: (item) => item.lastActivityAt ?? '',
+  createdBy: (item) => item.audit?.createdBy || item.createdBy || '',
+  createdOn: (item) => item.audit?.createdAt || item.createdAt || '',
+  modifiedBy: (item) => item.audit?.modifiedBy || '',
+  modifiedOn: (item) => item.audit?.modifiedAt || '',
+}
+
 export function listOpportunities(query: Record<string, string> = {}): OpportunityListResponse {
   requirePermission('crm.read')
   const q = (query.q ?? '').trim().toLowerCase()
@@ -935,6 +956,20 @@ export function listOpportunities(query: Record<string, string> = {}): Opportuni
     dealValue: items.reduce((sum, item) => sum + item.dealValue, 0),
     weightedValue: items.reduce((sum, item) => sum + item.weightedValue, 0),
     byCurrency: [...perCurrency.values()],
+  }
+  // Sorted before paging, so a column sorts the whole list (as in the leads grid).
+  const sortValue = query.sort ? OPPORTUNITY_SORT_KEYS[query.sort] : undefined
+  if (sortValue) {
+    const sign = query.dir === 'desc' ? -1 : 1
+    items = [...items].sort((a, b) => {
+      const av = sortValue(a)
+      const bv = sortValue(b)
+      const cmp =
+        typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' })
+      return sign * cmp
+    })
   }
   const total = items.length
   const page = Math.max(1, Number(query.page) || 1)

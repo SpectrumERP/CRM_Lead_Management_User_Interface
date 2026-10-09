@@ -28,7 +28,7 @@ describe('validateUploadFile', () => {
   it('rejects other types, bad MIME types and big files', () => {
     expect(validateUploadFile(file('deck.pptx'))).toMatchObject({ ok: false, reason: expect.stringContaining('Unsupported file type') })
     expect(validateUploadFile(file('a.pdf', 10, 'application/x-msdownload'))).toMatchObject({ ok: false, reason: expect.stringContaining('content type') })
-    expect(validateUploadFile(file('big.pdf', 10 * 1024 * 1024 + 1))).toMatchObject({ ok: false, reason: 'File size exceeds the 10MB limit.' })
+    expect(validateUploadFile(file('big.pdf', 25 * 1024 * 1024 + 1))).toMatchObject({ ok: false, reason: 'File size exceeds the 25MB limit.' })
   })
 })
 

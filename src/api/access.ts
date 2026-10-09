@@ -84,6 +84,8 @@ export const api = {
           stages: query.stages,
           leadId: query.leadId,
           source: query.source,
+          sort: query.sort,
+          dir: query.dir,
           page: query.page,
           pageSize: query.pageSize,
         }),

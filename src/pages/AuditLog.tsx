@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { GridSearch } from '../components/InlineFilterRow';
 import { useSheetClose } from '../components/useSheetClose';
 import {
   AuditEntry, AuditModule, AuditAction,
@@ -429,29 +430,13 @@ export default function AuditLog({
 
         {/* ── Filters ── */}
         <div className="flex flex-wrap items-center gap-2 mt-4">
-          {/* Search */}
-          <div
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 flex-1 min-w-56"
-            style={{ background: '#f8faff', border: '1px solid #dce4f2' }}
-          >
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: '#a0aab8', flexShrink: 0 }}>
-              <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35" />
-            </svg>
-            <input
-              className="flex-1 text-xs bg-transparent outline-none"
-              style={{ color: '#0c1a3a' }}
-              placeholder="Search records, users, changes…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            />
-            {search && (
-              <button onClick={() => { setSearch(''); setPage(1); }} style={{ color: '#a0aab8' }}>
-                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
+          {/* Search: the grid search used on every list page */}
+          <GridSearch
+            value={search}
+            onChange={(value) => { setSearch(value); setPage(1); }}
+            placeholder="Search records, users, changes…"
+            className="min-w-56 max-w-72 flex-1"
+          />
 
           {/* Date from */}
           <input

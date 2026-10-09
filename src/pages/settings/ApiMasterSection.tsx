@@ -1,16 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { toApiError } from '../../api/errors';
 import { NAME_MAX, needsDetailForEdit, type MasterApi, type MasterRow } from '../../api/masters';
 import { clearLeadFillValuesCache } from '../../api/leadFormFillValues';
 import { clearOpportunityFillValuesCache } from '../../api/opportunityFormFillValues';
 import { clearBusinessEntityFillValuesCache } from '../../api/businessEntityFillValues';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import Pagination from '../../components/Pagination';
 import type { ToastType } from '../../components/Toast';
 import { IconTooltip, Spinner } from '../../ui';
-import { C, EmptyRows, FilterBar, FormField, MasterTable, Modal, SectionHeader, StatusBadge, Td, Th } from './atoms';
+import { C, EmptyRows, FilterBar, FormField, MasterTable, Modal, SectionHeader, StatusBadge, Td, Th, useColumnSort } from './atoms';
 import type { ApiMasterState } from './useApiMaster';
 import { saveConfirm, useConfirm } from '../../contexts/ConfirmContext'
 import { formatDate } from '../../utils/dateFormat';
+
+/** Rows per page, as in the leads and opportunities grids. */
+const PAGE_SIZE = 10;
 
 export interface ApiMasterSectionProps {
   api: MasterApi;
@@ -23,6 +27,8 @@ export interface ApiMasterSectionProps {
   onToast?: (type: ToastType, title: string, message?: string) => void;
   /** Form rights (see formRights.ts); everything allowed when omitted. */
   rights?: { canAdd: boolean; canEdit: boolean; canDelete: boolean };
+  /** Page controls in the header, before Add New (the company picker). */
+  toolbar?: ReactNode;
 }
 
 const FULL_RIGHTS = { canAdd: true, canEdit: true, canDelete: true };
@@ -71,7 +77,7 @@ const DEFAULT_COLOR = '#2955A3';
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** Master backed by the Spectrum Save / Search / Delete APIs. Status is read-only (the API has no toggle). */
-export default function ApiMasterSection({ api, state, title, subtitle, noun, namePlaceholder, onToast, rights = FULL_RIGHTS }: ApiMasterSectionProps) {
+export default function ApiMasterSection({ api, state, title, subtitle, noun, namePlaceholder, onToast, rights = FULL_RIGHTS, toolbar }: ApiMasterSectionProps) {
   const confirm = useConfirm()
   const { rows, loading, error, reload } = state;
   const hasSequence = api.definition.hasSequence;
@@ -95,15 +101,33 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
   const [confirmDelete, setConfirmDelete] = useState<MasterRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const pageSize = PAGE_SIZE;
+  const [page, setPage] = useState(1);
+  // A new sort, search or status filter starts again at page 1.
+  const columnSort = useColumnSort<MasterRow>({
+    order: (x) => x.sequence ?? 0,
+    code: (x) => x.code,
+    name: (x) => x.name,
+    description: (x) => x.description,
+    status: (x) => (x.inactive ? 'Inactive' : 'Active'),
+    // ISO date-times sort correctly as text.
+    modified: (x) => x.modifiedDate ?? x.createdDate,
+    ...Object.fromEntries(listedNumbers.map((n) => [`number:${n.key}`, (x: MasterRow) => x.numbers?.[n.key]])),
+  }, () => setPage(1));
+
   const query = search.trim().toLowerCase();
-  const filtered = rows
+  const filtered = columnSort.apply(rows
     .filter((x) => {
       if (query && !x.name.toLowerCase().includes(query) && !x.code.toLowerCase().includes(query)) return false;
       if (statusFilter === 'Active' && x.inactive) return false;
       if (statusFilter === 'Inactive' && !x.inactive) return false;
       return true;
     })
-    .sort((a, b) => (hasSequence ? (a.sequence ?? 0) - (b.sequence ?? 0) : a.name.localeCompare(b.name)));
+    .sort((a, b) => (hasSequence ? (a.sequence ?? 0) - (b.sequence ?? 0) : a.name.localeCompare(b.name))));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
 
   function openAdd() {
     const next = Math.max(0, ...rows.map((x) => x.sequence ?? 0)) + 1;
@@ -216,32 +240,39 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
   }
 
   return (
-    <div>
-      <SectionHeader title={title} subtitle={subtitle} count={rows.length} onAdd={rights.canAdd ? openAdd : undefined} />
-      <FilterBar search={search} onSearch={setSearch} statusFilter={statusFilter} onStatus={setStatusFilter}
-        onClear={() => { setSearch(''); setStatusFilter('All'); }} />
+    // Leads page layout: header with filters on top, the grid fills the rest and scrolls, the pager at the bottom.
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SectionHeader title={title} subtitle={subtitle} count={rows.length} toolbar={toolbar} onAdd={rights.canAdd ? openAdd : undefined}>
+        <FilterBar search={search} onSearch={setSearch} statusFilter={statusFilter} onStatus={setStatusFilter}
+          placeholder={`Search ${title.toLowerCase()}…`}
+          onClear={() => { setSearch(''); setStatusFilter('All'); }} />
+      </SectionHeader>
 
       {error ? (
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs" role="alert"
+        <div className="page-gutter pt-3">
+        <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs" role="alert"
           style={{ background: '#fdf0f0', border: '1px solid #f5c2c2', color: C.red }}>
           <span>Could not load {title.toLowerCase()}: {error.message}</span>
           <button type="button" onClick={() => void reload()} className="font-bold underline">Retry</button>
         </div>
+        </div>
       ) : null}
 
+      <div className="page-gutter flex min-h-0 flex-1 flex-col">
       <MasterTable>
         <thead><tr>
-          {hasSequence ? <Th narrow>Order</Th> : null}
-          <Th narrow>Code</Th><Th>Name</Th>{hasDescription ? <Th>Description</Th> : null}
-          {listedNumbers.map((n) => <Th key={n.key} narrow>{n.label}{n.suffix ? ` (${n.suffix})` : ''}</Th>)}
-          <Th>Status</Th><Th>Modified</Th><Th right narrow>Actions</Th>
+          {hasSequence ? <Th narrow {...columnSort.th('order')}>Order</Th> : null}
+          <Th narrow {...columnSort.th('code')}>Code</Th><Th {...columnSort.th('name')}>Name</Th>
+          {hasDescription ? <Th {...columnSort.th('description')}>Description</Th> : null}
+          {listedNumbers.map((n) => <Th key={n.key} narrow {...columnSort.th(`number:${n.key}`)}>{n.label}{n.suffix ? ` (${n.suffix})` : ''}</Th>)}
+          <Th {...columnSort.th('status')}>Status</Th><Th {...columnSort.th('modified')}>Modified</Th><Th right narrow>Actions</Th>
         </tr></thead>
         <tbody>
           {loading && rows.length === 0 ? (
             <tr><td colSpan={99} className="py-16"><div className="flex justify-center"><Spinner label={`Loading ${title}`} /></div></td></tr>
           ) : filtered.length === 0 ? (
             error ? null : <EmptyRows onAdd={rights.canAdd ? openAdd : undefined} />
-          ) : filtered.map((item) => (
+          ) : pageRows.map((item) => (
             <tr key={item.no} style={{ opacity: item.inactive ? 0.6 : 1 }}>
               {hasSequence ? (
                 <Td narrow>
@@ -277,6 +308,12 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
           ))}
         </tbody>
       </MasterTable>
+      </div>
+
+      {/* Footer bar with the pager, as on the leads page. */}
+      <div className="page-gutter w-full shrink-0 border-t border-line bg-surface py-2.5 text-ink-muted">
+        <Pagination page={safePage} pageSize={pageSize} total={filtered.length} onPageChange={setPage} disabled={loading} />
+      </div>
 
       {(isNew || editing) && (
         <Modal title={isNew ? `Add ${noun}` : `Edit ${noun}`} onClose={closeModal} onSave={() => void save()} saving={saving || loadingDetail}>

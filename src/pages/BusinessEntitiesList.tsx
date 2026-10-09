@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { GRID_SEARCH_INPUT } from '../components/InlineFilterRow';
 import { deleteBusinessEntity } from '../api/businessEntities';
 import { getBusinessEntityFillValues } from '../api/businessEntityFillValues';
 import { toApiError } from '../api/errors';
@@ -337,7 +338,7 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
               placeholder="Search business entities…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface-hover py-1.5 pl-8 pr-3 text-xs text-ink outline-none transition-colors focus:border-primary focus:bg-surface focus-visible:shadow-[var(--shadow-focus)]"
+              className={GRID_SEARCH_INPUT}
               aria-label="Search business entities"
             />
           </div>

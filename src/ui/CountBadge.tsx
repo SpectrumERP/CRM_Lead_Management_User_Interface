@@ -23,6 +23,13 @@ const SIZE_WIDE: Record<CountBadgeSize, string> = {
   lg: 'size-6 text-[10px]',
 }
 
+/** Four digits and more (e.g. 3292) do not fit a circle: a pill as tall as the circle, at least as wide. */
+const SIZE_PILL: Record<CountBadgeSize, string> = {
+  sm: 'h-4 min-w-4 px-1 text-[7px]',
+  md: 'h-5 min-w-5 px-1.5 text-[9px]',
+  lg: 'h-6 min-w-6 px-2 text-[10px]',
+}
+
 const TONE: Record<CountBadgeTone, string> = {
   accent: 'bg-accent text-white',
   primary: 'bg-primary text-white',
@@ -56,7 +63,7 @@ export function CountBadge({
   'aria-label': ariaLabel,
 }: CountBadgeProps) {
   const text = value == null ? '' : String(value)
-  const box = text.length > 1 ? SIZE_WIDE[size] : SIZE[size]
+  const box = text.length > 3 ? SIZE_PILL[size] : text.length > 1 ? SIZE_WIDE[size] : SIZE[size]
 
   return (
     <span

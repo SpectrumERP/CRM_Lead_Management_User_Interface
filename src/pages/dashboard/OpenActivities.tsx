@@ -94,6 +94,8 @@ export function OpenActivitiesTable({ activities, todayIso, onOpenActivity, onOp
 
   return (
     <DashboardTable
+      // The count always shows; the page buttons once there are more than 10 activities.
+      showPager
       label="Open activities"
       rows={activities}
       columns={columns}

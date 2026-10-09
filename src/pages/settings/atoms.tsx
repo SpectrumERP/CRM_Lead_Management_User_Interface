@@ -1,9 +1,9 @@
 /** Shared building blocks for the Settings master-data sections. */
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { MasterItemStatus } from '../../contexts/MasterDataContext';
 import FormDrawer from '../../components/FormDrawer';
-import { FilterSearch, FilterSelect } from '../../components/InlineFilterRow';
-import { Button, Field, IconTooltip } from '../../ui';
+import { FilterSelect, GridSearch } from '../../components/InlineFilterRow';
+import { Button, Field, IconTooltip, PageHeader, SortChevrons, nextSort, type SortState } from '../../ui';
 
 // ─── Brand tokens (match existing design system) ──────────────────────────────
 export const C = {
@@ -26,89 +26,150 @@ export function StatusBadge({ status }: { status: MasterItemStatus }) {
   );
 }
 
-export function SectionHeader({ title, subtitle, count, onAdd }: {
+/**
+ * A section's header, as on the leads and business entities pages (PageHeader `bordered`): "Lead Sources - 8"
+ * with its description, the page controls (`toolbar`, e.g. the company) and Add New on the right, and the
+ * search / filters row under it.
+ */
+export function SectionHeader({ title, subtitle, count, onAdd, toolbar, children }: {
   title: string; subtitle: string; count: number;
   /** Omit to hide Add New (no rights to add). */
   onAdd?: () => void;
+  /** Controls before Add New (the Settings page passes its company picker). */
+  toolbar?: ReactNode;
+  /** The section's filters row (search, status). */
+  children?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-5">
-      <div>
-        <h2 className="text-base font-bold" style={{ fontFamily: 'DM Sans, sans-serif', color: C.text }}>{title}</h2>
-        <p className="text-xs mt-0.5" style={{ color: C.muted }}>{subtitle} · <span style={{ color: C.blue, fontWeight: 600 }}>{count} configured</span></p>
-      </div>
-      {onAdd ? <button onClick={onAdd}
-        className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-white flex-shrink-0 transition-all"
-        style={{ background: C.blue, boxShadow: '0 2px 8px rgba(41,85,163,0.25)' }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = '#1e3f87')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = C.blue)}>
-        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-        Add New
-      </button> : null}
-    </div>
+    <PageHeader
+      bordered
+      title={`${title} - ${count}`}
+      subtitle={subtitle}
+      actions={
+        toolbar || onAdd ? (
+          <>
+            {toolbar}
+            {onAdd ? (
+              <Button variant="solid" onClick={onAdd}>
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Add New
+              </Button>
+            ) : null}
+          </>
+        ) : undefined
+      }
+    >
+      {children ? <div className="flex w-full flex-wrap items-center gap-2.5 pb-3">{children}</div> : null}
+    </PageHeader>
   );
 }
 
-export function FilterBar({ search, onSearch, statusFilter, onStatus, onClear }: {
+/** The grid search, shared with the leads page. */
+export { GridSearch };
+
+export function FilterBar({ search, onSearch, statusFilter, onStatus, onClear, placeholder = 'Search…' }: {
   search: string; onSearch: (v: string) => void;
   statusFilter: string; onStatus: (v: string) => void;
   onClear: () => void;
+  placeholder?: string;
 }) {
   const dirty = search || statusFilter !== 'All';
   return (
-    <div className="mb-4 w-full min-w-0 overflow-hidden">
-      <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_9rem] items-center gap-2">
-        <FilterSearch value={search} onChange={onSearch} placeholder="Search…" />
-        <FilterSelect
-          aria-label="Status"
-          widthClass="w-full"
-          value={statusFilter}
-          onValueChange={onStatus}
-          options={[
-            { value: 'All', label: 'All Status' },
-            { value: 'Active', label: 'Active' },
-            { value: 'Inactive', label: 'Inactive' },
-          ]}
-        />
-      </div>
+    <>
+      <GridSearch value={search} onChange={onSearch} placeholder={placeholder} />
+      <FilterSelect
+        aria-label="Status"
+        widthClass="w-36"
+        value={statusFilter}
+        onValueChange={onStatus}
+        options={[
+          { value: 'All', label: 'All Status' },
+          { value: 'Active', label: 'Active' },
+          { value: 'Inactive', label: 'Inactive' },
+        ]}
+      />
       {dirty ? (
         <button
           type="button"
           onClick={onClear}
-          className="mt-2 h-8 rounded-lg px-3 text-xs font-semibold transition-colors"
-          style={{ background: '#f0f4fb', color: C.sub, border: `1px solid ${C.border}` }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#e4eaf5')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = '#f0f4fb')}
+          className="text-xs font-semibold text-primary hover:underline"
         >
           Clear
         </button>
       ) : null}
-    </div>
+    </>
   );
 }
 
-export function Th({ children, right, narrow }: { children: ReactNode; right?: boolean; narrow?: boolean }) {
+/** A header cell's sorting (from `useColumnSort().th(key)`). */
+export interface ThSort {
+  sortKey: string;
+  sort: SortState<string>;
+  onSort: (key: string) => void;
+}
+
+/** Header cell in the leads grid's style (.crm-table th); sortable when given `useColumnSort().th(key)`. */
+export function Th({ children, right, narrow, sortKey, sort, onSort }: { children: ReactNode; right?: boolean; narrow?: boolean } & Partial<ThSort>) {
+  const sortable = Boolean(sortKey && sort && onSort);
+  const active = sortable && sort!.field === sortKey;
   return (
     <th
-      className="px-4 py-2.5 text-left font-bold"
+      className={sortable ? 'cursor-pointer select-none' : undefined}
+      onClick={sortable ? () => onSort!(sortKey!) : undefined}
+      aria-sort={active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : undefined}
       style={{
-        fontSize: 12,
-        color: '#94a3b8',
-        letterSpacing: 0,
         textAlign: right ? 'right' : 'left',
         width: narrow ? '1%' : undefined,
         whiteSpace: narrow ? 'nowrap' : undefined,
       }}
     >
-      {children}
+      {sortable ? (
+        // Label left, sort icon at the right edge of the cell (as in the leads grid).
+        <span className="flex w-full items-center justify-between gap-2">
+          {children}
+          <SortChevrons active={active} dir={sort!.dir} />
+        </span>
+      ) : (
+        children
+      )}
     </th>
   );
+}
+
+/**
+ * Column sorting for the Settings grids, as in the leads grid: a header click sorts asc, then desc, then
+ * back to the section's own order. `th(key)` goes on a header cell; `apply` sorts rows by the value the
+ * column shows (numbers as numbers, text A–Z ignoring case, numbers inside text in numeric order).
+ */
+export function useColumnSort<Row>(values: Record<string, (row: Row) => string | number | null | undefined>, onChange?: () => void) {
+  const [sort, setSort] = useState<SortState<string>>({ field: '', dir: 'asc' });
+  const onSort = (key: string) => {
+    setSort((current) => nextSort(current, key, { field: '', dir: 'asc' }));
+    onChange?.();
+  };
+  const th = (sortKey: string): ThSort => ({ sortKey, sort, onSort });
+  const apply = (rows: Row[]): Row[] => {
+    const value = sort.field ? values[sort.field] : undefined;
+    if (!value) return rows;
+    const sign = sort.dir === 'desc' ? -1 : 1;
+    return [...rows].sort((a, b) => {
+      const av = value(a) ?? '';
+      const bv = value(b) ?? '';
+      const cmp =
+        typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+      return sign * cmp;
+    });
+  };
+  return { sort, th, apply };
 }
 
 export function Td({ children, right, narrow }: { children: ReactNode; right?: boolean; narrow?: boolean }) {
   return (
     <td
-      className="px-4 py-3"
       style={{
         textAlign: right ? 'right' : 'left',
         width: narrow ? '1%' : undefined,
@@ -225,14 +286,13 @@ export function EmptyRows({ onAdd }: { onAdd?: () => void }) {
 }
 
 // ─── Table wrapper ────────────────────────────────────────────────────────────
+/** The grid as on the leads page: it fills the room it is given and scrolls inside (header row stays on top). */
 export function MasterTable({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-xl" style={{ background: '#fff', border: `1px solid ${C.border}`, boxShadow: '0 1px 4px rgba(12,26,58,0.05)' }}>
-      <div className="w-full min-w-0">
-        <table className="crm-table crm-table-fit w-full" style={{ tableLayout: 'auto' }}>
-          {children}
-        </table>
-      </div>
+    <div className="table-scroll relative min-h-0 min-w-0 flex-1">
+      <table className="crm-table crm-table-fit">
+        {children}
+      </table>
     </div>
   );
 }

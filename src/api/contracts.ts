@@ -27,6 +27,9 @@ export interface OpportunityListQuery {
   leadId?: string
   /** `server` → only opportunities synced from Spectrum. */
   source?: 'server'
+  /** Grid column to sort by (see OPPORTUNITY_SORT_KEYS in db.ts); sorted before paging. */
+  sort?: string
+  dir?: 'asc' | 'desc'
   page?: number
   pageSize?: number
 }

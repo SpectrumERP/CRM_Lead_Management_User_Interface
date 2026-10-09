@@ -110,6 +110,12 @@ body.nav-lock {
   background: var(--color-ink-faint);
 }
 
+/* Grids: the vertical scrollbar runs beside the rows only, below the sticky header row
+   (--table-head-h is set by utils/tableHeadScrollbar.ts). */
+.table-scroll::-webkit-scrollbar-track {
+  margin-top: var(--table-head-h, 0px);
+}
+
 .table-scroll {
   overflow-x: auto;
 }
