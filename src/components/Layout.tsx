@@ -15,6 +15,15 @@ import { IconTooltip, CountBadge } from '../ui';
 import { useFormRights } from '@/contexts/FormRightsContext';
 import { FORM_NO } from '@/api/formRights';
 
+/** Running inside the Spectrum ERP shell (its /crm/ route). */
+const IN_SPECTRUM = Boolean(import.meta.env.VITE_CRM_ROUTE_BASE)
+
+/** Opens the shell's main dashboard with the shell's router (no page load). */
+function openShellDashboard(event: { preventDefault(): void }) {
+  event.preventDefault()
+  window.dispatchEvent(new CustomEvent('spectrum:open', { detail: { path: '/' } }))
+}
+
 /** Header global search is temporarily hidden. Flip to `true` to restore. */
 const SHOW_HEADER_SEARCH = false;
 
@@ -163,11 +172,21 @@ function SidebarHeader({
 
   return (
     <header className="flex h-[calc(3.5rem+1px)] flex-shrink-0 items-center border-b border-white/10 px-3">
-      <img
-        src="/spectrum-erp-logo-on-dark.png"
-        alt="Spectrum ERP"
-        className="block h-9 w-full object-contain object-left"
-      />
+      {IN_SPECTRUM ? (
+        <div className="flex w-full min-w-0 items-center gap-2.5">
+          {/* The shell's app launcher before the logo (as in the shell's left panel). */}
+          <div data-spectrum-launcher-slot="dark" className="flex shrink-0 items-center" />
+          <a href="/" onClick={openShellDashboard} aria-label="Spectrum ERP home" className="block min-w-0 flex-1 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            <img src="/spectrum-erp-logo-on-dark.png" alt="Spectrum ERP" className="block h-8 w-full object-contain object-left" />
+          </a>
+        </div>
+      ) : (
+        <img
+          src="/spectrum-erp-logo-on-dark.png"
+          alt="Spectrum ERP"
+          className="block h-9 w-full object-contain object-left"
+        />
+      )}
     </header>
   )
 }
@@ -247,7 +266,7 @@ function AppSidebar({
     <div className="flex h-full min-h-0 flex-col">
       <SidebarHeader collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
 
-      <nav className={`min-h-0 flex-1 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2.5'}`} aria-label="Main">
+      <nav className={`sidebar-scroll min-h-0 flex-1 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2.5'}`} aria-label="Main">
         {!collapsed ? (
           <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold tracking-[0.14em] text-white/40">
             Workspace
@@ -635,11 +654,23 @@ export default function Layout({ children, detailName }: LayoutProps) {
               </svg>
             </button>
             </IconTooltip>
+            {/* Inside Spectrum ERP the shell puts its app launcher before the logo (one launcher, apps from
+                its menu). With the menu open on a wide screen it sits with the logo in the left panel. */}
+            {IN_SPECTRUM ? (
+              <div
+                id="spectrum-module-launcher-slot"
+                data-spectrum-launcher-slot="flat"
+                className={`flex shrink-0 items-center ${
+                  (sidebarCollapsed || focusMode) && !(focusMode && focusSidebarOpen) ? 'pl-3 lg:pl-0 lg:pr-3' : 'pl-3 lg:hidden'
+                }`}
+              />
+            ) : null}
             {sidebarCollapsed || focusMode ? (
               // Focus mode with the sidebar open: the logo is in the sidebar, not twice.
               focusMode && focusSidebarOpen ? null : (
               <Link
-                to={paths.dashboard}
+                to={IN_SPECTRUM ? '/' : paths.dashboard}
+                onClick={IN_SPECTRUM ? openShellDashboard : undefined}
                 className="hidden min-w-0 items-center lg:inline-flex"
                 aria-label="Spectrum ERP home"
               >
@@ -667,15 +698,13 @@ export default function Layout({ children, detailName }: LayoutProps) {
             <div className="hidden shrink-0 items-center pl-3 gap-3 md:flex pr-3">
               <span aria-hidden className="h-8 w-px bg-line-strong" />
               <span className="client-logo-chip">
-                <img src="/steelmont-logo.png" alt="SteelMont" className="client-logo block h-10 w-auto object-contain" />
+                <img src="/steelmont-logo.png" alt="SteelMont" className="client-logo block h-8 w-auto object-contain" />
               </span>
             </div>
-            {/* ERP module launcher. Inside Spectrum ERP its Dashboard tile is the shell's home, so every CRM page is "CRM". */}
-            <ModuleLauncher
-              activeModule={activePage === 'dashboard' && !import.meta.env.VITE_CRM_ROUTE_BASE ? 'dashboard' : 'crm'}
-            />
-            {/* Spectrum ERP injects module launcher after logo / toggle. */}
-            <div id="spectrum-module-launcher-slot" className="flex shrink-0 items-center" />
+            {/* Standalone: our ERP module launcher (inside Spectrum ERP the shell's is in the slot above). */}
+            {import.meta.env.VITE_CRM_ROUTE_BASE ? null : (
+              <ModuleLauncher activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} />
+            )}
           </div>
 
             {/* Right actions */}
@@ -699,6 +728,22 @@ export default function Layout({ children, detailName }: LayoutProps) {
             ) : null}
 
             <QuickCreateMenu />
+
+            {/* Inside Spectrum ERP: straight back to its main dashboard (as the shell's header). */}
+            {IN_SPECTRUM ? (
+              <IconTooltip label="Main dashboard">
+                <a
+                  href="/"
+                  onClick={openShellDashboard}
+                  aria-label="Main dashboard"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-primary-soft text-primary transition-[background-color,border-color,color,transform] duration-200 ease-out hover:border-primary active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
+                  </svg>
+                </a>
+              </IconTooltip>
+            ) : null}
 
             <div className="hidden items-center lg:flex">
             <IconTooltip label={focusMode ? 'Exit full screen' : 'Full screen'}>
@@ -919,7 +964,7 @@ function AppFooter() {
       <p className="truncate">
         © {new Date().getFullYear()} {PAGE_COPY.login.rights}
       </p>
-      <p className="hidden shrink-0 font-semibold sm:block">Spectrum ERP</p>
+      <img src="/spectrum-erp-logo.png" alt="Spectrum ERP" className="hidden h-5 w-auto shrink-0 sm:block" />
     </footer>
   );
 }

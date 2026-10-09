@@ -64,7 +64,10 @@ function useSection<T>(companyNo: number | null, load: (companyNo: number) => Pr
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    if (!companyNo) return
+    if (!companyNo) {
+      setLoading(false)
+      return
+    }
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -86,7 +89,7 @@ function useSection<T>(companyNo: number | null, load: (companyNo: number) => Pr
   }, [companyNo, key, reload, attempt])
 
   const retry = useCallback(() => setAttempt((n) => n + 1), [])
-  return { data, loading: !companyNo || loading, error, retry }
+  return { data, loading: Boolean(companyNo) && loading, error, retry }
 }
 
 export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, onOpportunityStage, onToast }: DashboardProps) {

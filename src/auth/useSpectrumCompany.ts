@@ -16,12 +16,20 @@ export function useSpectrumCompany() {
   useEffect(() => {
     let cancelled = false
     setReady(false)
-    resolveSpectrumCompany().then((resolved) => {
-      if (cancelled) return
-      setCompanies(resolved?.companies ?? [])
-      setCompanyNoState(resolved?.companyNo ?? null)
-      setReady(true)
-    })
+    resolveSpectrumCompany()
+      .then((resolved) => {
+        if (cancelled) return
+        setCompanies(resolved?.companies ?? [])
+        setCompanyNoState(resolved?.companyNo ?? null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCompanies([])
+        setCompanyNoState(null)
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true)
+      })
     return () => {
       cancelled = true
     }

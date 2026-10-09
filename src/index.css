@@ -191,15 +191,14 @@ body.nav-lock {
   color: var(--color-surface);
 }
 
-.sidebar-item.active {
-  background: transparent;
+/* Where the user is, as in the Spectrum ERP shell: lit row, bold, a red bar on the left (the red tile
+   comes from the item's markup). */
+.sidebar-item.active,
+.sidebar-item.active:hover {
+  background: rgb(255 255 255 / 0.16);
   color: var(--color-surface);
   font-weight: 600;
-}
-
-.sidebar-item.active:hover {
-  background: color-mix(in srgb, var(--color-surface) 8%, transparent);
-  color: var(--color-surface);
+  box-shadow: inset 3px 0 0 #e05252;
 }
 
 .sidebar-item:focus-visible {
@@ -1082,8 +1081,8 @@ select.active-filter {
 /* Tooltip — same look as Task Management (ActionTip): white bubble, sky border, arrow, soft shadow */
 .icon-tip-bubble {
   position: fixed;
-  /* Above dialogs/drawers (z-90) and toasts (z-100) so portaled tips stay visible */
-  z-index: 110;
+  /* Above the app launcher panel (z-1000), dialogs and toasts. */
+  z-index: 1101;
   padding: 0.5rem 0.75rem;
   border: 1px solid rgba(14, 165, 233, 0.4);
   border-radius: 0.75rem;
@@ -1788,9 +1787,10 @@ html.dark :is([style*="solid rgb(233, 213, 255)"], [style*="border-color: rgb(23
 html.dark :is([style*="solid rgb(252, 165, 165)"], [style*="border-color: rgb(252, 165, 165)"]) { border-color: rgba(196, 30, 30, 0.4) !important; }
 html.dark :is([style*="solid rgb(165, 243, 252)"], [style*="border-color: rgb(165, 243, 252)"]) { border-color: rgba(14, 116, 144, 0.45) !important; }
 
-/* Dark mode logo = Task Management's: header + sidebar logos in solid white. */
+/* Dark mode logo = Task Management's: header, sidebar and footer logos in solid white. */
 html.dark header img,
-html.dark aside img {
+html.dark aside img,
+html.dark footer img {
   filter: brightness(0) invert(1);
   opacity: 0.95;
 }
@@ -1802,13 +1802,14 @@ html.dark .sidebar-item {
   color: rgba(255, 255, 255, 0.88);
 }
 
-html.dark .sidebar-item:hover,
-html.dark .sidebar-item.active:hover {
+html.dark .sidebar-item:hover {
   background: #1A2438;
   color: #f8fafc;
 }
 
-html.dark .sidebar-item.active {
+html.dark .sidebar-item.active,
+html.dark .sidebar-item.active:hover {
+  background: #1F2A40;
   color: #fff;
 }
 
@@ -1908,4 +1909,14 @@ html.dark .client-logo-chip {
   [role='button']:not([aria-disabled='true']) {
     cursor: pointer;
   }
+}
+
+/* Left panel: scrolls without a visible scrollbar, as Task Management's (its .scrollbar-hide). */
+.sidebar-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
 }
