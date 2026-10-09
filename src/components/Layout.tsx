@@ -19,12 +19,6 @@ import { watchTableHeadScrollbars } from '@/utils/tableHeadScrollbar';
 /** Running inside the Spectrum ERP shell (its /crm/ route). */
 const IN_SPECTRUM = Boolean(import.meta.env.VITE_CRM_ROUTE_BASE)
 
-/** Opens the shell's main dashboard with the shell's router (no page load). */
-function openShellDashboard(event: { preventDefault(): void }) {
-  event.preventDefault()
-  window.dispatchEvent(new CustomEvent('spectrum:open', { detail: { path: '/' } }))
-}
-
 /** Header global search is temporarily hidden. Flip to `true` to restore. */
 const SHOW_HEADER_SEARCH = false;
 
@@ -177,9 +171,7 @@ function SidebarHeader({
         <div className="flex w-full min-w-0 items-center gap-2.5">
           {/* The shell's app launcher before the logo (as in the shell's left panel). */}
           <div data-spectrum-launcher-slot="dark" className="flex shrink-0 items-center" />
-          <a href="/" onClick={openShellDashboard} aria-label="Spectrum ERP home" className="block min-w-0 flex-1 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-            <img src="/spectrum-erp-logo-on-dark.png" alt="Spectrum ERP" className="block h-8 w-full object-contain object-left" />
-          </a>
+          <img src="/spectrum-erp-logo-on-dark.png" alt="Spectrum ERP" className="block h-8 min-w-0 flex-1 object-contain object-left" />
         </div>
       ) : (
         <img
@@ -671,18 +663,14 @@ export default function Layout({ children, detailName }: LayoutProps) {
             {sidebarCollapsed || focusMode ? (
               // Focus mode with the sidebar open: the logo is in the sidebar, not twice.
               focusMode && focusSidebarOpen ? null : (
-              <Link
-                to={IN_SPECTRUM ? '/' : paths.dashboard}
-                onClick={IN_SPECTRUM ? openShellDashboard : undefined}
-                className="hidden min-w-0 items-center lg:inline-flex"
-                aria-label="Spectrum ERP home"
-              >
+              // The logo only (no link): the apps launcher and the account menu lead elsewhere.
+              <span className="hidden min-w-0 items-center lg:inline-flex">
                 <img
                   src="/spectrum-erp-logo.png"
                   alt="Spectrum ERP"
                   className="block h-8 w-auto max-w-[10.5rem] object-contain object-left"
                 />
-              </Link>
+              </span>
               )
             ) : (
               <IconTooltip label="Collapse menu">
@@ -731,22 +719,6 @@ export default function Layout({ children, detailName }: LayoutProps) {
             ) : null}
 
             <QuickCreateMenu />
-
-            {/* Inside Spectrum ERP: straight back to its main dashboard (as the shell's header). */}
-            {IN_SPECTRUM ? (
-              <IconTooltip label="Main dashboard">
-                <a
-                  href="/"
-                  onClick={openShellDashboard}
-                  aria-label="Main dashboard"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-primary-soft text-primary transition-[background-color,border-color,color,transform] duration-200 ease-out hover:border-primary active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                >
-                  <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
-                  </svg>
-                </a>
-              </IconTooltip>
-            ) : null}
 
             <div className="hidden items-center lg:flex">
             <IconTooltip label={focusMode ? 'Exit full screen' : 'Full screen'}>
