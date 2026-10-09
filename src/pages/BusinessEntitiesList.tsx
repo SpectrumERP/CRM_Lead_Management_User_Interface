@@ -41,6 +41,7 @@ const VIEW_MODES: { id: ListViewMode; label: string; icon: string }[] = [
 ];
 
 const PAGE_SIZE = 10;
+const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
 
 type SortState = { field: string; dir: SortDir };
 /** Task Management sorts the list by code by default. */
@@ -67,6 +68,7 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
   const [search, setSearch] = useState('');
   const keyword = useDeferredValue(search.trim());
   const [serverKeyword, setServerKeyword] = useState('');
+  const [letter, setLetter] = useState('');
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
   const [pageLoading, setPageLoading] = useState(false);
@@ -97,7 +99,7 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
 
   const feed = useBusinessEntityFeed(source, {
     keyword: serverKeyword,
-    startsWith: '',
+    startsWith: letter,
     enabled: company.enabled && rights.isOpen,
     typeNames,
     reloadKey: `${reloadKey}:${company.companyNo ?? ''}`,
@@ -105,12 +107,13 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
 
   // A new view starts from the top, sorted by its default column.
   useEffect(() => {
+    setLetter('');
     setSort({ field: SORT_FIELD[view], dir: 'asc' });
     setPage(1);
     scrollRef.current?.scrollTo({ top: 0 });
   }, [view]);
 
-  useEffect(() => { setPage(1); }, [keyword, sort.field, sort.dir]);
+  useEffect(() => { setPage(1); }, [keyword, letter, sort.field, sort.dir]);
 
   useEffect(() => {
     if (!pageLoading) return;
@@ -123,7 +126,9 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
   const ordered = useMemo(() => (keyword ? filtered : sortRows(filtered, sort)), [filtered, keyword, sort]);
   const totalPages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageRows = ordered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const isTableView = view === 'list' || view === 'contact-list';
+  // The album views show every loaded row (more load on scroll) with the A–Z rail instead of pages.
+  const pageRows = isTableView ? ordered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE) : ordered;
   const listBusy = feed.loading || pageLoading;
 
   // Keep the reader's place when earlier rows are added above.
@@ -162,6 +167,11 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
     }
   }
 
+  function pickLetter(next: string) {
+    setLetter((current) => (current === next ? '' : next));
+    scrollRef.current?.scrollTo({ top: 0 });
+  }
+
   function handlePageChange(next: number) {
     if (next === safePage || pageLoading) return;
     setPageLoading(true);
@@ -190,8 +200,8 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
     onDelete: rights.isDelete ? setConfirmDelete : undefined,
   };
   const sortProps = { sort, onSort: (field: string) => setSort((prev) => nextSort(prev, field, DEFAULT_SORT)) };
+  const enabledLetters = new Set(feed.alphabets.map((l) => l.toUpperCase()));
   const searching = Boolean(search.trim());
-  const isTableView = view === 'list' || view === 'contact-list';
   const titleCount = ordered.length;
   const emptyNode = searching ? (
     <NoResults onClear={() => setSearch('')} />
@@ -220,7 +230,7 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
   ) : (
     <>
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-        <div className={`page-gutter flex h-full min-w-0 flex-col ${isTableView ? '' : 'pt-3'}`}>
+        <div className={`page-gutter flex h-full min-w-0 ${isTableView ? '' : 'py-3'}`}>
           <div
             ref={scrollRef}
             onScroll={onScroll}
@@ -265,17 +275,36 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
               </div>
             ) : null}
           </div>
+          {isTableView ? null : (
+            /* A–Z jump: letters with entries are enabled; picking the active letter again clears it. */
+            <nav aria-label="Jump to letter" className="ml-2 flex w-7 shrink-0 flex-col items-center gap-px overflow-y-auto rounded-lg border border-line bg-surface py-2">
+              {LETTERS.map((l) => {
+                const enabled = enabledLetters.has(l) || letter === l;
+                return (
+                  <button key={l} type="button" disabled={!enabled || feed.loading} aria-pressed={letter === l} onClick={() => pickLetter(l)}
+                    title={enabled ? `Jump to ${l}` : undefined}
+                    className={`h-5 w-5 shrink-0 rounded text-[9px] font-semibold transition-colors ${
+                      letter === l ? 'bg-primary text-surface' : enabled ? 'text-primary hover:bg-primary-soft' : 'cursor-default text-ink-faint/50'
+                    }`}>
+                    {l}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
         </div>
       </div>
-      <div className="page-gutter w-full border-t border-line bg-surface py-2.5 text-ink-muted">
-        <Pagination
-          page={safePage}
-          pageSize={PAGE_SIZE}
-          total={ordered.length}
-          onPageChange={handlePageChange}
-          disabled={pageLoading}
-        />
-      </div>
+      {isTableView ? (
+        <div className="page-gutter w-full border-t border-line bg-surface py-2.5 text-ink-muted">
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={ordered.length}
+            onPageChange={handlePageChange}
+            disabled={pageLoading}
+          />
+        </div>
+      ) : null}
     </>
   );
 
