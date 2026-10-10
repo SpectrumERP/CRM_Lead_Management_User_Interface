@@ -26,6 +26,10 @@ export interface OpportunityStatusOption {
   opportunityStatusNo: number
   code?: string
   opportunityStatusName: string
+  /** Remark required when an opportunity moves to this status (pending backend field; see api/statusChange.ts). */
+  isRemarkMandatory?: boolean
+  /** The Won status: Order Value and Order Date are required (pending backend field). */
+  isWon?: boolean
 }
 
 export interface OpportunityCurrencyOption {

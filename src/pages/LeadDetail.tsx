@@ -53,6 +53,9 @@ import { ActivitiesTab, activityStatusTone, activityTypeTone } from "../componen
 import { InternalNotesTab, noteDateToInput, type LeadNote } from "../components/LeadNotes"
 import { PagedTimeline, TimelineTab, timelineIconMeta, type TimelineOrder } from "../components/RecordTimeline"
 import ConvertOpportunityDialog from "../components/ConvertOpportunityDialog"
+import StatusChangeDialog from "../components/StatusChangeDialog"
+import StatusHistory from "../components/StatusHistory"
+import { changeLeadStatus, type StatusOption } from "../api/statusChange"
 import MeetingDrawer from "../components/MeetingDrawer"
 import ConfirmDialog from "../components/ConfirmDialog"
 import { saveConfirm, useConfirm } from "../contexts/ConfirmContext"
@@ -1955,6 +1958,7 @@ const ALL_TABS = [
   "Emails",
   "Internal Notes / Observations",
   "Timeline",
+  "Status History",
 ] as const
 type Tab = (typeof ALL_TABS)[number]
 /** Hidden for now; the tab's code stays so it can be switched back on by removing it here. */
@@ -1979,6 +1983,9 @@ export default function LeadDetail({
   const { values: fill } = useLeadFormFillValues()
   const activeLeadStageNames = fill ? bySequence(fill.leadStages).map((x) => x.leadStageName) : []
   const activeLeadSourceNames = fill ? fill.leadSources.map((x) => x.leadSourceName) : []
+  const leadStatusOptions: StatusOption[] = fill
+    ? fill.leadStatuses.map((x) => ({ no: x.leadStatusNo, name: x.leadStatusName, isRemarkMandatory: x.isRemarkMandatory }))
+    : []
   // Server lead (id SL-…): reload it in full from load-data whenever the page opens.
   const serverLeadNo = leadNoFromId(leadId)
   const [serverRefresh, setServerRefresh] = useState<"idle" | "loading" | "done" | "failed">(serverLeadNo ? "loading" : "idle")
@@ -2047,6 +2054,7 @@ export default function LeadDetail({
     ? "Converted to an opportunity — this lead can no longer be changed"
     : "The lead is at a completed stage — it can no longer be changed"
   const [showConvert, setShowConvert] = useState(false)
+  const [showStatusChange, setShowStatusChange] = useState(false)
   const [editingField, setEditingField] = useState<FieldKey | null>(null)
   const [showActivityForm, setShowActivityForm] = useState(false)
   const [showMeetingForm, setShowMeetingForm] = useState(false)
@@ -2409,8 +2417,9 @@ export default function LeadDetail({
                 <HeaderFact
                   label="Status"
                   value={status}
-                  hint="Whether work on this lead is active"
+                  hint={locked ? lockedReason : "Whether work on this lead is active · click to change"}
                   tone={leadStatusClass(status)}
+                  onEdit={locked || !leadData?.spectrum ? undefined : () => setShowStatusChange(true)}
                 />
                 <HeaderFact
                   label="Owner"
@@ -2578,6 +2587,14 @@ export default function LeadDetail({
               onSave={saveEmail}
             />
           )}
+          {!loading && activeTab === "Status History" && leadData?.spectrum ? (
+            <StatusHistory
+              record="Lead"
+              recordNo={leadData.spectrum.leadNo}
+              serverLogs={leadData.spectrum.statusLogs}
+              refreshKey={`${status}:${leadData.audit?.modifiedAt ?? ""}`}
+            />
+          ) : null}
           {!loading && activeTab === "Internal Notes / Observations" && (
             <InternalNotesTab
               // Internal notes stay open on every lead, locked (converted / completed) ones included.
@@ -2683,6 +2700,21 @@ export default function LeadDetail({
               "Meeting Scheduled",
               `"${m.subject}" has been added.`,
             )
+          }}
+        />
+      )}
+      {showStatusChange && leadData && (
+        <StatusChangeDialog
+          record="Lead"
+          recordLabel={`Lead ${leadData.spectrum?.code ?? leadData.id} · ${leadData.leadName || leadData.companyName}`}
+          currentStatusName={status}
+          statuses={leadStatusOptions}
+          changedBy={createdByName}
+          onClose={() => setShowStatusChange(false)}
+          onSubmit={async (change) => {
+            await changeLeadStatus(leadData, change)
+            setStatus(change.newStatus.name as LeadStatus)
+            onToast?.("success", "Status Changed", `Lead status is now ${change.newStatus.name}.`)
           }}
         />
       )}

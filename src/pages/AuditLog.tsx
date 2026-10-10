@@ -400,6 +400,10 @@ export default function AuditLog({
             <p className="text-sm mt-0.5" style={{ color: '#7a8494' }}>
               Complete change history across all CRM modules · Read-only
             </p>
+            {/* No audit API on the server yet: these rows are sample data, not the server's changes. */}
+            <p className="mt-1 text-xs font-semibold text-warning">
+              Demo data — not connected to the server. Status changes are listed under each lead's / opportunity's Status History.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {/* Read-only badge */}

@@ -37,6 +37,7 @@ import { LeadActivitiesPanel } from '../components/LeadActivities'
 import { LeadNotesPanel } from '../components/LeadNotes'
 import { useOptionalToast } from '../contexts/ToastContext'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
+import { linkNewLeadActivityFiles } from '../api/activityAttachments'
 import { formatDate, formatDateTime, toIsoDate } from '../utils/dateFormat'
 import { BreadcrumbActions } from '../components/BreadcrumbActions'
 
@@ -71,6 +72,8 @@ interface AddedActivity {
   notesOutcome: string
   status: ActivityFormStatus
   closureDate: string
+  /** Files uploaded for this activity (linked to it once the lead is saved). */
+  attachments: Attachment[]
 }
 
 function SectionIcon({ children }: { children: ReactNode }) {
@@ -271,6 +274,8 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   })
   // New lead: activities added to the list (saved with the lead); the fields above hold the next one.
   const [addedActivities, setAddedActivities] = useState<AddedActivity[]>([])
+  const [activityFiles, setActivityFiles] = useState<Attachment[]>([])
+  const [activityUploadsBusy, setActivityUploadsBusy] = useState(false)
   // A note starts with today's date and the logged-in user as Created By.
   const userName = useAuth().user?.name ?? ''
   const [noteDateTime, setNoteDateTime] = useState(() => toIsoDate())
@@ -359,6 +364,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
       || Boolean(activity.notesOutcome.trim())
       || activity.status === 'Closed'
       || Boolean(activity.closureDate)
+      || activityFiles.length > 0
   }
 
   /** Errors of the activity in the fields (type, subject, due date and assignee are needed). */
@@ -376,6 +382,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     setSelectedActivityType(null)
     setActivity({ subject: '', dueDate: '', assignedTo: '', notesOutcome: '', status: 'Open', closureDate: '' })
     setAssigneeLoginNo(undefined)
+    setActivityFiles([])
     for (const key of ['activityType', 'subject', 'dueDate', 'assignedTo', 'closureDate']) clearErr(key)
   }
 
@@ -398,6 +405,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
         notesOutcome: activity.notesOutcome.trim(),
         status: activity.status,
         closureDate: activity.closureDate,
+        attachments: activityFiles,
       },
     ])
     resetActivityFields()
@@ -423,6 +431,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
       closureDate: item.closureDate,
     })
     setAssigneeLoginNo(item.assignToLoginNo)
+    setActivityFiles(item.attachments)
     setAddedActivities((prev) => prev.filter((a) => a.key !== key))
   }
 
@@ -546,6 +555,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
           notesOutcome: a.notesOutcome,
           statusName: a.status,
           closureDate: a.status === 'Closed' ? a.closureDate : undefined,
+          attachments: a.attachments,
         })),
         ...(activityDirty()
           ? [{
@@ -556,6 +566,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
               notesOutcome: activity.notesOutcome,
               statusName: activity.status,
               closureDate: activity.status === 'Closed' ? activity.closureDate : undefined,
+              attachments: activityFiles,
             }]
           : []),
       ],
@@ -593,7 +604,21 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
       setSaving(false)
       return
     }
-    if (!isEdit) onCreated?.(saved)
+    if (!isEdit) {
+      // Mock: link each activity's files to the activity the server created for it.
+      const filed = [
+        ...addedActivities,
+        ...(activityDirty() ? [{ subject: activity.subject.trim(), dueDate: activity.dueDate, attachments: activityFiles }] : []),
+      ]
+      if (linkNewLeadActivityFiles(saved.id, filed)) {
+        try {
+          saved = await refreshServerLead(leadNo)
+        } catch {
+          // The files are linked; the lead shows them on its next reload.
+        }
+      }
+      onCreated?.(saved)
+    }
     setTimeout(() => { setSubmitted(true); setTimeout(onSuccess, embedded ? 700 : 1600) }, 300)
   }
 
@@ -601,7 +626,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     if (saving) return
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    if (uploadsBusy) {
+    if (uploadsBusy || activityUploadsBusy) {
       setErrors({ form: 'Please wait for all attachments to finish uploading before saving the lead.' })
       return
     }
@@ -721,6 +746,9 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 options={statusOptions}
                 value={lead.status}
                 onValueChange={(v) => updateLead('status', v)}
+                // Editing: the status changes only through Change Status on the lead (remark + history).
+                disabled={isEdit}
+                hint={isEdit ? 'Change it with Change Status on the lead page' : undefined}
               />
               <OptionLookupField
                 label="Sales Organization"
@@ -855,6 +883,16 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 />
               ) : null}
             </FormGrid>
+            <div className="mt-3">
+              <AttachmentsField
+                noun="activity"
+                formNo={ATTACHMENT_FORM_NO.lead}
+                companyNo={spectrumCompany.headOfficeNo}
+                value={activityFiles}
+                onChange={setActivityFiles}
+                onBusyChange={setActivityUploadsBusy}
+              />
+            </div>
             <div className="mt-3 flex justify-end">
               <Button variant="solid" className="!min-h-8 !px-3 !py-2 text-xs" onClick={addLeadActivity}>
                 Add Activity
@@ -891,6 +929,11 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                     <p className="truncate text-xs text-ink-faint">{item.typeName} · Due {formatDate(item.dueDate)} · {item.status}</p>
                     <p className="truncate text-xs text-ink-soft">{item.assignedTo}</p>
                     {item.notesOutcome ? <p className="mt-1 line-clamp-2 text-xs text-ink-soft">{item.notesOutcome}</p> : null}
+                    {item.attachments.length ? (
+                      <p className="mt-1 truncate text-xs text-primary">
+                        {item.attachments.length === 1 ? item.attachments[0]!.name : `${item.attachments.length} files`}
+                      </p>
+                    ) : null}
                     </div>
                   </Card>
                 ))}

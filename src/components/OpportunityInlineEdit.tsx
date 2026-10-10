@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Select, TextInput } from '../ui'
 import { PersonContactCard } from './PersonContactCard'
 import { SecondaryContactsMore } from './SecondaryContactsMore'
@@ -162,6 +162,21 @@ export function OpportunityIdentityEdit({
 }) {
   const { patchOpportunity } = useCrmActions()
   const [nameDraft, setNameDraft] = useState(opportunity.name)
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false)
+  const [descriptionOverflows, setDescriptionOverflows] = useState(false)
+  const descriptionRef = useRef<HTMLParagraphElement | null>(null)
+  const description = opportunity.description?.trim() ?? ''
+
+  useEffect(() => {
+    if (descriptionExpanded || !description) return
+    const element = descriptionRef.current
+    if (!element) return
+    const measure = () => setDescriptionOverflows(element.scrollHeight > element.clientHeight + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [description, descriptionExpanded])
 
   function saveName() {
     const next = nameDraft.trim()
@@ -187,15 +202,27 @@ export function OpportunityIdentityEdit({
   }
 
   return (
-    <button
-      type="button"
-      className="group flex min-w-0 max-w-full items-start gap-2 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-      onClick={() => onEdit('name')}
-      aria-label={`Edit opportunity name: ${opportunity.name}`}
-    >
-      <h1 className="min-w-0 font-display text-xl font-bold text-ink">{opportunity.name}</h1>
-      <EditCue />
-    </button>
+    <div className="min-w-0">
+      <button
+        type="button"
+        className="group flex min-w-0 max-w-full items-start gap-2 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        onClick={() => onEdit('name')}
+        aria-label={`Edit opportunity name: ${opportunity.name}`}
+      >
+        <h1 className="min-w-0 font-display text-xl font-bold text-ink">{opportunity.name}</h1>
+        <EditCue />
+      </button>
+      {description ? (
+        <div className="mt-1 min-w-0">
+          <p ref={descriptionRef} className={`font-display text-sm font-semibold text-ink-soft ${descriptionExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>{description}</p>
+          {descriptionOverflows ? (
+            <button type="button" className="mt-0.5 text-xs font-semibold text-primary hover:underline" onClick={() => setDescriptionExpanded((value) => !value)}>
+              {descriptionExpanded ? 'Show less' : 'Read more'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   )
 }
 

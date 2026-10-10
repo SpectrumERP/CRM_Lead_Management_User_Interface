@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Button,
   SearchSelect,
@@ -205,6 +205,21 @@ export function LeadIdentityEdit({
   const { patchLead } = useCrmActions()
   const [nameDraft, setNameDraft] = useState(lead.leadName && lead.leadName !== lead.id ? lead.leadName : displayLeadName(lead))
   const [descriptionDraft, setDescriptionDraft] = useState(leadDescriptionOf(lead))
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false)
+  const [descriptionOverflows, setDescriptionOverflows] = useState(false)
+  const descriptionPreviewRef = useRef<HTMLElement | null>(null)
+  const description = leadDescriptionOf(lead)
+
+  useEffect(() => {
+    if (descriptionExpanded) return
+    const element = descriptionPreviewRef.current
+    if (!element) return
+    const measure = () => setDescriptionOverflows(element.scrollHeight > element.clientHeight + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [description, descriptionExpanded, editing, readOnly])
 
   function saveName() {
     const next = nameDraft.trim()
@@ -220,14 +235,19 @@ export function LeadIdentityEdit({
     onToast?.('success', 'Lead Updated', 'Lead description saved.')
   }
 
-  const description = leadDescriptionOf(lead)
-
   if (readOnly) {
     return (
       <div className="min-w-0">
         <h1 className="min-w-0 font-display text-xl font-bold text-ink">{displayLeadName(lead)}</h1>
         {description ? (
-          <p className="mt-1 min-w-0 truncate font-display text-sm font-semibold text-ink-soft" title={description}>{description}</p>
+          <div className="mt-1 min-w-0">
+            <p ref={descriptionPreviewRef} className={`font-display text-sm font-semibold text-ink-soft ${descriptionExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>{description}</p>
+            {descriptionOverflows ? (
+              <button type="button" className="mt-0.5 text-xs font-semibold text-primary hover:underline" onClick={() => setDescriptionExpanded((value) => !value)}>
+                {descriptionExpanded ? 'Show less' : 'Read more'}
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     )
@@ -259,18 +279,24 @@ export function LeadIdentityEdit({
           <SaveCancel onSave={saveDescription} onCancel={onCancel} />
         </div>
       ) : description ? (
-        <button
-          type="button"
-          className="group mt-1 flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          title={description}
-          onClick={() => {
-            setDescriptionDraft(description)
-            onEdit('description')
-          }}
-        >
-          <p className="min-w-0 truncate font-display text-sm font-semibold text-ink-soft">{description}</p>
-          <EditCue />
-        </button>
+        <div className="mt-1 min-w-0">
+          <button
+            type="button"
+            className="group flex w-full min-w-0 cursor-pointer items-start gap-1.5 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            onClick={() => {
+              setDescriptionDraft(description)
+              onEdit('description')
+            }}
+          >
+            <span ref={descriptionPreviewRef} className={`min-w-0 font-display text-sm font-semibold text-ink-soft ${descriptionExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>{description}</span>
+            <EditCue />
+          </button>
+          {descriptionOverflows ? (
+            <button type="button" className="mt-0.5 text-xs font-semibold text-primary hover:underline" onClick={() => setDescriptionExpanded((value) => !value)}>
+              {descriptionExpanded ? 'Show less' : 'Read more'}
+            </button>
+          ) : null}
+        </div>
       ) : (
         <button
           type="button"

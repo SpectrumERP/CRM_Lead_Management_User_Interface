@@ -21,7 +21,7 @@ import { buildOpportunitySaveBody, saveOpportunity } from '../api/opportunities'
 import { refreshServerOpportunity } from '../api/opportunitySync'
 import { loginNoForName, syncServerLeads } from '../api/leadSync'
 import { toApiError } from '../api/errors'
-import { Button, Card, FormGrid, TableSearchSelectField, TextField, type TableSearchColumn } from '../ui'
+import { Button, Card, FormGrid, TableSearchSelectField, TextAreaField, TextField, type TableSearchColumn } from '../ui'
 import { UserSelectField } from '../components/UserSelect'
 import ProductPicker, { useProductCatalog } from '../components/ProductPicker'
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
@@ -29,6 +29,8 @@ import type { Product } from '../data/products'
 import { FIELD_LIMITS } from '../constants/fieldLimits'
 import AttachmentsField from '../components/AttachmentsField'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
+import { usePendingData } from '../api/pendingApiStore'
+import { statusRule } from '../api/statusChange'
 import { BreadcrumbActions } from '../components/BreadcrumbActions'
 
 interface CreateOpportunityProps {
@@ -117,6 +119,7 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
   const today = new Date().toISOString().slice(0, 10)
 
   const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   // Business entity + one primary and any number of secondary contacts (shared with the lead form).
   const [entityContacts, setEntityContacts] = useState<EntityContactsValue>(EMPTY_ENTITY_CONTACTS)
   const entity = entityContacts.entity
@@ -127,6 +130,7 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
   // Set from the server lists once they load (first stage, "Open" status).
   const [dealStage, setDealStage] = useState<DealStage>('' as DealStage)
   const [status, setStatus] = useState<OpportunityStatus>('' as OpportunityStatus)
+  const pendingData = usePendingData()
   const [closingDate, setClosingDate] = useState('')
   const [owner, setOwner] = useState(createdBy)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -211,6 +215,7 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
       companyNo: spectrumCompany.headOfficeNo,
       leadNo: referenceLead?.spectrum?.leadNo,
       name,
+      description,
       ownerLoginNo: resolvedOwner,
       salesOrganizationNo,
       stageName: dealStage,
@@ -311,6 +316,14 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
                 onValueChange={setName}
                 placeholder="Enter opportunity name"
               />
+              <TextAreaField
+                fieldClassName="lg:col-span-2"
+                label="Opportunity Description"
+                rows={3}
+                value={description}
+                onValueChange={setDescription}
+                placeholder="Enter description"
+              />
               {/* {serverMode ? (
                 <TableSearchSelectField
                   label="Reference Lead"
@@ -373,7 +386,10 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
                 placeholder="Select status"
                 value={status}
                 onValueChange={(value) => setStatus(value as OpportunityStatus)}
-                options={(oppFill?.opportunityStatuses ?? []).map((st) => ({ value: st.opportunityStatusName, label: st.opportunityStatusName, code: st.code }))}
+                // Won needs Order Value and Order Date: set it later with Change Status, not at create.
+                options={(oppFill?.opportunityStatuses ?? [])
+                  .filter((st) => !statusRule('Opportunity', { no: st.opportunityStatusNo, name: st.opportunityStatusName, isWon: st.isWon }, pendingData).isWon)
+                  .map((st) => ({ value: st.opportunityStatusName, label: st.opportunityStatusName, code: st.code }))}
               />
               {serverMode ? (
                 <OptionLookupField

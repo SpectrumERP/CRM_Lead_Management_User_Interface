@@ -135,6 +135,19 @@ export interface SpectrumLeadRef {
   detailLoaded?: boolean
   /** The lead's stage is a completed one (`leadStage.isStagedCompleted`) — the lead is locked. */
   stageCompleted?: boolean
+  /** Status log from load-data (`statusLogs`), oldest first. */
+  statusLogs?: LeadStatusLog[]
+}
+
+/** One row of a lead's server status log. */
+export interface LeadStatusLog {
+  no: number
+  statusNo?: number
+  statusName: string
+  by: string
+  byLoginNo?: number
+  /** ISO date-time. */
+  at: string
 }
 
 export interface Lead {

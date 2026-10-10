@@ -77,6 +77,10 @@ export interface SpectrumOpportunityRef {
   attachmentNos?: number[]
   /** True once `load-data` has filled contacts / products. */
   detailLoaded?: boolean
+  /** Won order details from the server (pending backend fields; mock mode keeps them in api/pendingApiStore). */
+  orderValue?: number
+  /** `YYYY-MM-DD`. */
+  orderDate?: string
 }
 
 export interface Opportunity {
@@ -88,6 +92,7 @@ export interface Opportunity {
   /** Reference Lead No — set when converted from a lead; empty/undefined for direct create. */
   leadId?: string
   name: string
+  description?: string
   companyName: string
   contactPerson: string
   email: string

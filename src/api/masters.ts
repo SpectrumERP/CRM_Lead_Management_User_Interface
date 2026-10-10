@@ -6,6 +6,7 @@
 import { spectrumEndpoints } from './endpoints'
 import { fail, serverErrorMessage } from './errors'
 import { http } from './http'
+import { PENDING_API_MODE } from './pendingApiStore'
 import { withQuery } from './query'
 
 /** Every master endpoint wraps its payload the same way. */
@@ -105,8 +106,14 @@ export interface MasterDefinition {
   sendCompanyNo?: boolean
   /** Has a `colorCoding` hex colour (lead stages). */
   hasColor?: boolean
-  /** Required yes / no fields sent on save (opportunity statuses: isFirstActivity / isLastActivity). */
-  flags?: readonly { key: string; label: string; hint?: string }[]
+  /**
+   * Required yes / no fields sent on save (opportunity statuses: isFirstActivity / isLastActivity).
+   * `pending`: a field the backend does not have yet — in mock mode it is not sent; the Settings form keeps it
+   * in the browser instead (see statusRecord).
+   */
+  flags?: readonly { key: string; label: string; hint?: string; pending?: boolean }[]
+  /** Lead / opportunity status master: its pending flags are the status rules of api/statusChange.ts. */
+  statusRecord?: 'Lead' | 'Opportunity'
   /**
    * Optional whole-number fields (opportunity stages: weightage %). `inList`: search-data returns it,
    * so the list shows it as a column.
@@ -243,8 +250,11 @@ export function createMasterApi(def: MasterDefinition) {
         body.companyNo = input.companyNo
       }
       if (def.hasColor) body.colorCoding = input.colorCoding?.trim() || undefined
-      // Required booleans: always sent (false when not ticked).
-      for (const flag of def.flags ?? []) body[flag.key] = input.flags?.[flag.key] === true
+      // Required booleans: always sent (false when not ticked). Pending ones only once the backend has them.
+      for (const flag of def.flags ?? []) {
+        if (flag.pending && PENDING_API_MODE !== 'server') continue
+        body[flag.key] = input.flags?.[flag.key] === true
+      }
       // Optional whole numbers: sent when given, within their range.
       for (const field of def.numbers ?? []) {
         const value = input.numbers?.[field.key]
@@ -287,7 +297,9 @@ export const masterApis = {
     flags: [
       { key: 'isFirstActivity', label: 'First activity', hint: 'Status a new lead starts with' },
       { key: 'isLastActivity', label: 'Last activity', hint: 'Status that closes the lead' },
+      { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when a lead moves to this status', pending: true },
     ],
+    statusRecord: 'Lead',
     label: 'Lead status',
   }),
   opportunityStatuses: createMasterApi({
@@ -297,7 +309,10 @@ export const masterApis = {
     flags: [
       { key: 'isFirstActivity', label: 'First activity', hint: 'Status a new opportunity starts with' },
       { key: 'isLastActivity', label: 'Last activity', hint: 'Status that closes the opportunity' },
+      { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when an opportunity moves to this status', pending: true },
+      { key: 'isWon', label: 'Won (Order Value + Order Date required)', hint: 'Order Value and Order Date are required for this status', pending: true },
     ],
+    statusRecord: 'Opportunity',
     label: 'Opportunity status',
   }),
   opportunityStages: createMasterApi({

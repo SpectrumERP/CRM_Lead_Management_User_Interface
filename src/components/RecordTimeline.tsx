@@ -310,7 +310,8 @@ export function PagedTimeline({
       setLoading(true)
       setError(null)
       try {
-        const result = await fetchTimelinePage(record, recordNo, { pageNo: page, timelineTypeNo: typeNo })
+        // Latest entry first (ActionDate DESC); older entries follow on later pages.
+        const result = await fetchTimelinePage(record, recordNo, { pageNo: page, timelineTypeNo: typeNo, order: 'newest' })
         if (request !== requestRef.current) return
         setEntries((prev) => (reset ? result.entries : [...prev, ...result.entries]))
         setPageNo(page)

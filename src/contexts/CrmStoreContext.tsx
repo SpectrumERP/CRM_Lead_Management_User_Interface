@@ -45,7 +45,8 @@ export interface CrmStore {
   documents: CRMDocument[]
   audit: AuditEntry[]
   addLead: (lead: Lead) => void
-  patchLead: (id: string, patch: Partial<Lead>) => void
+  /** Resolves true once saved (server records: after the API call and reload); false when it failed. */
+  patchLead: (id: string, patch: Partial<Lead>) => Promise<boolean>
   removeLead: (id: string) => void
   addContact: (contact: Contact) => void
   addActivity: (activity: Activity) => void
@@ -67,7 +68,8 @@ export interface CrmStore {
     input: { dealValue: number; valueCurrency: LeadCurrency; closingDate: string },
   ) => Promise<Opportunity | undefined>
   addOpportunity: (opportunity: Opportunity) => void
-  patchOpportunity: (id: string, patch: Partial<Opportunity>) => void
+  /** Resolves true once saved (server records: after the API call and reload); false when it failed. */
+  patchOpportunity: (id: string, patch: Partial<Opportunity>) => Promise<boolean>
   removeOpportunity: (id: string) => void
 }
 
@@ -161,10 +163,10 @@ export function useCrmActions() {
         // Server leads are saved through /api/crm/leads/save, then reloaded into the store.
         const current = api.crm.getState().leads.find((lead) => lead.id === id)
         if (current?.spectrum) {
-          void runAsync(() => updateServerLead(current, patch))
-          return
+          return runAsync(() => updateServerLead(current, patch)).then((saved) => saved !== undefined)
         }
         run(() => RAW_ACTIONS.patchLead(id, patch))
+        return Promise.resolve(true)
       },
       removeLead: (id: string) => {
         const current = api.crm.getState().leads.find((lead) => lead.id === id)
@@ -281,10 +283,10 @@ export function useCrmActions() {
       patchOpportunity: (id: string, patch: Partial<Opportunity>) => {
         const current = api.crm.getState().opportunities.find((item) => item.id === id)
         if (current?.spectrum) {
-          void runAsync(() => updateServerOpportunity(current, patch))
-          return
+          return runAsync(() => updateServerOpportunity(current, patch)).then((saved) => saved !== undefined)
         }
         run(() => RAW_ACTIONS.patchOpportunity(id, patch))
+        return Promise.resolve(true)
       },
       removeOpportunity: (id: string) => {
         const current = api.crm.getState().opportunities.find((item) => item.id === id)

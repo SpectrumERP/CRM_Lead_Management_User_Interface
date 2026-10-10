@@ -12,7 +12,7 @@ import { spectrumEndpoints } from './endpoints'
 import { fail } from './errors'
 import { assertSuccess, type SpectrumResponse } from './fillValues'
 import { http } from './http'
-import { fetchAllPages, type DetailContactRow, type DetailProductRow, type ServerUserRef } from './leads'
+import { fetchAllPages, type DetailContactRow, type DetailProductRow, type ServerActivityAttachment, type ServerUserRef } from './leads'
 import type { OpportunityFormFillValues } from './opportunityFormFillValues'
 import { repeatedQuery, withQuery } from './query'
 
@@ -22,6 +22,7 @@ export interface OpportunitySaveBody {
   companyNo: number
   leadNo?: number
   opportunityName?: string
+  description?: string
   opportunityOwnerNo: number
   salesOrganizationNo: number
   opportunityStageNo: number
@@ -44,6 +45,8 @@ export interface OpportunityRow {
   opportunityNo: number
   code?: string | null
   opportunityName?: string | null
+  description?: string | null
+  opportunityDescription?: string | null
   company?: { companyNo: number; companyAlias?: string | null; companyName?: string | null } | null
   lead?: {
     leadNo: number
@@ -59,6 +62,9 @@ export interface OpportunityRow {
   currency?: { currencyNo: number; currencyName?: string | null; currencyCode?: string | null; symbol?: string | null } | null
   opportunityValue?: number | null
   expectedClosureDate?: string | null
+  /** Won order details (pending backend fields; see api/statusChange.ts). */
+  orderValue?: number | null
+  orderDate?: string | null
   opportunityOwner?: ServerUserRef | null
   createdBy?: ServerUserRef | null
   createdDate?: string | null
@@ -78,6 +84,8 @@ export interface OpportunityActivityRow {
   closureDate?: string | null
   completionRemark?: string | null
   status?: { statusNo: number; statusName?: string | null } | null
+  /** Files linked to the activity (pending backend field; see api/activityAttachments.ts). */
+  attachments?: ServerActivityAttachment[] | null
 }
 
 export interface OpportunityNoteRow {
@@ -112,6 +120,8 @@ export interface OpportunityActivityBody {
   /** With the "Completed" status (Mark Complete). */
   completionRemark?: string
   statusNo: number
+  /** Files to link (pending backend field; sent only in server mode — see api/activityAttachments.ts). */
+  attachments?: { docNo: number }[]
 }
 
 export async function saveOpportunityActivity(body: OpportunityActivityBody): Promise<void> {
@@ -182,6 +192,7 @@ export interface OpportunityDraft {
   companyNo: number
   leadNo?: number
   name: string
+  description?: string
   ownerLoginNo?: number
   salesOrganizationNo?: number
   stageName: string
@@ -224,6 +235,7 @@ export function buildOpportunitySaveBody(
     companyNo: draft.companyNo,
     leadNo: draft.leadNo,
     opportunityName: draft.name.trim() || undefined,
+    description: draft.description?.trim() || undefined,
     opportunityOwnerNo: draft.ownerLoginNo!,
     salesOrganizationNo: draft.salesOrganizationNo!,
     opportunityStageNo: stageNo!,

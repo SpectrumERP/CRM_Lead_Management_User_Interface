@@ -50,6 +50,8 @@ import {
   type OpportunityRow,
 } from './opportunities'
 import { getOpportunityFillValues, stageWeight, type OpportunityFormFillValues } from './opportunityFormFillValues'
+import { activityAttachmentBody, activityAttachmentFields, forgetActivityAttachments, newActivityId, rememberActivityAttachments } from './activityAttachments'
+import { isPendingApiMock } from './pendingApiStore'
 import { resolveSpectrumCompany } from './spectrumCompany'
 
 // ─── Ids ──────────────────────────────────────────────────────────────────────
@@ -106,6 +108,9 @@ export function opportunityFromRow(
       businessEntityNo: row.businessEntity?.businessEntityNo ?? existing?.spectrum?.businessEntityNo,
       currencyNo: currency?.currencyNo ?? existing?.spectrum?.currencyNo,
       salesOrganizationNo: row.salesOrganization?.salesOrganizationNo ?? existing?.spectrum?.salesOrganizationNo,
+      // Won order details (pending backend fields) — only when the server sends them.
+      ...(row.orderValue != null ? { orderValue: row.orderValue } : {}),
+      ...(row.orderDate ? { orderDate: row.orderDate.slice(0, 10) } : {}),
       ...(detail
         ? {
             contactPersonDetailNos: contactNosOf(contacts ?? []),
@@ -116,6 +121,7 @@ export function opportunityFromRow(
     },
     leadId: row.lead?.leadNo ? serverLeadId(row.lead.leadNo) : existing?.leadId,
     name: row.opportunityName || row.code || serverOpportunityId(row.opportunityNo),
+    description: row.description ?? row.opportunityDescription ?? existing?.description ?? '',
     companyName: row.businessEntity?.businessEntityName ?? existing?.companyName ?? '',
     // Contact names come with the detail only; email / phone are not sent by the server.
     contactPerson: primary ?? existing?.contactPerson ?? '',
@@ -197,7 +203,7 @@ export function opportunityActivities(detail: OpportunityDetail, item: Opportuni
       closureDate: dateOnly(a.closureDate) || undefined,
       completeDate: '',
       completeTime: '',
-      hasAttachment: false,
+      ...activityAttachmentFields(`SOA-${a.opportunityActivityDetailNo}`, a.attachments),
     }
   })
 }
@@ -258,6 +264,8 @@ export async function saveServerOpportunityActivity(activity: Activity): Promise
   if (!statusNo) fail('VALIDATION', `Activity status "${status.statusName}" is not set up on the server.`)
   const assignedToNo = activity.assignedTo ? await loginNoForName(activity.assignedTo) : undefined
   if (!assignedToNo) fail('VALIDATION', `"${activity.assignedTo}" was not found among server users.`)
+  const opportunityActivities = () => getState().activities.filter((a) => a.opportunityId === activity.opportunityId)
+  const before = opportunityActivityDetailNo === undefined ? opportunityActivities().map((a) => a.id) : []
   await saveOpportunityActivity({
     opportunityNo,
     opportunityActivityDetailNo,
@@ -269,8 +277,18 @@ export async function saveServerOpportunityActivity(activity: Activity): Promise
     closureDate: status.closureDate,
     completionRemark: status.completionRemark,
     statusNo,
+    ...activityAttachmentBody(activity),
   })
+  // Mock: files are linked once the save succeeded — an update by its id, a new activity by the id it got.
+  if (opportunityActivityDetailNo !== undefined) rememberActivityAttachments(`SOA-${opportunityActivityDetailNo}`, activity.attachments)
   await refreshServerOpportunity(opportunityNo)
+  if (opportunityActivityDetailNo === undefined && activity.attachments?.length && isPendingApiMock()) {
+    const id = newActivityId(before, opportunityActivities())
+    if (id) {
+      rememberActivityAttachments(id, activity.attachments)
+      await refreshServerOpportunity(opportunityNo)
+    }
+  }
 }
 
 /** Delete a server opportunity activity (`SOA-…` id) through `delete-activity-detail`, then reload it. */
@@ -279,6 +297,7 @@ export async function deleteServerOpportunityActivity(activity: Pick<Activity, '
   const detailNo = activity.id.startsWith('SOA-') ? Number(activity.id.slice(4)) : undefined
   if (!opportunityNo || !detailNo) fail('VALIDATION', 'This activity is not saved on the server.')
   await deleteOpportunityActivities([detailNo])
+  forgetActivityAttachments([activity.id])
   await refreshServerOpportunity(opportunityNo)
 }
 
@@ -345,6 +364,7 @@ export async function updateServerOpportunity(current: Opportunity, patch: Parti
     companyNo: company.headOfficeNo,
     leadNo: ref.leadNo,
     name: next.name,
+    description: next.description,
     ownerLoginNo,
     salesOrganizationNo: ref.salesOrganizationNo,
     stageName: next.dealStage,

@@ -62,7 +62,8 @@ const MODULES: ErpModule[] = [
     label: 'CRM',
     description: 'Leads, opportunities, contacts',
     color: '#0e7490',
-    to: IN_SPECTRUM ? paths.dashboard : paths.leads,
+    // The CRM opens on its first page, the Sales Dashboard.
+    to: paths.dashboard,
     icon: (
       <svg {...glyph}>
         {/* Handshake — the CRM icon in the sidebar (lucide "handshake") */}

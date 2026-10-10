@@ -74,6 +74,10 @@ export const spectrumEndpoints = {
     deleteActivities: '/api/crm/leads/delete-activity-detail',
     saveNote: '/api/crm/leads/save-notes-detail',
     deleteNotes: '/api/crm/leads/delete-notes-detail',
+    /** Pending backend: POST { leadNo, leadStatusNo, remark? } (see statusChange.ts). */
+    changeStatus: '/api/crm/leads/change-status',
+    /** Pending backend: `${statusHistory}/{leadNo}` — paged, latest first. */
+    statusHistory: '/api/crm/leads/status-history',
   },
   opportunities: {
     /** All opportunity form dropdowns in one call (see opportunityFormFillValues.ts). */
@@ -88,6 +92,10 @@ export const spectrumEndpoints = {
     deleteNotes: '/api/crm/opportunities/delete-notes-detail',
     /** `${timeline}/{opportunityNo}` — paged (see timeline.ts). */
     timeline: '/api/crm/opportunities/timeline',
+    /** Pending backend: POST { opportunityNo, opportunityStatusNo, remark?, orderValue?, orderDate? }. */
+    changeStatus: '/api/crm/opportunities/change-status',
+    /** Pending backend: `${statusHistory}/{opportunityNo}` — paged, latest first. */
+    statusHistory: '/api/crm/opportunities/status-history',
   },
   /** Sales dashboard figures, all GET with `CompanyNo` (see dashboard.ts). */
   dashboard: {

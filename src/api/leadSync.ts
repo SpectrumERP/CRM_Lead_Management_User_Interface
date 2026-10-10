@@ -9,7 +9,7 @@
  */
 import type { Activity, ActivityType } from '../data/activities'
 import { ACTIVITY_TYPES, activityStatusFromServer, serverActivityStatusKind, type ServerActivityStatusKind } from '../data/activities'
-import { isLeadLocked, leadDeleteBlockedReason, leadLockedReason, type Lead, type LeadContactEntry, type LeadPriority, type LeadSource, type LeadStage, type LeadStatus, type RecordAudit } from '../data/leads'
+import { isLeadLocked, leadDeleteBlockedReason, leadLockedReason, type Lead, type LeadContactEntry, type LeadPriority, type LeadSource, type LeadStage, type LeadStatus, type LeadStatusLog, type RecordAudit } from '../data/leads'
 import type { CrmNote } from '../contexts/crmTypes'
 import { dropServerLead, getState, replaceServerLeadChildren, upsertServerLeads } from './db'
 import { fail } from './errors'
@@ -36,6 +36,8 @@ import {
   type LeadSearchRow,
   type ServerUserRef,
 } from './leads'
+import { activityAttachmentBody, activityAttachmentFields, forgetActivityAttachments, newActivityId, rememberActivityAttachments } from './activityAttachments'
+import { isPendingApiMock } from './pendingApiStore'
 import { resolveSpectrumCompany } from './spectrumCompany'
 import { searchUsers, userDisplayName } from './users'
 
@@ -206,6 +208,21 @@ export function leadFromSearchRow(row: LeadSearchRow, existing?: Lead): Lead {
 }
 
 
+/** load-data `statusLogs` → the lead's status log, oldest first. */
+export function statusLogsFromDetail(rows: NonNullable<LeadDetail['statusLogs']>): LeadStatusLog[] {
+  return rows
+    .filter((row) => row.leadStatus?.leadStatusName)
+    .map((row) => ({
+      no: row.leadStatusLogDetailNo,
+      statusNo: row.leadStatus?.leadStatusNo,
+      statusName: row.leadStatus!.leadStatusName!.trim(),
+      by: personName(row.createdBy),
+      byLoginNo: row.createdBy?.loginNo,
+      at: row.createdDate ?? '',
+    }))
+    .sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0))
+}
+
 /** Full detail → Lead (+ its server notes and activities). */
 export function leadFromDetail(detail: LeadDetail, existing?: Lead): { lead: Lead; notes: CrmNote[]; activities: Activity[] } {
   const id = serverLeadId(detail.leadNo)
@@ -234,6 +251,7 @@ export function leadFromDetail(detail: LeadDetail, existing?: Lead): { lead: Lea
       leadDate: detail.leadDate ?? undefined,
       stageCompleted: Boolean(detail.leadStage?.isStagedCompleted),
       detailLoaded: true,
+      ...(detail.statusLogs ? { statusLogs: statusLogsFromDetail(detail.statusLogs) } : {}),
     },
     leadName,
     companyName: detail.businessEntity?.businessEntityName ?? existing?.companyName ?? '',
@@ -286,7 +304,7 @@ export function leadFromDetail(detail: LeadDetail, existing?: Lead): { lead: Lea
       closureDate: dateOnly(a.closureDate) || undefined,
       completeDate: '',
       completeTime: '',
-      hasAttachment: false,
+      ...activityAttachmentFields(`SA-${a.leadActivityDetailNo}`, a.attachments),
     }
   })
 
@@ -500,6 +518,8 @@ export async function saveServerLeadActivity(activity: Activity): Promise<void> 
   if (!statusNo) fail('VALIDATION', `Activity status "${status.statusName}" is not set up on the server.`)
   const assignToLoginNo = activity.assignedTo ? await loginNoForName(activity.assignedTo) : undefined
   if (activity.assignedTo && !assignToLoginNo) fail('VALIDATION', `"${activity.assignedTo}" was not found among server users.`)
+  const leadActivityIds = () => getState().activities.filter((a) => a.leadId === activity.leadId && !a.opportunityId).map((a) => a.id)
+  const before = detailNo === undefined ? leadActivityIds() : []
   await saveLeadActivity({
     leadNo,
     leadActivityDetailNo: detailNo,
@@ -511,8 +531,18 @@ export async function saveServerLeadActivity(activity: Activity): Promise<void> 
     closureDate: status.closureDate,
     completionRemark: status.completionRemark,
     statusNo,
+    ...activityAttachmentBody(activity),
   })
+  // Mock: files are linked once the save succeeded — an update by its id, a new activity by the id it got.
+  if (detailNo !== undefined) rememberActivityAttachments(activity.id, activity.attachments)
   await refreshServerLead(leadNo)
+  if (detailNo === undefined && activity.attachments?.length && isPendingApiMock()) {
+    const id = newActivityId(before, getState().activities.filter((a) => a.leadId === activity.leadId && !a.opportunityId))
+    if (id) {
+      rememberActivityAttachments(id, activity.attachments)
+      await refreshServerLead(leadNo)
+    }
+  }
 }
 
 /** Add (in-app id) or update (`SN-…` id) a note on a server lead, then reload the lead. */
@@ -536,6 +566,7 @@ export async function deleteServerLeadActivity(activity: Pick<Activity, 'id' | '
   if (!leadNo || !detailNo) fail('VALIDATION', 'This activity is not saved on the server.')
   assertLeadUnlocked(activity.leadId)
   await deleteLeadActivities([detailNo])
+  forgetActivityAttachments([activity.id])
   await refreshServerLead(leadNo)
 }
 

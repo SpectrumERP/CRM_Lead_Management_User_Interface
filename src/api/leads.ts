@@ -12,6 +12,8 @@ import { fail } from './errors'
 import { http } from './http'
 import { repeatedQuery, withQuery } from './query'
 import type { LeadFormFillValues } from './leadFormFillValues'
+import { activityAttachmentBody } from './activityAttachments'
+import type { Attachment } from './attachments'
 
 export interface LeadSaveContact {
   businessEntityContactPersonDetailNo: number
@@ -30,6 +32,16 @@ export interface LeadSaveActivity {
   /** With the "Completed" status (Mark Complete). */
   completionRemark?: string
   statusNo: number
+  /** Files to link (pending backend field; sent only in server mode — see api/activityAttachments.ts). */
+  attachments?: { docNo: number }[]
+}
+
+/** A file linked to an activity, as load-data will return it (pending backend field). */
+export interface ServerActivityAttachment {
+  docNo: number
+  fileName?: string | null
+  fileType?: string | null
+  fileSize?: number | null
 }
 
 export interface LeadSaveNote {
@@ -232,6 +244,15 @@ export interface LeadDetail {
     closureDate?: string | null
     completionRemark?: string | null
     status?: { statusNo: number; statusName?: string | null } | null
+    /** Pending backend field (see api/activityAttachments.ts). */
+    attachments?: ServerActivityAttachment[] | null
+  }[] | null
+  /** Every status the lead has had (`LeadLoadStatusLogModel`): status, who and when. */
+  statusLogs?: {
+    leadStatusLogDetailNo: number
+    leadStatus?: { leadStatusNo: number; leadStatusName?: string | null } | null
+    createdBy?: ServerUserRef | null
+    createdDate?: string | null
   }[] | null
   createdBy?: ServerUserRef | null
   createdDate?: string | null
@@ -295,6 +316,8 @@ export interface LeadDraftActivity {
   statusName: string
   /** `YYYY-MM-DD` — sent as `closureDate` when the status is Closed. */
   closureDate?: string
+  /** Uploaded files for this activity (sent in server mode; see activityAttachments.ts). */
+  attachments?: Attachment[]
 }
 
 /** What the lead form knows at save time: master values by name, everything else by number. */
@@ -384,6 +407,7 @@ export function buildLeadSaveBody(
         notesOutcome: a.notesOutcome.trim() || undefined,
         closureDate: /^closed$/i.test(a.statusName.trim()) && a.closureDate ? dateOnlyToIso(a.closureDate) : undefined,
         statusNo,
+        ...activityAttachmentBody(a),
       })
     }
   })

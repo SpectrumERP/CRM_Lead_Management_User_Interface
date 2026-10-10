@@ -15,7 +15,7 @@ import { OptionLookupField } from '../components/OptionLookupField'
 import CurrencyAmountField from '../components/CurrencyAmountField'
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
 import { bySequence, guessIsoCurrency } from '../api/fillValues'
-import { Button, Card, FormGrid, TextField } from '../ui'
+import { Button, Card, FormGrid, TextAreaField, TextField } from '../ui'
 import { UserSelectField } from '../components/UserSelect'
 import ProductPicker, { useProductCatalog } from '../components/ProductPicker'
 import { productsFromText, productsToText, type Product } from '../data/products'
@@ -109,6 +109,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
   const { patchOpportunity } = useCrmActions()
   const confirm = useConfirm()
   const [name, setName] = useState(existing.name)
+  const [description, setDescription] = useState(existing.description ?? '')
   // Business entity (fixed after creation) + primary / secondary contacts, shared with the lead form.
   const [entityContacts, setEntityContacts] = useState<EntityContactsValue>(() => ({
     entity: {
@@ -181,8 +182,10 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
     if (!(await confirm(saveConfirm('Opportunity', true)))) return
     setSaving(true)
     const pickedCurrency = oppFill?.currencies.find((c) => c.currencyNo === currencyNo)
-    patchOpportunity(existing.id, {
+    // Wait for the server: a rejected save shows its error (toast) and keeps the form open.
+    const saved = await patchOpportunity(existing.id, {
       name: name.trim(),
+      description: description.trim(),
       contactPerson: entityContacts.primary?.name.trim() ?? '',
       email: entityContacts.primary?.email.trim() ?? '',
       phone: entityContacts.primary?.phone.trim() ?? '',
@@ -206,6 +209,11 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
         attachmentNos: attachments.map((a) => a.id),
       },
     })
+    if (!saved) {
+      setSaving(false)
+      setErrors({ form: 'The opportunity could not be saved. Please check the details and try again.' })
+      return
+    }
     setTimeout(() => {
       setSubmitted(true)
       setTimeout(onSuccess, 1200)
@@ -278,6 +286,14 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
                 onValueChange={setName}
                 placeholder="Enter opportunity name"
               />
+              <TextAreaField
+                fieldClassName="lg:col-span-2"
+                label="Opportunity Description"
+                rows={3}
+                value={description}
+                onValueChange={setDescription}
+                placeholder="Enter description"
+              />
               <div className="lg:col-span-2">
                 <ProductPicker
                   label="Products Required"
@@ -324,6 +340,9 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
                 error={errors.status}
                 placeholder="Select status"
                 value={status}
+                // The status changes only through Change Status on the opportunity (remark, Won order details, history).
+                disabled
+                hint="Change it with Change Status on the opportunity page"
                 onValueChange={(value) => setStatus(value as OpportunityStatus)}
                 options={(oppFill?.opportunityStatuses ?? []).map((st) => ({ value: st.opportunityStatusName, label: st.opportunityStatusName, code: st.code }))}
               />

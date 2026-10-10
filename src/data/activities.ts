@@ -1,4 +1,5 @@
 import { formatDateParts } from '../utils/dateFormat';
+import type { Attachment } from '../api/attachments';
 
 export type ActivityType =
   | 'Task'
@@ -47,6 +48,8 @@ export interface Activity {
   completeTime: string;
   hasAttachment: boolean;
   attachmentName?: string;
+  /** Files linked to the activity (document store docNos; see api/activityAttachments.ts). */
+  attachments?: Attachment[];
   parentActivityId?: string; // for follow-ups
   /** Server activity number to save with (expected-closures `lastActivity.activityDetailNo`); wins over the one in `id`. */
   serverDetailNo?: number;

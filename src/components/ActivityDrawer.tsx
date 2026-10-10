@@ -23,6 +23,10 @@ import { UserSelectField } from './UserSelect'
 import { FIELD_LIMITS } from '../constants/fieldLimits'
 import { formatDate } from '../utils/dateFormat'
 import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
+import AttachmentsField from './AttachmentsField'
+import type { Attachment } from '../api/attachments'
+import { activityAttachmentFormNo } from '../api/activityAttachments'
+import { useSpectrumCompany } from '../auth/useSpectrumCompany'
 
 interface ActivityDrawerProps {
   preselectedLead?: { id: string; name: string; contact: string } | null
@@ -35,12 +39,14 @@ interface ActivityDrawerProps {
   inline?: boolean
   /** Editing: show the details read-only; only Notes / Outcome and Status can change. */
   notesOnly?: boolean
+  /** A new activity of an opportunity: its files are filed under the opportunity form. */
+  forOpportunity?: boolean
 }
 
 type LeadOption = { id: string; name: string; contact: string }
 
 
-export default function ActivityDrawer({ preselectedLead, followUpFrom, editing, onClose, onSave, inline = false, notesOnly = false }: ActivityDrawerProps) {
+export default function ActivityDrawer({ preselectedLead, followUpFrom, editing, onClose, onSave, inline = false, notesOnly = false, forOpportunity = false }: ActivityDrawerProps) {
   const confirm = useConfirm()
   // Server activity types and server leads only (what the save APIs accept).
   const { values: fill } = useLeadFormFillValues()
@@ -83,6 +89,11 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  // Uploaded to the document store as they are picked; the save links them to the activity.
+  const [attachments, setAttachments] = useState<Attachment[]>(editing?.attachments ?? [])
+  const [uploadsBusy, setUploadsBusy] = useState(false)
+  const spectrumCompany = useSpectrumCompany()
+  const attachmentFormNo = activityAttachmentFormNo({ opportunityId: editing?.opportunityId ?? (forOpportunity ? 'opportunity' : undefined) })
   const { closing, requestClose } = useSheetClose(onClose)
   const dismiss = inline ? onClose : requestClose
   const fromLeadForm = Boolean(preselectedLead)
@@ -118,6 +129,10 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
       return
     }
     if (!lead) return
+    if (uploadsBusy) {
+      setErrors({ attachments: 'Please wait for the attachments to finish uploading.' })
+      return
+    }
     if (!(await confirm(saveConfirm('Activity', Boolean(editing))))) return
     setSaving(true)
     window.setTimeout(() => {
@@ -141,7 +156,9 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
         closureDate: isClosed ? closureDate : undefined,
         completeDate: isCompleted ? (editing?.completeDate ?? '') : '',
         completeTime: isCompleted ? (editing?.completeTime ?? '') : '',
-        hasAttachment: editing?.hasAttachment ?? false,
+        hasAttachment: attachments.length > 0,
+        attachmentName: attachments.length === 1 ? attachments[0]!.name : attachments.length ? `${attachments.length} files` : undefined,
+        attachments,
         parentActivityId: editing?.parentActivityId ?? followUpFrom?.id,
       })
       dismiss()
@@ -302,9 +319,21 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
         ) : null}
       </FormGrid>
 
+      <AttachmentsField
+        formNo={attachmentFormNo}
+        companyNo={spectrumCompany.enabled ? spectrumCompany.headOfficeNo : null}
+        value={attachments}
+        onChange={(next) => {
+          setAttachments(next)
+          clearErr('attachments')
+        }}
+        onBusyChange={setUploadsBusy}
+        noun="activity"
+      />
+
       {Object.keys(errors).length > 0 ? (
         <p className="text-xs text-accent" role="alert">
-          Please fill the required fields before saving.
+          {errors.attachments ?? 'Please fill the required fields before saving.'}
         </p>
       ) : null}
     </div>
@@ -315,7 +344,7 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
           <Button variant="secondary" className={inline ? '' : 'flex-1'} onClick={dismiss}>
             Cancel
           </Button>
-          <Button variant="solid" className={inline ? '' : 'flex-1'} onClick={handleSave} disabled={saving}>
+          <Button variant="solid" className={inline ? '' : 'flex-1'} onClick={handleSave} disabled={saving || uploadsBusy}>
             {saving ? 'Saving…' : editing ? 'Update Activity' : 'Save Activity'}
           </Button>
         </div>

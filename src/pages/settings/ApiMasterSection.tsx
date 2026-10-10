@@ -12,6 +12,8 @@ import { C, EmptyRows, FilterBar, FormField, MasterTable, Modal, SectionHeader, 
 import type { ApiMasterState } from './useApiMaster';
 import { saveConfirm, useConfirm } from '../../contexts/ConfirmContext'
 import { formatDate } from '../../utils/dateFormat';
+import { isPendingApiMock } from '../../api/pendingApiStore';
+import { saveStatusRule, statusRule } from '../../api/statusChange';
 
 /** Rows per page, as in the leads and opportunities grids. */
 const PAGE_SIZE = 10;
@@ -85,6 +87,13 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
   const nameMax = api.definition.nameMax ?? NAME_MAX;
   const hasColor = Boolean(api.definition.hasColor);
   const flagDefs = api.definition.flags ?? [];
+  // Status masters in mock mode: Remark mandatory / Won are kept in this browser (not sent to the server).
+  const localRecord = isPendingApiMock() ? api.definition.statusRecord : undefined;
+  const localFlags = (item: Pick<MasterRow, 'no' | 'name'>): Record<string, boolean> => {
+    if (!localRecord) return {};
+    const rule = statusRule(localRecord, { no: item.no, name: item.name });
+    return localRecord === 'Opportunity' ? { isRemarkMandatory: rule.isRemarkMandatory, isWon: rule.isWon } : { isRemarkMandatory: rule.isRemarkMandatory };
+  };
   const numberDefs = api.definition.numbers ?? [];
   const listedNumbers = numberDefs.filter((n) => n.inList);
   const [search, setSearch] = useState('');
@@ -138,7 +147,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     setIsNew(false); setEditing(item);
     setForm({
       name: item.name, sequence: item.sequence ? String(item.sequence) : '', description: item.description ?? '',
-      colorCoding: '', flags: {}, numbers: numbersToText(item.numbers),
+      colorCoding: '', flags: localFlags(item), numbers: numbersToText(item.numbers),
     }); setErrors({});
     if (!needsDetailForEdit(api.definition) || !state.companyNo) return;
     // Colour / flags come only from load-data — without them a save would clear them.
@@ -150,7 +159,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
         name: detail.name || prev.name,
         sequence: detail.sequence ? String(detail.sequence) : prev.sequence,
         colorCoding: detail.colorCoding ?? '',
-        flags: detail.flags ?? {},
+        flags: { ...detail.flags, ...localFlags(item) },
         numbers: { ...prev.numbers, ...numbersToText(detail.numbers) },
       }));
     } catch (err) {
@@ -196,7 +205,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     if (!(await confirm(saveConfirm(noun, !isNew)))) return;
     setSaving(true);
     try {
-      await api.save({
+      const savedNo = await api.save({
         no: editing?.no ?? null,
         companyNo: state.companyNo,
         name: form.name.trim(),
@@ -211,6 +220,9 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
             }))
           : undefined,
       });
+      if (localRecord && savedNo > 0) {
+        saveStatusRule(localRecord, savedNo, { isRemarkMandatory: form.flags.isRemarkMandatory === true, isWon: form.flags.isWon === true });
+      }
       clearFillValueCaches();
       onToast?.('success', isNew ? `${noun} Added` : `${noun} Updated`, `"${form.name.trim()}" saved successfully.`);
       closeModal();

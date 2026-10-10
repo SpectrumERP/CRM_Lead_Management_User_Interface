@@ -24,9 +24,17 @@ import {
   type OppFieldKey,
 } from '../components/OpportunityInlineEdit'
 import { formatDateTime, type Activity } from '../data/activities'
+import { formatMoney } from '../data/leads'
+import { useAuth } from '../auth/AuthContext'
+import { usePendingData } from '../api/pendingApiStore'
+import { changeOpportunityStatus, opportunityOrder, statusRule, type StatusOption } from '../api/statusChange'
+import StatusChangeDialog from '../components/StatusChangeDialog'
+import StatusHistory from '../components/StatusHistory'
+import ActivityAttachments from '../components/ActivityAttachments'
+import { formatDate } from '../utils/dateFormat'
 
 /** Same tabs as the lead view (its Emails tab is hidden there too). */
-const DETAIL_TABS = ['Internal Notes / Observations', 'Timeline'] as const
+const DETAIL_TABS = ['Internal Notes / Observations', 'Timeline', 'Status History'] as const
 type DetailTab = (typeof DETAIL_TABS)[number]
 
 interface OpportunityDetailProps {
@@ -320,6 +328,15 @@ export default function OpportunityDetail({
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [editingField, setEditingField] = useState<OppFieldKey | null>(null)
   const [activeTab, setActiveTab] = useState<DetailTab>(DETAIL_TABS[0])
+  const [showStatusChange, setShowStatusChange] = useState(false)
+  const pending = usePendingData()
+  const { user } = useAuth()
+  const statusOptions: StatusOption[] = (oppFill?.opportunityStatuses ?? []).map((s) => ({
+    no: s.opportunityStatusNo,
+    name: s.opportunityStatusName,
+    isRemarkMandatory: s.isRemarkMandatory,
+    isWon: s.isWon,
+  }))
 
   const relatedActivities = useMemo(() => {
     if (!opportunity) return []
@@ -377,6 +394,9 @@ export default function OpportunityDetail({
   }
 
   const stage = opportunity.dealStage as DealStage
+  // Won → its Order Value / Order Date under the status.
+  const currentStatus = statusOptions.find((s) => s.name.trim().toLowerCase() === opportunity.status.trim().toLowerCase())
+  const order = statusRule('Opportunity', currentStatus, pending).isWon ? opportunityOrder(opportunity, pending) : undefined
 
   return (
     <div className="min-h-full bg-canvas">
@@ -461,8 +481,13 @@ export default function OpportunityDetail({
             <HeaderFact
               label="Opportunity Status"
               value={opportunity.status}
-              hint="Whether work on this opportunity is active"
+              hint={
+                order
+                  ? `Order ${formatMoney(order.orderValue, opportunity.valueCurrency)} · ${formatDate(order.orderDate)}`
+                  : 'Whether work on this opportunity is active · click to change'
+              }
               tone={opportunityStatusClass(opportunity.status)}
+              onEdit={opportunity.spectrum ? () => setShowStatusChange(true) : undefined}
             />
             <HeaderFact
               label="Opportunity Owner"
@@ -549,6 +574,7 @@ export default function OpportunityDetail({
                       <p className="mt-0.5 text-[11px] text-ink-faint">
                         {item.type} · {formatDateTime(item.scheduleDate, item.scheduleTime)} · {item.assignedTo}
                       </p>
+                      <ActivityAttachments files={item.attachments} className="mt-1.5" />
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <span className="badge stage-contacted">{item.status}</span>
@@ -602,6 +628,14 @@ export default function OpportunityDetail({
 
       {/* ── Tab content ─────────────────────────────────────────────────────── */}
       <div className="page-gutter py-4">
+        {activeTab === 'Status History' && opportunity.spectrum ? (
+          <StatusHistory
+            record="Opportunity"
+            recordNo={opportunity.spectrum.opportunityNo}
+            currency={opportunity.valueCurrency}
+            refreshKey={`${opportunity.status}:${opportunity.audit?.modifiedAt ?? ''}`}
+          />
+        ) : null}
         {activeTab === 'Internal Notes / Observations' && (
           // Saved through the opportunity notes API (save-notes-detail / delete-notes-detail).
           <RecordNotesPanel recordId={opportunity.id} recordName={opportunity.name} noun="opportunity" onToast={onToast} />
@@ -637,8 +671,24 @@ export default function OpportunityDetail({
           }}
         />
       ) : null}
+      {showStatusChange ? (
+        <StatusChangeDialog
+          record="Opportunity"
+          recordLabel={`Opportunity ${opportunity.spectrum?.code ?? opportunity.id} · ${opportunity.name}`}
+          currentStatusName={opportunity.status}
+          statuses={statusOptions}
+          currencyLabel={opportunity.valueCurrency}
+          changedBy={user?.name ?? ''}
+          onClose={() => setShowStatusChange(false)}
+          onSubmit={async (change) => {
+            await changeOpportunityStatus(opportunity, change)
+            onToast?.('success', 'Status Changed', `Opportunity status is now ${change.newStatus.name}.`)
+          }}
+        />
+      ) : null}
       {showActivity ? (
         <ActivityDrawer
+          forOpportunity
           preselectedLead={{
             id: opportunity.leadId || opportunity.id,
             name: opportunity.companyName,
