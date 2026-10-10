@@ -67,6 +67,7 @@ export function taskAppReturnPath(next: string | null | undefined): string | nul
 }
 
 export const paths = {
+  login: withBase('/login'),
   dashboard: withBase('/'),
   entities: withBase('/entities'),
   entityNew: withBase('/entities/new'),

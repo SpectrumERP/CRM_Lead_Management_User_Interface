@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { IconTooltip } from '../ui'
 import { paths, taskAppUrl } from '../app/paths'
@@ -97,12 +98,24 @@ function WaffleIcon() {
   )
 }
 
-export default function ModuleLauncher({ activeModule }: { activeModule: 'dashboard' | 'crm' }) {
+/**
+ * `tone="dark"`: on the blue left panel, before the logo (as in the Spectrum ERP shell). The panel is
+ * portalled to <body> at the button's position, since the sidebar clips its overflow.
+ */
+export default function ModuleLauncher({
+  activeModule,
+  tone = 'light',
+}: {
+  activeModule: 'dashboard' | 'crm'
+  tone?: 'light' | 'dark'
+}) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [panelPos, setPanelPos] = useState<CSSProperties | null>(null)
   const panelId = useId()
 
   const shown = useMemo(() => {
@@ -111,11 +124,23 @@ export default function ModuleLauncher({ activeModule }: { activeModule: 'dashbo
     return MODULES.filter((m) => `${m.label} ${m.description}`.toLowerCase().includes(q))
   }, [query])
 
+  useLayoutEffect(() => {
+    if (!open) return
+    function place() {
+      const rect = rootRef.current?.getBoundingClientRect()
+      if (rect) setPanelPos({ top: rect.bottom + 8, left: Math.max(8, rect.left) })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     searchRef.current?.focus()
     function onPointer(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) setOpen(false)
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false)
@@ -148,22 +173,25 @@ export default function ModuleLauncher({ activeModule }: { activeModule: 'dashbo
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
-          className={`flex h-8 w-8 items-center justify-center rounded-lg border text-primary transition-[background-color,border-color,transform] duration-200 ease-out active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
-            open ? 'border-primary bg-primary-soft' : 'border-line-strong bg-primary-soft hover:border-primary'
+          className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-[background-color,border-color,transform] duration-200 ease-out active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 ${
+            tone === 'dark'
+              ? `text-white focus-visible:outline-white ${open ? 'border-white/40 bg-white/20' : 'border-white/15 bg-white/10 hover:border-white/30 hover:bg-white/20'}`
+              : `text-primary focus-visible:outline-primary ${open ? 'border-primary bg-primary-soft' : 'border-line-strong bg-primary-soft hover:border-primary'}`
           }`}
         >
           <WaffleIcon />
         </button>
       </IconTooltip>
 
-      {open ? (
+      {open && panelPos ? createPortal(
         <div
+          ref={panelRef}
           id={panelId}
           role="dialog"
           aria-label="Spectrum ERP apps"
           data-state="open"
-          className="crm-menu-anim absolute left-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-line bg-surface shadow-overlay"
-          style={{ transformOrigin: 'top left' }}
+          className="crm-menu-anim fixed z-[1000] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-line bg-surface shadow-overlay"
+          style={{ ...panelPos, transformOrigin: 'top left' }}
         >
           <div className="border-b border-line-subtle p-3">
             <div className="relative">
@@ -221,7 +249,8 @@ export default function ModuleLauncher({ activeModule }: { activeModule: 'dashbo
               </ul>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   )

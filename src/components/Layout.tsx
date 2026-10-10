@@ -138,9 +138,12 @@ const settingsNavItem = {
 function SidebarHeader({
   collapsed,
   onToggleCollapsed,
+  launcher,
 }: {
   collapsed?: boolean
   onToggleCollapsed?: () => void
+  /** Standalone: our app launcher before the logo (the shell's slot does this inside Spectrum ERP). */
+  launcher?: ReactNode
 }) {
   if (collapsed && onToggleCollapsed) {
     return (
@@ -171,6 +174,11 @@ function SidebarHeader({
         <div className="flex w-full min-w-0 items-center gap-2.5">
           {/* The shell's app launcher before the logo (as in the shell's left panel). */}
           <div data-spectrum-launcher-slot="dark" className="flex shrink-0 items-center" />
+          <img src="/spectrum-erp-logo-on-dark.png" alt="Spectrum ERP" className="block h-8 min-w-0 flex-1 object-contain object-left" />
+        </div>
+      ) : launcher ? (
+        <div className="flex w-full min-w-0 items-center gap-2.5">
+          <div className="flex shrink-0 items-center">{launcher}</div>
           <img src="/spectrum-erp-logo-on-dark.png" alt="Spectrum ERP" className="block h-8 min-w-0 flex-1 object-contain object-left" />
         </div>
       ) : (
@@ -244,12 +252,14 @@ function AppSidebar({
   onNavigate,
   collapsed = false,
   onToggleCollapsed,
+  showLauncher = false,
 }: {
   activePage: Page;
   currentPage: Page;
   onNavigate: (to: string) => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  showLauncher?: boolean;
 }) {
   const { user } = useAuth();
   const admin = isAdmin(user?.role);
@@ -257,7 +267,11 @@ function AppSidebar({
   const visibleNavItems = navItems.filter((item) => item.id !== 'business-entities' || entityRights.isOpen);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SidebarHeader collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
+      <SidebarHeader
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+        launcher={showLauncher && !IN_SPECTRUM ? <ModuleLauncher tone="dark" activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} /> : undefined}
+      />
 
       <nav className={`sidebar-scroll min-h-0 flex-1 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2.5'}`} aria-label="Main">
         {!collapsed ? (
@@ -602,6 +616,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
             onNavigate={go}
             collapsed={sidebarCollapsed && !focusMode}
             onToggleCollapsed={focusMode ? undefined : toggleSidebarCollapsed}
+            showLauncher
           />
         </div>
       </aside>
@@ -649,8 +664,8 @@ export default function Layout({ children, detailName }: LayoutProps) {
               </svg>
             </button>
             </IconTooltip>
-            {/* Inside Spectrum ERP the shell puts its app launcher before the logo (one launcher, apps from
-                its menu). With the menu open on a wide screen it sits with the logo in the left panel. */}
+            {/* The app launcher before the logo: inside Spectrum ERP the shell's (one launcher, apps from its
+                menu), standalone ours. With the menu open on a wide screen it sits with the logo in the left panel. */}
             {IN_SPECTRUM ? (
               <div
                 id="spectrum-module-launcher-slot"
@@ -659,7 +674,15 @@ export default function Layout({ children, detailName }: LayoutProps) {
                   (sidebarCollapsed || focusMode) && !(focusMode && focusSidebarOpen) ? 'pl-3 lg:pl-0 lg:pr-3' : 'pl-3 lg:hidden'
                 }`}
               />
-            ) : null}
+            ) : (
+              <div
+                className={`flex shrink-0 items-center ${
+                  (sidebarCollapsed || focusMode) && !(focusMode && focusSidebarOpen) ? 'pl-3 lg:pl-0 lg:pr-3' : 'pl-3 lg:hidden'
+                }`}
+              >
+                <ModuleLauncher activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} />
+              </div>
+            )}
             {sidebarCollapsed || focusMode ? (
               // Focus mode with the sidebar open: the logo is in the sidebar, not twice.
               focusMode && focusSidebarOpen ? null : (
@@ -692,10 +715,6 @@ export default function Layout({ children, detailName }: LayoutProps) {
                 <img src="/steelmont-logo.png" alt="SteelMont" className="client-logo block h-8 w-auto object-contain" />
               </span>
             </div>
-            {/* Standalone: our ERP module launcher (inside Spectrum ERP the shell's is in the slot above). */}
-            {import.meta.env.VITE_CRM_ROUTE_BASE ? null : (
-              <ModuleLauncher activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} />
-            )}
           </div>
 
             {/* Right actions */}
