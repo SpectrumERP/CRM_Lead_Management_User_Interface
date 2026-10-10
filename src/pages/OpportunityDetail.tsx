@@ -34,7 +34,7 @@ import ActivityAttachments from '../components/ActivityAttachments'
 import { formatDate } from '../utils/dateFormat'
 
 /** Same tabs as the lead view (its Emails tab is hidden there too). */
-const DETAIL_TABS = ['Internal Notes / Observations', 'Timeline', 'Status History'] as const
+const DETAIL_TABS = ['Internal Notes / Observations', 'Timeline'] as const
 type DetailTab = (typeof DETAIL_TABS)[number]
 
 interface OpportunityDetailProps {
@@ -487,7 +487,7 @@ export default function OpportunityDetail({
                   : 'Whether work on this opportunity is active · click to change'
               }
               tone={opportunityStatusClass(opportunity.status)}
-              onEdit={opportunity.spectrum ? () => setShowStatusChange(true) : undefined}
+              // onEdit={opportunity.spectrum ? () => setShowStatusChange(true) : undefined}
             />
             <HeaderFact
               label="Opportunity Owner"

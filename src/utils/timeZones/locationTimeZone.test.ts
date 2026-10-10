@@ -18,8 +18,15 @@ describe('location time zones', () => {
   it('picks a country’s only zone, else guesses from the state', () => {
     expect(suggestLocationTimeZoneNo(ZONES, 91, 'India', '', '')).toBe('1')
     expect(suggestLocationTimeZoneNo(ZONES, 1, 'United States', 'California', '')).toBe('3')
+    expect(suggestLocationTimeZoneNo(ZONES, 1, 'United States', 'New York', '')).toBe('2')
     expect(suggestLocationTimeZoneNo(ZONES, null, 'United Kingdom', '', '')).toBe('4')
     expect(suggestLocationTimeZoneNo(ZONES, null, 'Atlantis', '', '')).toBeNull()
+  })
+
+  it('defaults a multi-zone country to the first zone in the list', () => {
+    // Pacific (UTC-08:00) lists before Eastern (UTC-05:00).
+    expect(suggestLocationTimeZoneNo(ZONES, 1, 'United States', '', '')).toBe('3')
+    expect(nextLocationTimeZoneNo(ZONES, '', { countryNo: 1, country: 'United States', state: '', city: '' }, true)).toBe('3')
   })
 
   it('re-picks only for a new country or a multi-zone country', () => {

@@ -10,7 +10,7 @@ export function usesRemoteApi() {
 
 const DEFAULT_SPECTRUM_URL = 'https://crm-uat.steelmont.co.in:9097'
 // const DEFAULT_SPECTRUM_URL = 'http://3.108.117.198:9080'
-// const DEFAULT_SPECTRUM_URL = 'http://192.168.0.17:7002'
+// const DEFAULT_SPECTRUM_URL = 'http://192.168.0.21:7002'
 
 /** Spectrum backend used by `http` (real login + future APIs). Set VITE_SPECTRUM_API_URL to override; "off" disables it. */
 export function spectrumOrigin(): string {

@@ -1958,7 +1958,7 @@ const ALL_TABS = [
   "Emails",
   "Internal Notes / Observations",
   "Timeline",
-  "Status History",
+  // "Status History",
 ] as const
 type Tab = (typeof ALL_TABS)[number]
 /** Hidden for now; the tab's code stays so it can be switched back on by removing it here. */
@@ -2419,7 +2419,7 @@ export default function LeadDetail({
                   value={status}
                   hint={locked ? lockedReason : "Whether work on this lead is active · click to change"}
                   tone={leadStatusClass(status)}
-                  onEdit={locked || !leadData?.spectrum ? undefined : () => setShowStatusChange(true)}
+                  // onEdit={locked || !leadData?.spectrum ? undefined : () => setShowStatusChange(true)}
                 />
                 <HeaderFact
                   label="Owner"

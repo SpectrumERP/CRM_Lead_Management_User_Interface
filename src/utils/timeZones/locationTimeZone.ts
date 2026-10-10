@@ -1,6 +1,6 @@
 /**
  * Time zone helpers for business entity locations (same rules as the Task Management form):
- * a country with one zone gets it; otherwise the zone is guessed from country / state / city.
+ * a country with one zone gets it; a country with several gets the first, refined by state / city.
  */
 import { guessWindowsTimeZone } from './timezoneGuesser'
 import { buildTimeZoneComboboxOptions, formatTimeZoneDisplay } from './windowsTimeZones'
@@ -21,7 +21,10 @@ function asOptionLike(timeZones: readonly LocationTimeZone[]) {
   return timeZones.map((tz) => ({ timeZoneNo: tz.timeZoneNo, timeZoneName: tz.timeZoneName }))
 }
 
-/** Zone to pre-select: the country's only zone, else the guessed one (within the country when it has zones). */
+/**
+ * Zone to pre-select: the country's only zone. A country with several zones gets the one its state / city
+ * points to, else the first in the list (by UTC offset). A country with no zones mapped gets the guessed one.
+ */
 export function suggestLocationTimeZoneNo(
   timeZones: readonly LocationTimeZone[],
   countryNo: number | null,
@@ -31,10 +34,12 @@ export function suggestLocationTimeZoneNo(
 ): string | null {
   const zones = inCountry(timeZones, countryNo)
   if (zones.length === 1) return String(zones[0].timeZoneNo)
+  const first = zones.length ? buildTimeZoneComboboxOptions(asOptionLike(zones))[0].value : null
+  // Without a state or city the guess is only the country's, so the list's first zone is the default.
+  if (first && !state.trim() && !city.trim()) return first
   const guessed = guessWindowsTimeZone(country, state, city)
-  if (!guessed) return null
-  const match = (zones.length ? zones : timeZones).find((tz) => tz.timeZoneName === guessed)
-  return match ? String(match.timeZoneNo) : null
+  const match = guessed ? (zones.length ? zones : timeZones).find((tz) => tz.timeZoneName === guessed) : undefined
+  return match ? String(match.timeZoneNo) : first
 }
 
 /** True when the country has more than one zone, so state / city can change the pick. */
