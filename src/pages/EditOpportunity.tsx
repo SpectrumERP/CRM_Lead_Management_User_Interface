@@ -286,14 +286,14 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
                 onValueChange={setName}
                 placeholder="Enter opportunity name"
               />
-              <TextAreaField
+              {/* <TextAreaField
                 fieldClassName="lg:col-span-2"
                 label="Opportunity Description"
                 rows={3}
                 value={description}
                 onValueChange={setDescription}
                 placeholder="Enter description"
-              />
+              /> */}
               <div className="lg:col-span-2">
                 <ProductPicker
                   label="Products Required"

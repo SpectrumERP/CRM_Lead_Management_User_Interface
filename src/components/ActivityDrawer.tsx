@@ -319,7 +319,7 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
         ) : null}
       </FormGrid>
 
-      <AttachmentsField
+      {/* <AttachmentsField
         formNo={attachmentFormNo}
         companyNo={spectrumCompany.enabled ? spectrumCompany.headOfficeNo : null}
         value={attachments}
@@ -329,7 +329,7 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
         }}
         onBusyChange={setUploadsBusy}
         noun="activity"
-      />
+      /> */}
 
       {Object.keys(errors).length > 0 ? (
         <p className="text-xs text-accent" role="alert">

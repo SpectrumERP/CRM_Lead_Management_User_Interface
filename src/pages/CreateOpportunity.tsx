@@ -316,14 +316,14 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
                 onValueChange={setName}
                 placeholder="Enter opportunity name"
               />
-              <TextAreaField
+              {/* <TextAreaField
                 fieldClassName="lg:col-span-2"
                 label="Opportunity Description"
                 rows={3}
                 value={description}
                 onValueChange={setDescription}
                 placeholder="Enter description"
-              />
+              /> */}
               {/* {serverMode ? (
                 <TableSearchSelectField
                   label="Reference Lead"
