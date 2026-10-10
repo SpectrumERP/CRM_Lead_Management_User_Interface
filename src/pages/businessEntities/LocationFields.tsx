@@ -21,6 +21,8 @@ export interface LocationFieldsProps {
   layout?: 'primary' | 'modal'
 }
 
+type ZoneOption = ReturnType<typeof locationTimeZoneOptions>[number]
+
 /** City option: the picked city plus the search results. */
 function cityOption(value: LocationDraft): CityComboRow | null {
   const cityNo = toNo(value.cityNo)
@@ -209,14 +211,17 @@ export default function LocationFields({ value, onChange, errors, countries, tim
     />
   )
   const zone = (
-    <SelectField
+    <SearchSelectField<ZoneOption>
       fieldClassName="sm:col-span-2"
       label="Timezone"
       placeholder="Select timezone"
+      searchPlaceholder="Search timezone…"
       preserveOrder
       options={zoneOptions}
-      value={value.timeZoneNo}
-      onValueChange={(timeZoneNo) => onChange({ timeZoneNo, timeZoneName: '' })}
+      value={zoneOptions.find((z) => z.value === value.timeZoneNo) ?? null}
+      onChange={(zone) => onChange({ timeZoneNo: zone?.value ?? '', timeZoneName: '' })}
+      getKey={(z) => z.value}
+      getLabel={(z) => z.label}
     />
   )
   const mapFields = (

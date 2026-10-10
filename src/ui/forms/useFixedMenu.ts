@@ -7,6 +7,8 @@ export interface FixedMenuOptions {
   maxHeight?: number
   /** Take the menu's width and left edge from this element instead of the trigger (e.g. the form row). */
   span?: () => HTMLElement | null
+  /** Line the menu up with the trigger's right edge instead of its left (default 'start'). */
+  align?: 'start' | 'end'
 }
 
 /**
@@ -39,7 +41,8 @@ export function useFixedMenu(open: boolean, triggerRef: RefObject<HTMLElement | 
       const baseWidth = spanRect ? spanRect.width : rect.width
       const width = Math.min(optionsRef.current.width?.(baseWidth) ?? baseWidth, window.innerWidth - gutter * 2)
       const fitsLeftAligned = rect.left + width <= window.innerWidth - gutter
-      const preferred = spanRect ? spanRect.left : fitsLeftAligned ? rect.left : rect.right - width
+      const endAligned = optionsRef.current.align === 'end' || !fitsLeftAligned
+      const preferred = spanRect ? spanRect.left : endAligned ? rect.right - width : rect.left
       setStyle({
         position: 'fixed',
         left: Math.max(gutter, Math.min(preferred, window.innerWidth - width - gutter)),
