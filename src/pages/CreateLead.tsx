@@ -883,7 +883,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 />
               ) : null}
             </FormGrid>
-            <div className="mt-3">
+            {/* <div className="mt-3">
               <AttachmentsField
                 noun="activity"
                 formNo={ATTACHMENT_FORM_NO.lead}
@@ -892,7 +892,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 onChange={setActivityFiles}
                 onBusyChange={setActivityUploadsBusy}
               />
-            </div>
+            </div> */}
             <div className="mt-3 flex justify-end">
               <Button variant="solid" className="!min-h-8 !px-3 !py-2 text-xs" onClick={addLeadActivity}>
                 Add Activity
