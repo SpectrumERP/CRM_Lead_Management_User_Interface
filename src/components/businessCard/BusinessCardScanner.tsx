@@ -4,11 +4,13 @@ import 'react-image-crop/dist/ReactCrop.css'
 import { uploadAttachment, type Attachment } from '../../api/attachments'
 import type { BusinessCardData } from '../../api/businessCard'
 import { toApiError } from '../../api/errors'
-import { Button, FormGrid, Spinner, TextField } from '../../ui'
+import { Button, FormGrid, Spinner } from '../../ui'
 import FormDrawer from '../FormDrawer'
 import { ICON, Icon } from '../../pages/businessEntities/ui'
 import { cropImage, defaultLogoCrop, detectCard, detectLogo, loadOpenCv, Steadiness, type Detection, type Rect } from './imaging'
 import { readCard, stopCardReader } from './readCard'
+import ClipboardField from './ClipboardField'
+import { addClipboardEntry } from './clipboardStore'
 
 export interface ScanResult {
   /** Reviewed card details; null when the image was only uploaded. */
@@ -30,18 +32,19 @@ export interface BusinessCardScannerProps {
 
 type Step = 'idle' | 'requesting' | 'denied' | 'live' | 'preview' | 'reading' | 'review' | 'logo' | 'uploading'
 
-const FIELDS: { key: keyof BusinessCardData; label: string; wide?: boolean }[] = [
-  { key: 'name', label: 'Contact Person Name' },
-  { key: 'designation', label: 'Designation' },
-  { key: 'company', label: 'Company', wide: true },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'website', label: 'Website', wide: true },
-  { key: 'address', label: 'Address', wide: true },
-  { key: 'city', label: 'City' },
-  { key: 'state', label: 'State' },
-  { key: 'country', label: 'Country' },
-  { key: 'zipCode', label: 'PIN / ZIP Code' },
+/** `paste` names the field on the clipboard's "Paste …" button. */
+const FIELDS: { key: keyof BusinessCardData; label: string; paste: string; wide?: boolean }[] = [
+  { key: 'name', label: 'Contact Person Name', paste: 'Name' },
+  { key: 'designation', label: 'Designation', paste: 'Designation' },
+  { key: 'company', label: 'Company', paste: 'Company', wide: true },
+  { key: 'email', label: 'Email', paste: 'Email' },
+  { key: 'phone', label: 'Phone', paste: 'Phone' },
+  { key: 'website', label: 'Website', paste: 'Website', wide: true },
+  { key: 'address', label: 'Address', paste: 'Address', wide: true },
+  { key: 'city', label: 'City', paste: 'City' },
+  { key: 'state', label: 'State', paste: 'State' },
+  { key: 'country', label: 'Country', paste: 'Country' },
+  { key: 'zipCode', label: 'PIN / ZIP Code', paste: 'PIN / ZIP Code' },
 ]
 
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-')
@@ -155,6 +158,8 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
     try {
       const blob = cropRect ? await cropImage(target.url, cropRect) : target.file
       const reading = await readCard(blob, setProgress)
+      // Every read goes to the clipboard, as in Task Management.
+      addClipboardEntry({ source: 'BusinessCard', data: reading.data, formattedText: reading.text })
       const url = URL.createObjectURL(blob)
       setReadImage({ blob, url })
       setData(reading.data)
@@ -462,10 +467,12 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
               </p>
               <FormGrid cols={2}>
                 {FIELDS.map((f) => (
-                  <TextField
+                  <ClipboardField
                     key={f.key}
                     fieldClassName={f.wide ? 'lg:col-span-2' : undefined}
                     label={f.label}
+                    pasteLabel={f.paste}
+                    field={f.key}
                     value={data[f.key] ?? ''}
                     onValueChange={(v) => setData((prev) => ({ ...(prev ?? {}), [f.key]: v }))}
                   />

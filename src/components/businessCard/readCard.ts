@@ -39,6 +39,8 @@ export interface CardReading {
   data: BusinessCardData
   /** Which reader produced it. */
   source: 'server' | 'device'
+  /** The reader's raw text (the server's JSON, or the OCR text) — kept for the clipboard. */
+  text: string
 }
 
 export async function readCard(image: Blob, progress: (fraction: number) => void): Promise<CardReading> {
@@ -47,7 +49,7 @@ export async function readCard(image: Blob, progress: (fraction: number) => void
     const text = await readCardWithVision(image)
     if (text) {
       const data = parseVisionCard(text)
-      if (Object.values(data).some(Boolean)) return { data, source: 'server' }
+      if (Object.values(data).some(Boolean)) return { data, source: 'server', text }
     }
   } catch {
     // Fall through to the on-device reader.
@@ -60,7 +62,7 @@ export async function readCard(image: Blob, progress: (fraction: number) => void
   try {
     const w = await tesseract()
     const { data } = await w.recognize(cleaned)
-    return { data: parseCardText(data.text), source: 'device' }
+    return { data: parseCardText(data.text), source: 'device', text: data.text }
   } finally {
     onProgress = null
     progress(1)
