@@ -297,7 +297,7 @@ export const masterApis = {
     flags: [
       { key: 'isFirstActivity', label: 'First activity', hint: 'Status a new lead starts with' },
       { key: 'isLastActivity', label: 'Last activity', hint: 'Status that closes the lead' },
-      { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when a lead moves to this status', pending: true },
+      // { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when a lead moves to this status', pending: true },
     ],
     statusRecord: 'Lead',
     label: 'Lead status',
@@ -309,8 +309,8 @@ export const masterApis = {
     flags: [
       { key: 'isFirstActivity', label: 'First activity', hint: 'Status a new opportunity starts with' },
       { key: 'isLastActivity', label: 'Last activity', hint: 'Status that closes the opportunity' },
-      { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when an opportunity moves to this status', pending: true },
-      { key: 'isWon', label: 'Won (Order Value + Order Date required)', hint: 'Order Value and Order Date are required for this status', pending: true },
+      // { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when an opportunity moves to this status', pending: true },
+      // { key: 'isWon', label: 'Won (Order Value + Order Date required)', hint: 'Order Value and Order Date are required for this status', pending: true },
     ],
     statusRecord: 'Opportunity',
     label: 'Opportunity status',
