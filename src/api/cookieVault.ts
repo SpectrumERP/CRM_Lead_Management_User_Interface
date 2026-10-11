@@ -94,7 +94,9 @@ function readRaw(name: string): string | null {
 
 function writeRaw(name: string, value: string, maxAgeSeconds: number) {
   const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `${name}=${value}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Strict${secure}`
+  const domain = String(import.meta.env.VITE_COOKIE_DOMAIN ?? '').trim()
+  const sharedDomain = domain ? `; Domain=${domain}` : ''
+  document.cookie = `${name}=${value}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Strict${sharedDomain}${secure}`
 }
 
 function removeChunks(name: string) {

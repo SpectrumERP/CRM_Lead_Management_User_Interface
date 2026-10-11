@@ -11,10 +11,12 @@ import { remoteApps, remoteEnv } from './microfrontends.mjs'
 
 const root = resolve(import.meta.dirname, '..')
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const env = remoteEnv(root, 'production')
+const modeIndex = process.argv.indexOf('--mode')
+const mode = modeIndex >= 0 ? process.argv[modeIndex + 1] : 'production'
+const env = remoteEnv(root, mode)
 
 let failed = false
-for (const remote of remoteApps(root, 'production')) {
+for (const remote of remoteApps(root, mode)) {
   if (!remote.dir) {
     console.error(`${remote.title} not found (set ${remote.dirEnv} in .env to its checkout) — not built.`)
     failed = true
@@ -23,7 +25,7 @@ for (const remote of remoteApps(root, 'production')) {
   const outDir = resolve(root, 'dist', remote.basePath.replace(/^\/+|\/+$/g, ''))
   const result = spawnSync(
     npm,
-    ['--prefix', remote.dir, 'run', 'build', '--', '--base', remote.basePath, '--outDir', outDir, '--emptyOutDir'],
+    ['--prefix', remote.dir, 'run', 'build', '--', '--mode', mode, '--base', remote.basePath, '--outDir', outDir, '--emptyOutDir'],
     { cwd: root, stdio: 'inherit', env },
   )
   if (result.status !== 0) process.exit(result.status ?? 1)

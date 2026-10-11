@@ -10,12 +10,14 @@ export const sessionContract = manifest.session
 export type RemoteName = (typeof manifest.remotes)[number]['name']
 
 /**
- * URL a remote opens at on this same origin. Keeping remotes under their basePath preserves the
- * current deployment environment (local, UAT, or production) across navigation and sign-in.
+ * URL a remote opens at. It defaults to its same-origin basePath and may be overridden per build mode
+ * when a remote is hosted separately.
  */
 export function remoteAppUrl(name: RemoteName): string {
   const remote = manifest.remotes.find((r) => r.name === name)
   if (!remote) throw new Error(`Unknown micro-frontend "${name}"`)
+  const configuredUrl = (import.meta.env as Record<string, string | undefined>)[remote.urlEnv]?.trim()
+  if (configuredUrl) return configuredUrl.endsWith('/') ? configuredUrl : `${configuredUrl}/`
   // Inside the Spectrum ERP shell, the shell hosts every module at its own path on the shell's root.
   if (import.meta.env.VITE_CRM_ROUTE_BASE) return remote.basePath
   return `${import.meta.env.BASE_URL.replace(/\/+$/, '')}${remote.basePath}`

@@ -13,7 +13,7 @@
     "dev:task": "node scripts/dev-all.mjs --remotes-only",
     "build:remotes": "node scripts/build-remotes.mjs",
     "build:task": "node scripts/build-remotes.mjs",
-    "build:all": "npm run build && npm run build:remotes",
+    "build:all": "node scripts/build-all.mjs",
     "setup:task": "npm --prefix task-management install",
     "dev:crm": "vite",
     "dev:spectrum": "vite --mode spectrum",

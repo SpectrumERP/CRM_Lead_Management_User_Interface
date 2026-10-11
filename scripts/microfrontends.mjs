@@ -33,6 +33,14 @@ export function remoteApps(root, mode = 'development') {
 /** Env for a remote's dev server / build: the CRM cookie secret under the name the remote reads. */
 export function remoteEnv(root, mode = 'development') {
   const { session } = loadManifest(root)
-  const secret = loadEnv(mode, root, '')[session.secretEnv]
-  return secret ? { ...process.env, [session.remoteSecretEnv]: secret } : process.env
+  const env = loadEnv(mode, root, '')
+  const secret = env[session.secretEnv]
+  const remoteEnv = { ...process.env }
+  if (secret) remoteEnv[session.remoteSecretEnv] = secret
+  // Public routing config must follow the selected CRM build mode into remote bundles.
+  for (const key of ['VITE_CRM_LOGIN_URL', 'VITE_TASK_PUBLIC_URL', 'VITE_COOKIE_DOMAIN']) {
+    if (process.env[key] || env[key]) remoteEnv[key] = process.env[key] || env[key]
+  }
+  if (remoteEnv.VITE_COOKIE_DOMAIN) remoteEnv.VITE_CRM_COOKIE_DOMAIN = remoteEnv.VITE_COOKIE_DOMAIN
+  return remoteEnv
 }

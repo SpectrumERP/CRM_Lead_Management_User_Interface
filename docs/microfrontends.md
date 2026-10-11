@@ -1,8 +1,11 @@
 # Micro-frontends
 
 The CRM is the **shell**. Other apps (today: Task Management) are **remote apps**: each is its own
-repository and its own React app, with its own layout, served under a path on the CRM's origin.
-They share one sign-in, the CRM's.
+repository and its own React app, with its own layout. They can be built under a path on the CRM's origin
+or hosted separately. The shared-cookie sign-in
+contract works when the browser can read the CRM cookie from the remote (same origin, or a deliberately
+configured shared parent-domain cookie). Different registrable domains need a server/token or explicit
+shell messaging integration; browser cookies and `BroadcastChannel` do not cross origins by themselves.
 
 All of it is described in [`microfrontends.json`](../microfrontends.json), the single source for:
 
@@ -19,12 +22,15 @@ All of it is described in [`microfrontends.json`](../microfrontends.json), the s
 npm run dev            # CRM on :5173 + every remote, each proxied under its basePath
 npm run dev:crm        # CRM alone (a remote's path then shows "not running")
 npm run dev:remotes    # remotes alone
-npm run build:all      # CRM build, then every remote into dist/<basePath>
+npm run build:all                         # production mode (default)
+npm run build:all -- --mode development  # local development config
+npm run build:all -- --mode staging      # staging config
+npm run build:all -- --mode uat           # UAT config
+npm run build:all -- --mode production   # production config
 ```
 
-Open remotes **through the CRM** (`http://localhost:5173/task/`). Do not run a remote's own
-`npm run dev` on its own: it would serve base `/`, which the CRM proxy cannot use, and it would not
-share the sign-in.
+For the standard same-origin setup, open remotes **through the CRM** (`http://localhost:5173/task/`).
+For a separately hosted remote, configure the URLs below and open its configured address.
 
 Each remote's checkout is found through its `dirEnv` in the CRM `.env` (absolute, or relative to the
 CRM folder), e.g.
@@ -34,6 +40,27 @@ TASK_APP_DIR=../Task-Management-User-Interface
 ```
 
 Without it, the first of its `fallbackDirs` that has a `package.json` is used.
+
+Vite loads `.env` plus `.env.<mode>` from the CRM checkout. The selected mode is also passed to every
+remote build. For same-origin hosting, no login URL override is needed: Task returns to `/login` on its
+current host. For a remote on another host, define matching public URLs in the mode-specific CRM env:
+
+```dotenv
+# CRM .env.uat
+VITE_CRM_LOGIN_URL=https://crm-uat.example.com/login
+VITE_TASK_APP_URL=https://tasks-uat.example.com/
+VITE_TASK_PUBLIC_URL=https://tasks-uat.example.com/
+VITE_COOKIE_DOMAIN=.example.com
+```
+
+`VITE_CRM_LOGIN_URL` and `VITE_TASK_PUBLIC_URL` are copied into the Task remote build. The CRM's
+`VITE_TASK_APP_URL` must point at that same Task deployment so the CRM can validate the `next` return
+URL. Add equivalent values to `.env.development`, `.env.staging`, or `.env.production` as needed. These
+URLs are public configuration, not secrets. Set `VITE_COOKIE_DOMAIN` only when CRM and Task are
+subdomains of the same site; it deliberately makes the session cookie available to sibling subdomains.
+The remote receives it as `VITE_CRM_COOKIE_DOMAIN` so logout removes the same shared cookie. Local
+separate-origin development can use
+`http://localhost:5173/login` and `http://localhost:5174/` respectively.
 
 ## Contract a remote app must keep
 

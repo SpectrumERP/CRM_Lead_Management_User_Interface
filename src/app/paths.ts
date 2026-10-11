@@ -56,14 +56,25 @@ function stripBase(pathname: string) {
  */
 export const taskAppUrl = remoteAppUrl('task')
 
-/** A `next` value inside the Task app (never another site), else null. */
+/** A `next` value inside the configured Task app (never an untrusted site), else null. */
 export function taskAppReturnPath(next: string | null | undefined): string | null {
   if (!next) return null
-  const root = taskAppUrl.replace(/\/$/, '')
-  // Task app on its own origin: only URLs under that exact address.
-  if (/^https?:\/\//i.test(taskAppUrl)) return next === root || next.startsWith(taskAppUrl) ? next : null
-  if (/[\\]|\/\/|^[a-z][a-z0-9+.-]*:/i.test(next)) return null
-  return next === root || next.startsWith(taskAppUrl) ? next : null
+  try {
+    const taskBase = new URL(taskAppUrl, window.location.origin)
+    const candidate = new URL(next, window.location.origin)
+    const basePath = taskBase.pathname.replace(/\/+$/, '') || '/'
+    const isWithinTask =
+      basePath === '/' || candidate.pathname === basePath || candidate.pathname.startsWith(`${basePath}/`)
+    if (candidate.origin !== taskBase.origin || !isWithinTask) return null
+
+    // Keep the configured absolute Task origin when separately hosted; same-origin routes
+    // can remain relative so they work behind the CRM's configured base path.
+    return taskBase.origin === window.location.origin
+      ? `${candidate.pathname}${candidate.search}${candidate.hash}`
+      : candidate.toString()
+  } catch {
+    return null
+  }
 }
 
 export const paths = {
