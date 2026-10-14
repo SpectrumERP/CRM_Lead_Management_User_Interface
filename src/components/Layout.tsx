@@ -265,15 +265,48 @@ function AppSidebar({
   const admin = isAdmin(user?.role);
   const entityRights = useFormRights(FORM_NO.businessEntity);
   const visibleNavItems = navItems.filter((item) => item.id !== 'business-entities' || entityRights.isOpen);
+  const navRef = useRef<HTMLElement | null>(null);
+  const [navThumb, setNavThumb] = useState({ height: 0, top: 0, visible: false });
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || collapsed) {
+      setNavThumb({ height: 0, top: 0, visible: false });
+      return;
+    }
+
+    const updateThumb = () => {
+      const { clientHeight, scrollHeight, scrollTop } = nav;
+      const visible = scrollHeight > clientHeight;
+      const height = visible ? Math.max(20, (clientHeight / scrollHeight) * clientHeight) : 0;
+      const top = visible
+        ? (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - height)
+        : 0;
+      setNavThumb({ height, top, visible });
+    };
+
+    updateThumb();
+    nav.addEventListener('scroll', updateThumb, { passive: true });
+    const resizeObserver = new ResizeObserver(updateThumb);
+    resizeObserver.observe(nav);
+    const contentObserver = new MutationObserver(updateThumb);
+    contentObserver.observe(nav, { childList: true, subtree: true, attributes: true });
+    return () => {
+      nav.removeEventListener('scroll', updateThumb);
+      resizeObserver.disconnect();
+      contentObserver.disconnect();
+    };
+  }, [collapsed, activePage, currentPage]);
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="crm-sidebar-inner relative flex h-full min-h-0 flex-col">
       <SidebarHeader
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
         launcher={showLauncher && !IN_SPECTRUM ? <ModuleLauncher tone="dark" activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} /> : undefined}
       />
 
-      <nav className={`sidebar-scroll min-h-0 flex-1 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2.5'}`} aria-label="Main">
+      <nav ref={navRef} className={`sidebar-scroll min-h-0 flex-1 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2.5'}`} aria-label="Main">
         {!collapsed ? (
           <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold tracking-[0.14em] text-white/40">
             Workspace
@@ -329,6 +362,17 @@ function AppSidebar({
           </div>
         )}
       </nav>
+      {!collapsed && navThumb.visible && (
+        <div
+          aria-hidden="true"
+          className="crm-sidebar-scroll-indicator"
+          style={{
+            top: `${navRef.current?.offsetTop ?? 0}px`,
+            height: `${navThumb.height}px`,
+            transform: `translateY(${navThumb.top}px)`,
+          }}
+        />
+      )}
 
       <div className={`flex-shrink-0 border-t border-white/10 ${collapsed ? 'p-1.5' : 'p-2.5'}`}>
         {/* Collapsed: name / role in a right-side tip, as in Task Management */}
@@ -597,7 +641,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* ── Desktop sidebar ── */}
       <aside
-        className={`hidden h-full flex-shrink-0 flex-col overflow-hidden bg-[#1E56A0] dark:bg-[#121A2B] dark:border-[#2A3548] transition-[width] duration-300 ease-out lg:flex ${
+        className={`crm-shell-sidebar hidden h-full flex-shrink-0 flex-col overflow-hidden bg-[#1E56A0] dark:bg-[#121A2B] dark:border-[#2A3548] transition-[width] duration-300 ease-out lg:flex ${
           focusMode
             ? focusSidebarOpen
               ? 'w-56 border-r border-white/10'
@@ -632,7 +676,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
       )}
       <aside
         id="mobile-sidebar"
-        className={`fixed inset-y-0 left-0 z-[70] flex w-56 flex-col overflow-hidden bg-[#1E56A0] dark:bg-[#121A2B] dark:border-[#2A3548] transition-transform duration-200 ease-out lg:hidden ${navOpen ? 'translate-x-0 shadow-overlay' : '-translate-x-full'}`}
+        className={`crm-shell-sidebar fixed inset-y-0 left-0 z-[70] flex w-56 flex-col overflow-hidden bg-[#1E56A0] dark:bg-[#121A2B] dark:border-[#2A3548] transition-transform duration-200 ease-out lg:hidden ${navOpen ? 'translate-x-0 shadow-overlay' : '-translate-x-full'}`}
         aria-hidden={!navOpen}
       >
         <AppSidebar
