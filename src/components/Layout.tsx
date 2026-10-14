@@ -138,10 +138,12 @@ const settingsNavItem = {
 function SidebarHeader({
   collapsed,
   onToggleCollapsed,
+  onClose,
   launcher,
 }: {
   collapsed?: boolean
   onToggleCollapsed?: () => void
+  onClose?: () => void
   /** Standalone: our app launcher before the logo (the shell's slot does this inside Spectrum ERP). */
   launcher?: ReactNode
 }) {
@@ -170,6 +172,7 @@ function SidebarHeader({
 
   return (
     <header className="flex h-[calc(3.5rem+1px)] flex-shrink-0 items-center border-b border-white/10 px-3">
+      <div className="flex min-w-0 flex-1 items-center">
       {IN_SPECTRUM ? (
         <div className="flex w-full min-w-0 items-center gap-2.5">
           {/* The shell's app launcher before the logo (as in the shell's left panel). */}
@@ -187,6 +190,19 @@ function SidebarHeader({
           alt="Spectrum ERP"
           className="block h-9 w-full object-contain object-left"
         />
+      )}
+      </div>
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close navigation"
+          className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+          </svg>
+        </button>
       )}
     </header>
   )
@@ -252,6 +268,7 @@ function AppSidebar({
   onNavigate,
   collapsed = false,
   onToggleCollapsed,
+  onClose,
   showLauncher = false,
 }: {
   activePage: Page;
@@ -259,6 +276,7 @@ function AppSidebar({
   onNavigate: (to: string) => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  onClose?: () => void;
   showLauncher?: boolean;
 }) {
   const { user } = useAuth();
@@ -303,6 +321,7 @@ function AppSidebar({
       <SidebarHeader
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
+        onClose={onClose}
         launcher={showLauncher && !IN_SPECTRUM ? <ModuleLauncher tone="dark" activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} /> : undefined}
       />
 
@@ -683,6 +702,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
           activePage={activePage}
           currentPage={currentPage}
           onNavigate={go}
+          onClose={() => setNavOpen(false)}
         />
       </aside>
 
