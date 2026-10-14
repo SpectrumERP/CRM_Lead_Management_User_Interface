@@ -9,6 +9,7 @@ import {
   findBusinessEntityNames,
   loadBusinessEntity,
   saveBusinessEntity,
+  saveBusinessEntityContact,
   searchBusinessEntityAttachments,
   searchBusinessEntityContacts,
   type BusinessEntityDraft,
@@ -117,7 +118,21 @@ describe('business entity record', () => {
     expect(detail.primaryLocation).toMatchObject({ address: 'Lane 1', pinCode: '1100', timeZoneNo: '5' })
   })
 
-  it('builds the save body with the primary contact and location first', () => {
+  it('saves a new entity with every contact person, primary first', () => {
+    const body = buildBusinessEntitySaveBody(
+      draft({
+        contacts: [{ contactPersonNo: null, name: 'Asha', designation: '', department: '', phone: '111', email: 'asha@tata.com', status: 'Active' }],
+      }),
+      FILL,
+    ).body!
+    expect(body.businessEntityNo).toBeNull()
+    expect(body.contactPersons.map((c) => [c.businessEntityContactPersonDetailNo, c.contactPersonName, c.isPrimary])).toEqual([
+      [null, 'Ravi', true],
+      [null, 'Asha', false],
+    ])
+  })
+
+  it('builds the update body with the primary contact only and the primary location first', () => {
     const result = buildBusinessEntitySaveBody(
       draft({
         businessEntityNo: 12,
@@ -149,9 +164,9 @@ describe('business entity record', () => {
         { followUpNotes: 'Undated', followUpDate: null },
       ],
     })
+    // Other contacts are not resent on update (deleted / saved through their own APIs).
     expect(body.contactPersons.map((c) => [c.businessEntityContactPersonDetailNo, c.contactPersonName, c.isPrimary])).toEqual([
       [null, 'Ravi', true],
-      [31, 'Asha', false],
     ])
     // The primary location's type is hidden on the form: the default type is sent.
     expect(body.locations[0]).toMatchObject({ locationTypeNo: 4, countryNo: 1, stateNo: 27, cityNo: 400, crmTimeZoneNo: 5, latitude: null, isPrimary: true })
@@ -214,6 +229,28 @@ describe('business entity record', () => {
     call = lastCall(fetchMock)
     expect(call.url.pathname).toBe('/api/master/business-entities/delete-contact-person')
     expect(call.url.searchParams.get('businessEntityContactPersonDetailNo')).toBe('31')
+  })
+
+  it('saves one other contact of a saved entity through save-contact-person', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: 'Saved', data: true }))
+    await saveBusinessEntityContact(12, { contactPersonNo: 31, name: ' Asha ', designation: 'CFO', department: '', phone: '111', email: 'asha@tata.com', status: 'Active' })
+    const call = lastCall(fetchMock)
+    expect(call.init.method).toBe('POST')
+    expect(call.url.pathname).toBe('/api/master/business-entities/save-contact-person')
+    expect(JSON.parse(String(call.init.body))).toMatchObject({
+      businessEntityNo: 12,
+      businessEntityContactPersonDetailNo: 31,
+      contactPersonName: 'Asha',
+      designation: 'CFO',
+      phoneNo: '111',
+      email: 'asha@tata.com',
+      isPrimary: false,
+    })
+
+    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: false }))
+    await expect(saveBusinessEntityContact(12, { ...emptyBusinessEntityDraft().primaryContact, name: 'New' })).rejects.toMatchObject({
+      message: 'The server did not save the contact person.',
+    })
   })
 
   it('surfaces a failed save as an error', async () => {

@@ -108,6 +108,8 @@ export function opportunityFromRow(
       businessEntityNo: row.businessEntity?.businessEntityNo ?? existing?.spectrum?.businessEntityNo,
       currencyNo: currency?.currencyNo ?? existing?.spectrum?.currencyNo,
       salesOrganizationNo: row.salesOrganization?.salesOrganizationNo ?? existing?.spectrum?.salesOrganizationNo,
+      // load-data only (search rows leave the known one).
+      ...(row.opportunityStatusRemarks !== undefined ? { statusRemarks: row.opportunityStatusRemarks ?? undefined } : {}),
       // Won order details (pending backend fields) — only when the server sends them.
       ...(row.orderValue != null ? { orderValue: row.orderValue } : {}),
       ...(row.orderDate ? { orderDate: row.orderDate.slice(0, 10) } : {}),
@@ -121,7 +123,10 @@ export function opportunityFromRow(
     },
     leadId: row.lead?.leadNo ? serverLeadId(row.lead.leadNo) : existing?.leadId,
     name: row.opportunityName || row.code || serverOpportunityId(row.opportunityNo),
-    description: row.description ?? row.opportunityDescription ?? existing?.description ?? '',
+    // load-data carries it (null = none); search rows do not, so they keep the known one.
+    description: detail
+      ? (row.description ?? row.opportunityDescription ?? '')
+      : (row.description ?? row.opportunityDescription ?? existing?.description ?? ''),
     companyName: row.businessEntity?.businessEntityName ?? existing?.companyName ?? '',
     // Contact names come with the detail only; email / phone are not sent by the server.
     contactPerson: primary ?? existing?.contactPerson ?? '',
@@ -335,7 +340,12 @@ export async function deleteServerOpportunity(item: Opportunity): Promise<void> 
 const CONTACT_FIELDS = ['contactPerson', 'email', 'phone'] as const
 
 /** Apply an in-app patch (names, as the editors send them) to a server opportunity, save, reload. */
-export async function updateServerOpportunity(current: Opportunity, patch: Partial<Opportunity>): Promise<Opportunity> {
+export async function updateServerOpportunity(
+  current: Opportunity,
+  patch: Partial<Opportunity>,
+  /** `statusRemarks`: the remark of a status change (null clears it); otherwise the saved one is kept. */
+  options: { statusRemarks?: string | null } = {},
+): Promise<Opportunity> {
   if (!current.spectrum) fail('VALIDATION', 'This opportunity is not stored on the server.')
   // Contacts can change only by picking server contact persons (the form sends their numbers).
   const pickedContacts = patch.spectrum?.contactPersonDetailNos
@@ -369,13 +379,14 @@ export async function updateServerOpportunity(current: Opportunity, patch: Parti
     salesOrganizationNo: ref.salesOrganizationNo,
     stageName: next.dealStage,
     statusName: next.status,
-    businessEntityNo: ref.businessEntityNo,
+    businessEntityNo: picked?.businessEntityNo ?? ref.businessEntityNo,
     currencyNo,
     closingDate: next.closingDate,
     value: next.dealValue,
     contactPersonDetailNos: pickedContacts ?? ref.contactPersonDetailNos ?? [],
     productNos,
     attachmentNos: picked?.attachmentNos,
+    statusRemarks: options.statusRemarks !== undefined ? options.statusRemarks : (ref.statusRemarks ?? null),
   }, fill)
   if (built.errors) fail('VALIDATION', Object.values(built.errors)[0])
   await saveOpportunity(built.body)

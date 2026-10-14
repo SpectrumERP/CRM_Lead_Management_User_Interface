@@ -46,6 +46,8 @@ export const spectrumEndpoints = {
     save: '/api/master/business-entities/save',
     delete: '/api/master/business-entities/delete',
     deleteContactPerson: '/api/master/business-entities/delete-contact-person',
+    /** Add / update one non-primary contact of a saved entity (the entity save carries only the primary). */
+    saveContactPerson: '/api/master/business-entities/save-contact-person',
     /** GET ?BusinessEntityName= — existing names, for the "already exists?" hint while typing. */
     names: '/api/master/business-entities',
   },

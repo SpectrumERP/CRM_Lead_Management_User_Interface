@@ -352,6 +352,8 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
       ) : null}
       {activityOpp ? (
         <ActivityDrawer
+          // An opportunity activity (as on the detail page): opportunity save API, files filed as detailType 3.
+          forOpportunity
           preselectedLead={{
             id: activityOpp.leadId || activityOpp.id,
             name: activityOpp.companyName,
@@ -359,7 +361,7 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
           }}
           onClose={() => setActivityOpp(null)}
           onSave={(activity) => {
-            addActivity(activity)
+            addActivity({ ...activity, opportunityId: activityOpp.id })
             onToast?.('success', 'Activity Logged', `"${activity.subject}" has been added.`)
           }}
         />

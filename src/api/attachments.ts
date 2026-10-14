@@ -2,12 +2,12 @@
  * Spectrum document store (same flow as the Task Management app).
  *
  * Upload, per file, as soon as it is picked:
- *   1. POST /api/document-attachments          [{ fileName, companyNo, formNo }] → entry id (docNo)
+ *   1. POST /api/document-attachments          [{ fileName, companyNo, formNo, detailType? }] → entry id (docNo)
  *   2. PUT  /api/document-attachments          multipart: id + file
  *   3. GET  /api/document-attachments/status   ?DocNo=
  * The parent record's save then links the files: `attachment: [{ docNo }]`.
  *
- * Also: list (?transactionId=&formNo=), {docNo}/download, rename, delete.
+ * Also: list (?transactionId=&formNo=&detailType=), {docNo}/download, rename, delete.
  */
 import { spectrumEndpoints } from './endpoints'
 import { fail } from './errors'
@@ -31,6 +31,12 @@ export const ATTACHMENT_FORM_NO = {
   opportunity: formNoFromEnv(import.meta.env.VITE_OPPORTUNITY_FORM_NO, 380),
   businessEntity: formNoFromEnv(import.meta.env.VITE_BUSINESS_ENTITY_FORM_NO, 1550),
 } as const
+
+/** `detailType` of a store entry for files on an activity (as opposed to the record itself), by parent record. */
+export const ACTIVITY_ATTACHMENT_DETAIL_TYPE = { lead: 2, opportunity: 3 } as const
+
+/** `detailType` of a store entry for files on a lead note. */
+export const NOTE_ATTACHMENT_DETAIL_TYPE = 1
 
 /** An uploaded file, as the forms keep it. `id` is the store's docNo. */
 export interface Attachment {
@@ -60,10 +66,10 @@ interface ListRow {
   docSize?: number | null
 }
 
-/** Step 1: register the file; returns its docNo. */
-export async function createAttachmentEntry(fileName: string, companyNo: number, formNo: number): Promise<number> {
+/** Step 1: register the file; returns its docNo. `detailType` is sent only when given (activity files). */
+export async function createAttachmentEntry(fileName: string, companyNo: number, formNo: number, detailType?: number): Promise<number> {
   const response = await http.post<SpectrumResponse<EntryRow[] | null>>(spectrumEndpoints.attachments.root, [
-    { fileName, companyNo, formNo },
+    { fileName, companyNo, formNo, ...(detailType !== undefined ? { detailType } : {}) },
   ])
   assertSuccess(response)
   const id = Number(response.data?.[0]?.id)
@@ -93,17 +99,20 @@ export async function checkAttachmentStatus(id: number): Promise<void> {
 }
 
 /** All three steps. */
-export async function uploadAttachment(file: File, companyNo: number, formNo: number): Promise<Attachment> {
-  const id = await createAttachmentEntry(file.name, companyNo, formNo)
+export async function uploadAttachment(file: File, companyNo: number, formNo: number, detailType?: number): Promise<Attachment> {
+  const id = await createAttachmentEntry(file.name, companyNo, formNo, detailType)
   await uploadAttachmentFile(id, file)
   await checkAttachmentStatus(id)
   return { id, name: file.name, size: file.size, type: file.type || undefined }
 }
 
-/** Files already linked to a saved record (leadNo / opportunityNo). */
-export async function listAttachments(transactionId: number, formNo: number): Promise<Attachment[]> {
+/**
+ * Files already linked to a saved record (leadNo / opportunityNo), or with `detailType` to one of its
+ * activities (transactionId = the activity's detail number).
+ */
+export async function listAttachments(transactionId: number, formNo: number, detailType?: number): Promise<Attachment[]> {
   const response = await http.get<SpectrumResponse<ListRow[] | null>>(
-    withQuery(spectrumEndpoints.attachments.root, { transactionId, formNo }),
+    withQuery(spectrumEndpoints.attachments.root, { transactionId, formNo, detailType }),
   )
   assertSuccess(response)
   return (response.data ?? [])
@@ -114,6 +123,26 @@ export async function listAttachments(transactionId: number, formNo: number): Pr
       size: row.docSize ?? undefined,
       type: row.docType ?? undefined,
     }))
+}
+
+// Files of child records (activities, notes): lists re-render often, so each record's list is fetched once
+// and kept under its id until the record is saved / deleted again.
+const cachedLists = new Map<string, Promise<Attachment[]>>()
+
+/** `listAttachments`, cached under `key` (a record id). A failed request is not kept, so the next view retries. */
+export function listAttachmentsCached(key: string, transactionId: number, formNo: number, detailType: number): Promise<Attachment[]> {
+  let pending = cachedLists.get(key)
+  if (!pending) {
+    pending = listAttachments(transactionId, formNo, detailType)
+    cachedLists.set(key, pending)
+    pending.catch(() => cachedLists.delete(key))
+  }
+  return pending
+}
+
+/** Drop the cached lists of records whose files changed (saved / deleted). */
+export function forgetCachedAttachments(keys: readonly string[]) {
+  for (const key of keys) cachedLists.delete(key)
 }
 
 export async function renameAttachment(docNo: number, docName: string, formNo: number): Promise<void> {

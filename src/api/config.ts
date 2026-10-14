@@ -9,6 +9,7 @@ export function usesRemoteApi() {
 }
 
 const DEFAULT_SPECTRUM_URL = 'https://crm-uat.steelmont.co.in:9097'
+// const DEFAULT_SPECTRUM_URL = 'https://crm.steelmont.co.in:8085'
 // const DEFAULT_SPECTRUM_URL = 'http://3.108.117.198:9080'
 // const DEFAULT_SPECTRUM_URL = 'http://192.168.0.21:7002'
 

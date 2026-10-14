@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { toApiError } from '../../api/errors';
-import { NAME_MAX, needsDetailForEdit, type MasterApi, type MasterRow } from '../../api/masters';
+import { NAME_MAX, needsDetailForEdit, withLookupFlags, type MasterApi, type MasterLookupOption, type MasterRow } from '../../api/masters';
 import { clearLeadFillValuesCache } from '../../api/leadFormFillValues';
 import { clearOpportunityFillValuesCache } from '../../api/opportunityFormFillValues';
 import { clearBusinessEntityFillValuesCache } from '../../api/businessEntityFillValues';
@@ -87,6 +87,8 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
   const nameMax = api.definition.nameMax ?? NAME_MAX;
   const hasColor = Boolean(api.definition.hasColor);
   const flagDefs = api.definition.flags ?? [];
+  // Flags the form shows; the others are set from the picked status type when saving.
+  const shownFlags = flagDefs.filter((flag) => !flag.fromLookupName);
   // Status masters in mock mode: Remark mandatory / Won are kept in this browser (not sent to the server).
   const localRecord = isPendingApiMock() ? api.definition.statusRecord : undefined;
   const localFlags = (item: Pick<MasterRow, 'no' | 'name'>): Record<string, boolean> => {
@@ -95,6 +97,22 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     return localRecord === 'Opportunity' ? { isRemarkMandatory: rule.isRemarkMandatory, isWon: rule.isWon } : { isRemarkMandatory: rule.isRemarkMandatory };
   };
   const numberDefs = api.definition.numbers ?? [];
+  // Status masters: the Status Type options come from the master's own fill-values.
+  const lookup = api.definition.lookup;
+  const [lookupOptions, setLookupOptions] = useState<MasterLookupOption[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  useEffect(() => {
+    if (!lookup || !state.companyNo) return;
+    let cancelled = false;
+    setLookupLoading(true);
+    api.lookupOptions(state.companyNo)
+      .then((options) => { if (!cancelled) setLookupOptions(options); })
+      .catch((err) => { if (!cancelled) onToast?.('error', `Could not load ${lookup.label.toLowerCase()} options`, toApiError(err).message); })
+      .finally(() => { if (!cancelled) setLookupLoading(false); });
+    return () => { cancelled = true; };
+    // Once per master and company; `onToast` identity changes must not refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, lookup, state.companyNo]);
   const listedNumbers = numberDefs.filter((n) => n.inList);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -102,7 +120,9 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
   const [isNew, setIsNew] = useState(false);
   const [form, setForm] = useState<{
     name: string; sequence: string; description: string; colorCoding: string; flags: Record<string, boolean>; numbers: Record<string, string>
-  }>({ name: '', sequence: '', description: '', colorCoding: '', flags: {}, numbers: {} });
+    /** The lookup pick (status type number) as the select's value; '' = none. */
+    lookupNo: string
+  }>({ name: '', sequence: '', description: '', colorCoding: '', flags: {}, numbers: {}, lookupNo: '' });
   // Editing a master with load-data-only fields (colour, flags): the record is loaded before saving.
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -141,13 +161,13 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
   function openAdd() {
     const next = Math.max(0, ...rows.map((x) => x.sequence ?? 0)) + 1;
     setIsNew(true); setEditing(null);
-    setForm({ name: '', sequence: hasSequence ? String(next) : '', description: '', colorCoding: hasColor ? DEFAULT_COLOR : '', flags: {}, numbers: {} }); setErrors({});
+    setForm({ name: '', sequence: hasSequence ? String(next) : '', description: '', colorCoding: hasColor ? DEFAULT_COLOR : '', flags: {}, numbers: {}, lookupNo: '' }); setErrors({});
   }
   async function openEdit(item: MasterRow) {
     setIsNew(false); setEditing(item);
     setForm({
       name: item.name, sequence: item.sequence ? String(item.sequence) : '', description: item.description ?? '',
-      colorCoding: '', flags: localFlags(item), numbers: numbersToText(item.numbers),
+      colorCoding: '', flags: localFlags(item), numbers: numbersToText(item.numbers), lookupNo: '',
     }); setErrors({});
     if (!needsDetailForEdit(api.definition) || !state.companyNo) return;
     // Colour / flags come only from load-data — without them a save would clear them.
@@ -161,6 +181,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
         colorCoding: detail.colorCoding ?? '',
         flags: { ...detail.flags, ...localFlags(item) },
         numbers: { ...prev.numbers, ...numbersToText(detail.numbers) },
+        lookupNo: detail.lookupNo ? String(detail.lookupNo) : '',
       }));
     } catch (err) {
       onToast?.('error', `Could not load ${noun.toLowerCase()}`, toApiError(err).message);
@@ -200,6 +221,12 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     return Object.keys(e).length === 0;
   }
 
+  /** The form's flags plus the ones set from the status type (e.g. Won → opportunity value required). */
+  function flagsToSave(): Record<string, boolean> {
+    const picked = lookupOptions.find((o) => String(o.no) === form.lookupNo);
+    return withLookupFlags(api.definition, form.flags, form.lookupNo ? picked?.name : null);
+  }
+
   async function save() {
     if (!validate()) return;
     if (!(await confirm(saveConfirm(noun, !isNew)))) return;
@@ -212,7 +239,8 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
         sequence: hasSequence ? Number(form.sequence) : undefined,
         description: hasDescription ? form.description : undefined,
         colorCoding: hasColor ? form.colorCoding.trim().toUpperCase() : undefined,
-        flags: flagDefs.length ? form.flags : undefined,
+        flags: flagDefs.length ? flagsToSave() : undefined,
+        lookupNo: lookup ? Number(form.lookupNo) || null : undefined,
         numbers: numberDefs.length
           ? Object.fromEntries(numberDefs.map((n) => {
               const raw = form.numbers[n.key]?.trim() ?? '';
@@ -353,6 +381,21 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
                 value={form.sequence} onChange={(e) => setForm({ ...form, sequence: e.target.value })} />
             </FormField>
           ) : null}
+          {lookup ? (
+            <FormField label={lookup.label}>
+              <select className="form-input" aria-label={lookup.label} disabled={lookupLoading}
+                value={form.lookupNo} onChange={(e) => setForm({ ...form, lookupNo: e.target.value })}>
+                <option value="">{lookupLoading ? 'Loading…' : `Select ${lookup.label.toLowerCase()}`}</option>
+                {lookupOptions.map((option) => (
+                  <option key={option.no} value={String(option.no)}>{option.name}</option>
+                ))}
+                {/* A saved type no longer in the list stays selectable, so a save keeps it. */}
+                {form.lookupNo && !lookupOptions.some((o) => String(o.no) === form.lookupNo) && !lookupLoading ? (
+                  <option value={form.lookupNo}>#{form.lookupNo}</option>
+                ) : null}
+              </select>
+            </FormField>
+          ) : null}
           {numberDefs.map((field) => (
             <FormField key={field.key} label={`${field.label}${field.suffix ? ` (${field.suffix})` : ''}`} error={errors[`number:${field.key}`]}>
               <input type="number" min={field.min ?? 0} max={field.max} className="form-input"
@@ -375,9 +418,9 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
               </div>
             </FormField>
           ) : null}
-          {flagDefs.length ? (
+          {shownFlags.length ? (
             <div className="space-y-2">
-              {flagDefs.map((flag) => (
+              {shownFlags.map((flag) => (
                 <label key={flag.key} className="flex cursor-pointer items-start gap-2.5 text-xs">
                   <input type="checkbox" className="mt-0.5" checked={form.flags[flag.key] === true}
                     onChange={(e) => setForm({ ...form, flags: { ...form.flags, [flag.key]: e.target.checked } })} />

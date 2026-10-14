@@ -47,7 +47,8 @@ export function useFixedMenu(open: boolean, triggerRef: RefObject<HTMLElement | 
         position: 'fixed',
         left: Math.max(gutter, Math.min(preferred, window.innerWidth - width - gutter)),
         width,
-        zIndex: 80,
+        // Above every drawer / dialog it can open from (form drawers z-60…90, confirm 95); below toasts (100).
+        zIndex: 96,
         maxHeight: maxH,
         visibility: 'visible',
         ...(openUp

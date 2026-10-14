@@ -77,6 +77,8 @@ export interface SpectrumOpportunityRef {
   attachmentNos?: number[]
   /** True once `load-data` has filled contacts / products. */
   detailLoaded?: boolean
+  /** Remark of the current status (load-data `opportunityStatusRemarks`), sent back unchanged on other saves. */
+  statusRemarks?: string
   /** Won order details from the server (pending backend fields; mock mode keeps them in api/pendingApiStore). */
   orderValue?: number
   /** `YYYY-MM-DD`. */

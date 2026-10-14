@@ -32,6 +32,11 @@ export interface StatusChangeDialogProps {
   statuses: readonly StatusOption[]
   /** Currency of the record, shown with Order Value (e.g. "INR"). */
   currencyLabel?: string
+  /**
+   * Opportunity: Order Value / Order Date start as its opportunity value and expected closure date
+   * (`YYYY-MM-DD`); the user can change them before submitting.
+   */
+  orderDefaults?: { orderValue?: number; orderDate?: string }
   changedBy: string
   /** Saves the change; a rejection (server error) keeps the dialog open with its message. */
   onSubmit: (change: StatusChangeSubmit) => Promise<void>
@@ -48,17 +53,20 @@ export default function StatusChangeDialog({
   currentStatusName,
   statuses,
   currencyLabel,
+  orderDefaults,
   changedBy,
   onSubmit,
   onClose,
 }: StatusChangeDialogProps) {
   const confirm = useConfirm()
   const pending = usePendingData()
-  const choices = statuses.filter((s) => s.name.trim().toLowerCase() !== currentStatusName.trim().toLowerCase())
+  const isCurrent = (s: StatusOption) => s.name.trim().toLowerCase() === currentStatusName.trim().toLowerCase()
+  // Every status from the fill values is listed; the current one is shown but cannot be picked.
+  const choices = statuses.filter((s) => !isCurrent(s))
   const [statusNo, setStatusNo] = useState('')
   const [remark, setRemark] = useState('')
-  const [orderValue, setOrderValue] = useState('')
-  const [orderDate, setOrderDate] = useState('')
+  const [orderValue, setOrderValue] = useState(() => (orderDefaults?.orderValue ? String(orderDefaults.orderValue) : ''))
+  const [orderDate, setOrderDate] = useState(() => (/^\d{4}-\d{2}-\d{2}$/.test(orderDefaults?.orderDate ?? '') ? orderDefaults!.orderDate! : ''))
   const [errors, setErrors] = useState<StatusChangeErrors>({})
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -94,10 +102,11 @@ export default function StatusChangeDialog({
     }
   }
 
-  const statusOptions = choices.map((s) => {
+  const statusOptions = statuses.map((s) => {
+    if (isCurrent(s)) return { value: String(s.no), label: `${s.name} (current)`, disabled: true }
     const r = statusRule(record, s, pending)
     const notes = [r.isRemarkMandatory ? 'remark required' : '', r.isWon ? 'order details required' : ''].filter(Boolean)
-    return { value: String(s.no), label: notes.length ? `${s.name} (${notes.join(', ')})` : s.name }
+    return { value: String(s.no), label: notes.length ? `${s.name}` : s.name }
   })
 
   return (
@@ -144,7 +153,7 @@ export default function StatusChangeDialog({
         />
         <TextAreaField
           fieldClassName="lg:col-span-2"
-          label="Remark"
+          label="Status Remark"
           required={rule.isRemarkMandatory}
           hint={rule.isRemarkMandatory ? undefined : 'Optional'}
           error={errors.remark}
@@ -193,8 +202,8 @@ export default function StatusChangeDialog({
 
       {isPendingApiMock() ? (
         <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
-          Demo mode: the status is saved on the server; the remark, order details and history are kept in this browser
-          until the backend change-status API is available.
+          Demo mode: the status and its remark are saved on the server; order details and history are kept in this
+          browser until the backend change-status API is available.
         </p>
       ) : null}
 

@@ -68,6 +68,13 @@ describe('opportunity ids and mapping', () => {
     expect(again.contactPerson).toBe('Roberto Matos')
     expect(again.spectrum?.productNos).toEqual([7])
   })
+
+  it('takes the description from load-data (cleared = empty); search rows keep the known one', () => {
+    const loaded = opportunityFromRow({ ...detail, description: 'Phase 2 rollout' }, undefined, fill)
+    expect(loaded.description).toBe('Phase 2 rollout')
+    expect(opportunityFromRow(row, loaded, fill).description).toBe('Phase 2 rollout')
+    expect(opportunityFromRow({ ...detail, description: null }, loaded, fill).description).toBe('')
+  })
 })
 
 describe('buildOpportunitySaveBody', () => {
@@ -87,11 +94,24 @@ describe('buildOpportunitySaveBody', () => {
     productNos: [7, -1],
   }
 
+  it('sends the description trimmed', () => {
+    expect(buildOpportunitySaveBody({ ...draft, description: '  Phase 2 rollout ' }, fill).body?.description).toBe('Phase 2 rollout')
+    expect(buildOpportunitySaveBody({ ...draft, description: '   ' }, fill).body?.description).toBeNull()
+  })
+
+  it('sends the status remark only when given (null clears it)', () => {
+    expect(buildOpportunitySaveBody({ ...draft, statusRemarks: 'Budget frozen' }, fill).body?.opportunityStatusRemarks).toBe('Budget frozen')
+    expect(buildOpportunitySaveBody({ ...draft, statusRemarks: null }, fill).body?.opportunityStatusRemarks).toBeNull()
+    expect(buildOpportunitySaveBody(draft, fill).body).not.toHaveProperty('opportunityStatusRemarks')
+  })
+
   it('builds the body with server numbers', () => {
     expect(buildOpportunitySaveBody(draft, fill).body).toEqual({
       companyNo: 1,
       leadNo: 42,
       opportunityName: 'ERP rollout',
+      // No description: sent as null (an update clears it).
+      description: null,
       opportunityOwnerNo: 11,
       salesOrganizationNo: 2,
       opportunityStageNo: 3,

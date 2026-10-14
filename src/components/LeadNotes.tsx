@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
+import type { Attachment } from "../api/attachments"
 import { Button, FormGrid, TextAreaField, TextField } from "../ui"
 import { initialsAvatar } from "../data/contacts"
 import type { Lead } from "../data/leads"
@@ -9,12 +10,14 @@ import { sameList, useCrmActions, useCrmSelector, type CrmNote } from "../contex
 import { saveConfirm, useConfirm } from "../contexts/ConfirmContext"
 import { formatDateParts, toIsoDate } from "../utils/dateFormat"
 import { useAuth } from "../auth/AuthContext"
+import { NoteAttachments, NoteAttachmentsField } from "./NoteAttachments"
 
 /**
  * Internal notes (list + add form), shared by the lead / opportunity views and their edit forms.
  */
 
-export type LeadNote = { id: string; text: string; date: string; time: string; by: string }
+/** `attachments`: files the note carries (just saved); saved lead notes also list theirs from the store. */
+export type LeadNote = { id: string; text: string; date: string; time: string; by: string; attachments?: Attachment[] }
 
 /** LeadNotesDetail.Discussion varchar(1000) */
 const NOTE_DISCUSSION_MAX = FIELD_LIMITS.noteDiscussion
@@ -87,6 +90,8 @@ export function NoteCard({
             <p className="mt-1 rounded-md border border-line bg-surface-muted px-2 py-1.5 text-[11px] leading-relaxed text-ink">
               {note.text || "No discussion text."}
             </p>
+            {/* Loaded once opened: a long note list would otherwise list every note's files up front. */}
+            {expanded ? <NoteAttachments note={note} className="mt-2" /> : null}
             {onDelete || onEdit ? (
               <div className="mt-2 flex justify-end gap-2">
                 {onEdit ? (
@@ -126,7 +131,10 @@ export function InternalNotesTab({
   editing = false,
   editingId = null,
   readOnly = false,
+  attachmentsField,
 }: {
+  /** Shown in the add / edit form (lead notes: NoteAttachmentsField). */
+  attachmentsField?: ReactNode
   /** The note open in the form; it is left out of the list while edited. */
   editingId?: string | null
   /** Locked lead: notes are shown only (no add / edit / delete). */
@@ -205,6 +213,7 @@ export function InternalNotesTab({
             onValueChange={(v) => onDraft({ text: v.slice(0, NOTE_DISCUSSION_MAX) })}
             placeholder="Capture the internal discussion…"
           />
+          {attachmentsField}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={onCancel}>Cancel</Button>
             <Button variant="solid" onClick={onSave}>{editing ? "Update Note" : "Save Note"}</Button>
@@ -267,7 +276,7 @@ export function noteDateToInput(value: string): string {
 }
 
 function toLeadNote(n: CrmNote): LeadNote {
-  return { id: n.id, text: n.title ? `${n.title} — ${n.text}` : n.text, date: n.date, time: "", by: n.by }
+  return { id: n.id, text: n.title ? `${n.title} — ${n.text}` : n.text, date: n.date, time: "", by: n.by, attachments: n.attachments }
 }
 
 export interface LeadNotesPanelProps {
@@ -309,6 +318,10 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly
   const [errors, setErrors] = useState<Record<string, string>>({})
   /** Note being edited (its id), or null when the form adds a new one. */
   const [editingId, setEditingId] = useState<string | null>(null)
+  // Lead notes only (the opportunity note save takes no attachments).
+  const withFiles = noun === "lead"
+  const [files, setFiles] = useState<Attachment[]>([])
+  const [filesBusy, setFilesBusy] = useState(false)
 
   useEffect(() => setPending([]), [stored])
   const notes = useMemo(() => [...pending, ...stored.map(toLeadNote)], [pending, stored])
@@ -326,15 +339,21 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly
       setErrors(errs)
       return
     }
+    if (withFiles && filesBusy) {
+      onToast?.("info", "Attachments still uploading", "Please wait for the attachments to finish before saving the note.")
+      return
+    }
     if (!(await confirm(saveConfirm("Note", Boolean(editingId))))) return
     const { date, time } = splitDateTime(dateTime)
+    const attachments = withFiles ? files : undefined
     if (editingId) {
       // Server notes → save-notes-detail with their number, then the lead / opportunity reloads.
       // Failed → the error toast shows and the form stays open with the text.
-      const responseMessage = await patchNote(editingId, { text, by, date: `${date} ${time}`.trim() })
+      const responseMessage = await patchNote(editingId, { text, by, date: `${date} ${time}`.trim(), ...(attachments ? { attachments } : {}) })
       if (!responseMessage) return
       setDraft(EMPTY_DRAFT)
       setErrors({})
+      setFiles([])
       setAdding(false)
       setEditingId(null)
       onToast?.("success", "Internal Note / Observation Updated", typeof responseMessage === 'string' ? responseMessage : "The discussion has been updated.")
@@ -348,12 +367,14 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly
       relatedLeadName: recordName,
       date: `${date} ${time}`.trim(),
       by,
+      ...(attachments ? { attachments } : {}),
     }
     const responseMessage = await addNote(created)
     if (!responseMessage) return
-    setPending((prev) => [{ id: created.id, text, date, time, by }, ...prev])
+    setPending((prev) => [{ id: created.id, text, date, time, by, attachments }, ...prev])
     setDraft(EMPTY_DRAFT)
     setErrors({})
+    setFiles([])
     setAdding(false)
     onToast?.("success", "Internal Note / Observation Added", typeof responseMessage === 'string' ? responseMessage : `The discussion has been saved on this ${noun}.`)
   }
@@ -366,6 +387,8 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly
     }
     setDraft({ dateTime: noteDateToInput(saved.date), createdBy: saved.by, text: saved.text })
     setErrors({})
+    // The field loads the note's saved files from the store.
+    setFiles(saved.attachments ?? [])
     setEditingId(saved.id)
     setAdding(true)
   }
@@ -403,6 +426,7 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly
       onStartAdd={() => {
         setDraft(EMPTY_DRAFT)
         setErrors({})
+        setFiles([])
         setEditingId(null)
         setAdding(true)
       }}
@@ -410,8 +434,12 @@ export function RecordNotesPanel({ recordId, recordName, noun, onToast, readOnly
         setAdding(false)
         setDraft(EMPTY_DRAFT)
         setErrors({})
+        setFiles([])
         setEditingId(null)
       }}
+      attachmentsField={
+        withFiles ? <NoteAttachmentsField noteId={editingId} value={files} onChange={setFiles} onBusyChange={setFilesBusy} /> : undefined
+      }
       onSave={() => void save()}
       onDelete={(note) => void remove(note)}
       onEdit={(note) => edit(note)}

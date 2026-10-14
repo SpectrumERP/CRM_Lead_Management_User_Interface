@@ -26,8 +26,10 @@ export interface OpportunityStatusOption {
   opportunityStatusNo: number
   code?: string
   opportunityStatusName: string
-  /** Remark required when an opportunity moves to this status (pending backend field; see api/statusChange.ts). */
-  isRemarkMandatory?: boolean
+  /** A remark is required when an opportunity moves to this status (sent as opportunityStatusRemarks). */
+  isRemarkRequired?: boolean
+  /** The opportunity value is required for this status (not used by the Change Status drawer yet). */
+  isOpportunityValueRequired?: boolean
   /** The Won status: Order Value and Order Date are required (pending backend field). */
   isWon?: boolean
 }

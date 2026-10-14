@@ -6,8 +6,9 @@
  *   GET    /api/master/business-entities/search/contact-person-wise   (list "Contact" views)
  *   GET    /api/master/business-entities/search/attachment-wise       (list "Attachments" view)
  *   GET    /api/master/business-entities/load-data/{businessEntityNo}?companyNo=
- *   POST   /api/master/business-entities/save
+ *   POST   /api/master/business-entities/save   (insert: every contact person; update: the primary only)
  *   DELETE /api/master/business-entities/delete?businessEntityNo=
+ *   POST   /api/master/business-entities/save-contact-person   (one other contact of a saved entity)
  *   DELETE /api/master/business-entities/delete-contact-person?businessEntityContactPersonDetailNo=
  *   GET    /api/master/business-entities?BusinessEntityName=           (names, for the duplicate hint)
  *
@@ -682,8 +683,12 @@ export function buildBusinessEntitySaveBody(
 
   const defaultTypeNo = (fill.locationTypes.find((t) => t.isDefault) ?? fill.locationTypes[0])?.locationTypeNo ?? null
   const primaryLocation = saveLocation(draft.primaryLocation, true, defaultTypeNo)
+  const businessEntityNo = draft.businessEntityNo && draft.businessEntityNo > 0 ? draft.businessEntityNo : null
+  // A new entity is saved with all its contacts. An update carries the primary contact only: other contacts
+  // are saved / removed straight away (save-contact-person / delete-contact-person).
+  const primaryContact = saveContact(draft.primaryContact, true)
   const body: BusinessEntitySaveBody = {
-    businessEntityNo: draft.businessEntityNo && draft.businessEntityNo > 0 ? draft.businessEntityNo : null,
+    businessEntityNo,
     businessEntityName: name,
     crmBusinessEntityTypeNo: typeNo!,
     crmTimeZoneNo: primaryLocation.crmTimeZoneNo,
@@ -692,7 +697,7 @@ export function buildBusinessEntitySaveBody(
     creditInsuranceLimit: typeof limit === 'number' ? limit : null,
     creditInsuranceCompanyName: draft.creditInsuranceCompanyName.trim() || null,
     website: draft.website.trim() || null,
-    contactPersons: [saveContact(draft.primaryContact, true), ...draft.contacts.map((c) => saveContact(c, false))],
+    contactPersons: businessEntityNo ? [primaryContact] : [primaryContact, ...draft.contacts.map((c) => saveContact(c, false))],
     locations: [primaryLocation, ...draft.locations.map((l) => saveLocation(l, false, null))],
     ports: draft.ports.filter((p, i, all) => p.portNo > 0 && all.findIndex((x) => x.portNo === p.portNo) === i).map((p) => ({ portNo: p.portNo })),
     attachment: attachmentLinks(draft.attachments),
@@ -713,6 +718,17 @@ export async function deleteBusinessEntity(businessEntityNo: number): Promise<vo
   if (!toNo(businessEntityNo)) fail('VALIDATION', 'Business entity must be a positive number.')
   const url = withQuery(spectrumEndpoints.businessEntities.delete, { businessEntityNo })
   assertSuccess(await http.delete<SpectrumResponse<unknown>>(url))
+}
+
+/** Adds (no `contactPersonNo`) or updates a non-primary contact of a saved entity straight away. */
+export async function saveBusinessEntityContact(businessEntityNo: number, contact: ContactDraft): Promise<void> {
+  if (!toNo(businessEntityNo)) fail('VALIDATION', 'Business entity must be a positive number.')
+  const response = await http.post<SpectrumResponse<boolean>>(spectrumEndpoints.businessEntities.saveContactPerson, {
+    ...saveContact(contact, false),
+    businessEntityNo,
+  })
+  assertSuccess(response)
+  if (response.data === false) fail('VALIDATION', 'The server did not save the contact person.')
 }
 
 /** Removes a saved contact person straight away (unsaved ones only live in the form). */

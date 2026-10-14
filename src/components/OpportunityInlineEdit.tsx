@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Button, Select, TextInput } from '../ui'
+import { Button, Select, TextArea, TextInput } from '../ui'
 import { PersonContactCard } from './PersonContactCard'
 import { SecondaryContactsMore } from './SecondaryContactsMore'
 import { useCrmActions } from '../contexts/CrmStoreContext'
@@ -24,6 +24,7 @@ import { formatDate } from '../utils/dateFormat'
 
 export type OppFieldKey =
   | 'name'
+  | 'description'
   | 'contact'
   | 'email'
   | 'phone'
@@ -261,6 +262,7 @@ export function OpportunitySummaryEdit({
   const [emailDraft, setEmailDraft] = useState(opportunity.email)
   const [phoneDraft, setPhoneDraft] = useState(opportunity.phone)
   const [productsDraft, setProductsDraft] = useState(opportunity.productsRequired)
+  const [descriptionDraft, setDescriptionDraft] = useState(opportunity.description ?? '')
   const [stageDraft, setStageDraft] = useState<DealStage>(opportunity.dealStage)
   const [currencyNoDraft, setCurrencyNoDraft] = useState<number | undefined>(opportunity.spectrum?.currencyNo)
   const currencyDraft = serverCurrencies.find((c) => c.currencyNo === currencyNoDraft)
@@ -278,6 +280,7 @@ export function OpportunitySummaryEdit({
     if (editing === 'email') setEmailDraft(opportunity.email)
     if (editing === 'phone') setPhoneDraft(opportunity.phone)
     if (editing === 'products') setProductsDraft(opportunity.productsRequired)
+    if (editing === 'description') setDescriptionDraft(opportunity.description ?? '')
     if (editing === 'closure') setClosureDraft(opportunity.closingDate)
   }, [editing, opportunity])
 
@@ -369,6 +372,42 @@ export function OpportunitySummaryEdit({
           }
         >
           {opportunity.productsRequired || '—'}
+        </Cell>
+        <Cell
+          label="Opportunity Description"
+          field="description"
+          full
+          editing={editing}
+          onEdit={(field) => {
+            setDescriptionDraft(opportunity.description ?? '')
+            onEdit(field)
+          }}
+          editor={
+            <div>
+              <TextArea
+                rows={3}
+                maxLength={FIELD_LIMITS.opportunityDescription}
+                value={descriptionDraft}
+                onValueChange={setDescriptionDraft}
+                aria-label="Opportunity description"
+                autoFocus
+              />
+              <SaveCancel
+                onSave={() => {
+                  // Saved with the opportunity (save → description; empty clears it).
+                  patchOpportunity(opportunity.id, { description: descriptionDraft.trim() })
+                  toastSaved('Description saved.')
+                }}
+                onCancel={onCancel}
+              />
+            </div>
+          }
+        >
+          {opportunity.description ? (
+            <span className="whitespace-pre-line font-normal text-ink-soft">{opportunity.description}</span>
+          ) : (
+            <span className="text-ink-faint">—</span>
+          )}
         </Cell>
         <Cell
           label="Opportunity Stage"

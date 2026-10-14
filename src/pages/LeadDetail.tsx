@@ -51,11 +51,13 @@ import { formatConversionStamp, type Opportunity } from "../data/opportunities"
 import ActivityDrawer from "../components/ActivityDrawer"
 import { ActivitiesTab, activityStatusTone, activityTypeTone } from "../components/LeadActivities"
 import { InternalNotesTab, noteDateToInput, type LeadNote } from "../components/LeadNotes"
+import { NoteAttachmentsField } from "../components/NoteAttachments"
+import type { Attachment } from "../api/attachments"
 import { PagedTimeline, TimelineTab, timelineIconMeta, type TimelineOrder } from "../components/RecordTimeline"
 import ConvertOpportunityDialog from "../components/ConvertOpportunityDialog"
 import StatusChangeDialog from "../components/StatusChangeDialog"
 import StatusHistory from "../components/StatusHistory"
-import { changeLeadStatus, type StatusOption } from "../api/statusChange"
+import { changeLeadStatus, leadStatusOptions, type StatusOption } from "../api/statusChange"
 import MeetingDrawer from "../components/MeetingDrawer"
 import ConfirmDialog from "../components/ConfirmDialog"
 import { saveConfirm, useConfirm } from "../contexts/ConfirmContext"
@@ -1983,9 +1985,7 @@ export default function LeadDetail({
   const { values: fill } = useLeadFormFillValues()
   const activeLeadStageNames = fill ? bySequence(fill.leadStages).map((x) => x.leadStageName) : []
   const activeLeadSourceNames = fill ? fill.leadSources.map((x) => x.leadSourceName) : []
-  const leadStatusOptions: StatusOption[] = fill
-    ? fill.leadStatuses.map((x) => ({ no: x.leadStatusNo, name: x.leadStatusName, isRemarkMandatory: x.isRemarkMandatory }))
-    : []
+  const statusOptions: StatusOption[] = leadStatusOptions(fill)
   // Server lead (id SL-…): reload it in full from load-data whenever the page opens.
   const serverLeadNo = leadNoFromId(leadId)
   const [serverRefresh, setServerRefresh] = useState<"idle" | "loading" | "done" | "failed">(serverLeadNo ? "loading" : "idle")
@@ -2049,7 +2049,7 @@ export default function LeadDetail({
   const converted = isLeadConverted({ leadStage: stage, leadStatus: status }) || Boolean(linkedOpportunity)
   // Locked: converted, or at a completed stage (load-data `leadStage.isStagedCompleted`) — no edits to
   // the lead, and no adding / editing / deleting its activities or notes.
-  const locked = converted || Boolean(leadData?.spectrum?.stageCompleted)
+  const locked = converted && Boolean(leadData?.spectrum?.stageCompleted)
   const lockedReason = converted
     ? "Converted to an opportunity — this lead can no longer be changed"
     : "The lead is at a completed stage — it can no longer be changed"
@@ -2069,6 +2069,9 @@ export default function LeadDetail({
   const [addingNote, setAddingNote] = useState(false)
   const [noteDraft, setNoteDraft] = useState(EMPTY_NOTE_DRAFT)
   const [noteErrors, setNoteErrors] = useState<Record<string, string>>({})
+  // Files of the note in the form (uploaded with detailType 1; the note save links them).
+  const [noteFiles, setNoteFiles] = useState<Attachment[]>([])
+  const [noteFilesBusy, setNoteFilesBusy] = useState(false)
   const [emails, setEmails] = useState<LeadEmail[]>([])
   const [addingEmail, setAddingEmail] = useState(false)
   const [emailDraft, setEmailDraft] = useState({ subject: "", to: "", body: "" })
@@ -2087,6 +2090,7 @@ export default function LeadDetail({
     setAddingNote(false)
     setNoteDraft(EMPTY_NOTE_DRAFT)
     setNoteErrors({})
+    setNoteFiles([])
     setAddingEmail(false)
     setEmailDraft({ subject: "", to: "", body: "" })
     setEditingField(null)
@@ -2119,6 +2123,7 @@ export default function LeadDetail({
             date: n.date,
             time: "",
             by: n.by,
+            attachments: n.attachments,
           })),
       ])
       setEmails([
@@ -2158,7 +2163,7 @@ export default function LeadDetail({
     setNotes((prev) => {
       const extras = storeNotes
         .filter((n) => n.relatedLeadId === leadId && !prev.some((p) => p.id === n.id))
-        .map((n) => ({ id: n.id, text: n.title ? `${n.title} — ${n.text}` : n.text, date: n.date, time: "", by: n.by }))
+        .map((n) => ({ id: n.id, text: n.title ? `${n.title} — ${n.text}` : n.text, date: n.date, time: "", by: n.by, attachments: n.attachments }))
       return extras.length ? [...extras, ...prev] : prev
     })
     setEmails((prev) => {
@@ -2241,15 +2246,21 @@ export default function LeadDetail({
       setNoteErrors(errs)
       return
     }
+    if (noteFilesBusy) {
+      onToast?.("info", "Attachments still uploading", "Please wait for the attachments to finish before saving the note.")
+      return
+    }
     if (!(await confirm(saveConfirm("Note", Boolean(editingNoteId))))) return
     const { date, time } = splitDateTime(dateTime)
+    const attachments = noteFiles
     if (editingNoteId) {
       // Server notes → save-notes-detail with their number (an update), then the lead reloads.
       // Failed → the error toast shows and the form stays open with the text.
-      if (!(await patchNote(editingNoteId, { text, by, date: `${date} ${time}`.trim() }))) return
-      setNotes((prev) => prev.map((n) => (n.id === editingNoteId ? { ...n, text, by, date, time } : n)))
+      if (!(await patchNote(editingNoteId, { text, by, date: `${date} ${time}`.trim(), attachments }))) return
+      setNotes((prev) => prev.map((n) => (n.id === editingNoteId ? { ...n, text, by, date, time, attachments } : n)))
       setNoteDraft(EMPTY_NOTE_DRAFT)
       setNoteErrors({})
+      setNoteFiles([])
       setAddingNote(false)
       setEditingNoteId(null)
       onToast?.("success", "Internal Note / Observation Updated", "The discussion has been updated.")
@@ -2263,6 +2274,7 @@ export default function LeadDetail({
       relatedLeadName: leadData.companyName,
       date: `${date} ${time}`.trim(),
       by,
+      attachments,
     }
     if (!(await addNote(created))) return
     setNotes((n) => [
@@ -2272,11 +2284,13 @@ export default function LeadDetail({
         date,
         time,
         by,
+        attachments,
       },
       ...n,
     ])
     setNoteDraft(EMPTY_NOTE_DRAFT)
     setNoteErrors({})
+    setNoteFiles([])
     setAddingNote(false)
     onToast?.("success", "Internal Note / Observation Added", "The discussion has been saved on this lead.")
   }
@@ -2419,7 +2433,7 @@ export default function LeadDetail({
                   value={status}
                   hint={locked ? lockedReason : "Whether work on this lead is active · click to change"}
                   tone={leadStatusClass(status)}
-                  // onEdit={locked || !leadData?.spectrum ? undefined : () => setShowStatusChange(true)}
+                  onEdit={locked || !leadData?.spectrum ? undefined : () => setShowStatusChange(true)}
                 />
                 <HeaderFact
                   label="Owner"
@@ -2615,6 +2629,7 @@ export default function LeadDetail({
               onStartAdd={() => {
                 setNoteDraft(EMPTY_NOTE_DRAFT)
                 setNoteErrors({})
+                setNoteFiles([])
                 setEditingNoteId(null)
                 setAddingNote(true)
               }}
@@ -2622,8 +2637,12 @@ export default function LeadDetail({
                 setAddingNote(false)
                 setNoteDraft(EMPTY_NOTE_DRAFT)
                 setNoteErrors({})
+                setNoteFiles([])
                 setEditingNoteId(null)
               }}
+              attachmentsField={
+                <NoteAttachmentsField noteId={editingNoteId} value={noteFiles} onChange={setNoteFiles} onBusyChange={setNoteFilesBusy} />
+              }
               onSave={saveNote}
               onDelete={(note) => void deleteNote(note)}
               onEdit={(note) => {
@@ -2634,6 +2653,8 @@ export default function LeadDetail({
                 }
                 setNoteDraft({ dateTime: noteDateToInput(saved.date), createdBy: saved.by, text: saved.text })
                 setNoteErrors({})
+                // The field loads the note's saved files from the store.
+                setNoteFiles(saved.attachments ?? [])
                 setEditingNoteId(saved.id)
                 setAddingNote(true)
               }}
@@ -2708,7 +2729,7 @@ export default function LeadDetail({
           record="Lead"
           recordLabel={`Lead ${leadData.spectrum?.code ?? leadData.id} · ${leadData.leadName || leadData.companyName}`}
           currentStatusName={status}
-          statuses={leadStatusOptions}
+          statuses={statusOptions}
           changedBy={createdByName}
           onClose={() => setShowStatusChange(false)}
           onSubmit={async (change) => {

@@ -61,11 +61,13 @@ export interface AttachmentsFieldProps {
   formNo: number | null
   /** Head office company number (as the Task Management app sends). */
   companyNo: number | null
+  /** Store `detailType` for activity files (lead 2 / opportunity 3, ACTIVITY_ATTACHMENT_DETAIL_TYPE): sent on upload and on the list. */
+  detailType?: number
   value: Attachment[]
   onChange: (next: Attachment[]) => void
   /** Saved record (leadNo / opportunityNo): its linked files are loaded once. */
   transactionId?: number
-  /** True while any file is still uploading, so the form can hold its save. */
+  /** True while any file is still uploading (or the saved ones are loading), so the form can hold its save. */
   onBusyChange?: (busy: boolean) => void
   /** Record noun for messages, e.g. "lead". */
   noun: string
@@ -81,6 +83,7 @@ export interface AttachmentsFieldProps {
 export default function AttachmentsField({
   formNo,
   companyNo,
+  detailType,
   value,
   onChange,
   transactionId,
@@ -104,7 +107,8 @@ export default function AttachmentsField({
   valueRef.current = value
 
   const enabled = formNo !== null && companyNo !== null
-  const busy = queue.some((q) => q.status !== 'failed')
+  // Also while the saved files load: a save before then would link only the new ones.
+  const busy = loadingList || queue.some((q) => q.status !== 'failed')
 
   useEffect(() => {
     onBusyChange?.(busy)
@@ -114,7 +118,7 @@ export default function AttachmentsField({
     if (!transactionId || formNo === null) return
     let cancelled = false
     setLoadingList(true)
-    listAttachments(transactionId, formNo)
+    listAttachments(transactionId, formNo, detailType)
       .then((rows) => {
         if (cancelled) return
         const known = new Set(valueRef.current.map((a) => a.id))
@@ -131,7 +135,7 @@ export default function AttachmentsField({
     }
     // Load once per record; `onChange` / `addToast` identity changes must not refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionId, formNo])
+  }, [transactionId, formNo, detailType])
 
   function setStatus(tempId: string, patch: Partial<QueueItem>) {
     setQueue((prev) => prev.map((q) => (q.tempId === tempId ? { ...q, ...patch } : q)))
@@ -141,7 +145,7 @@ export default function AttachmentsField({
     if (formNo === null || companyNo === null) return
     setStatus(tempId, { status: 'uploading', error: undefined })
     try {
-      const id = await createAttachmentEntry(file.name, companyNo, formNo)
+      const id = await createAttachmentEntry(file.name, companyNo, formNo, detailType)
       setStatus(tempId, { status: 'verifying' })
       await uploadAttachmentFile(id, file)
       await checkAttachmentStatus(id)

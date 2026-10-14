@@ -22,13 +22,16 @@ export interface OpportunitySaveBody {
   companyNo: number
   leadNo?: number
   opportunityName?: string
-  description?: string
+  /** null clears it on update. */
+  description?: string | null
   opportunityOwnerNo: number
   salesOrganizationNo: number
   opportunityStageNo: number
   businessEntityNo: number
   currencyNo: number
   opportunityStatusNo: number
+  /** Remark for the current status (required when the status has isRemarkRequired). */
+  opportunityStatusRemarks?: string | null
   /** ISO date-time. */
   expectedClosureDate?: string
   opportunityValue?: number
@@ -57,6 +60,8 @@ export interface OpportunityRow {
   } | null
   opportunityStage?: Named<'opportunityStageNo', 'opportunityStageName'> | null
   opportunityStatus?: Named<'opportunityStatusNo', 'opportunityStatusName'> | null
+  /** load-data only. */
+  opportunityStatusRemarks?: string | null
   businessEntity?: Named<'businessEntityNo', 'businessEntityName'> | null
   salesOrganization?: Named<'salesOrganizationNo', 'salesOrganizationName'> | null
   currency?: { currencyNo: number; currencyName?: string | null; currencyCode?: string | null; symbol?: string | null } | null
@@ -206,6 +211,8 @@ export interface OpportunityDraft {
   productNos: number[]
   /** docNos of files uploaded through the document store. */
   attachmentNos?: number[]
+  /** Remark for the status (`opportunityStatusRemarks`); left out when undefined. */
+  statusRemarks?: string | null
 }
 
 function noByName<T>(items: readonly T[], name: string, getName: (item: T) => string | undefined, getNo: (item: T) => number) {
@@ -235,7 +242,8 @@ export function buildOpportunitySaveBody(
     companyNo: draft.companyNo,
     leadNo: draft.leadNo,
     opportunityName: draft.name.trim() || undefined,
-    description: draft.description?.trim() || undefined,
+    // Sent as null when empty, so an update clears it.
+    description: draft.description?.trim() || null,
     opportunityOwnerNo: draft.ownerLoginNo!,
     salesOrganizationNo: draft.salesOrganizationNo!,
     opportunityStageNo: stageNo!,
@@ -251,6 +259,7 @@ export function buildOpportunitySaveBody(
     products: draft.productNos.filter((no) => no > 0).map((crmProductNo) => ({ crmProductNo })),
   }
   if (draft.attachmentNos?.length) body.attachments = draft.attachmentNos.filter((no) => no > 0).map((docNo) => ({ docNo }))
+  if (draft.statusRemarks !== undefined) body.opportunityStatusRemarks = draft.statusRemarks
   if (draft.opportunityNo) body.opportunityNo = draft.opportunityNo
   return { body }
 }

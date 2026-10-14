@@ -1,3 +1,5 @@
+import type { Attachment } from '../api/attachments'
+
 export interface CrmNote {
   id: string
   title: string
@@ -5,6 +7,8 @@ export interface CrmNote {
   relatedLeadId: string
   relatedLeadName: string
   attachmentName?: string
+  /** Lead notes: files linked by the note save (document store docNos; see api/noteAttachments.ts). */
+  attachments?: Attachment[]
   date: string
   by: string
 }

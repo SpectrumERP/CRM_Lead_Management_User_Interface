@@ -69,11 +69,13 @@ export function contactDetailNos(value: EntityContactsValue): number[] {
     .filter((no): no is number => Boolean(no))
 }
 
+// Shares, not fixed widths: the menu is only as wide as the field, and fixed Type / Location columns
+// left the entity name no room on a half-width field.
 const ENTITY_COLUMNS: TableSearchColumn<EntityOption>[] = [
-  { header: 'Business Entity', getValue: (o) => o.name, truncate: true },
+  { header: 'Business Entity', getValue: (o) => o.name, width: 'minmax(0,2fr)', truncate: true },
   { header: 'Code', getValue: (o) => o.code || '', width: '6.5rem' },
-  { header: 'Type', getValue: (o) => o.type || '', width: '9rem', truncate: true },
-  { header: 'Location', getValue: (o) => o.city || '', width: '12rem', truncate: true },
+  { header: 'Type', getValue: (o) => o.type || '', width: 'minmax(0,1fr)', truncate: true },
+  { header: 'Location', getValue: (o) => o.city || '', width: 'minmax(0,1fr)', truncate: true },
 ]
 
 const CONTACT_COLUMNS: TableSearchColumn<ContactPick>[] = [
@@ -86,7 +88,7 @@ export interface EntityContactsFieldsProps {
   value: EntityContactsValue
   onChange: (next: EntityContactsValue) => void
   errors?: { entity?: string; contact?: string }
-  /** Show the entity but do not allow changing it (e.g. editing an opportunity). */
+  /** Show the entity but do not allow changing it. */
   entityLocked?: boolean
 }
 

@@ -37,6 +37,7 @@ import {
   type ServerUserRef,
 } from './leads'
 import { activityAttachmentBody, activityAttachmentFields, forgetActivityAttachments, newActivityId, rememberActivityAttachments } from './activityAttachments'
+import { forgetNoteAttachments, noteAttachmentBody } from './noteAttachments'
 import { isPendingApiMock } from './pendingApiStore'
 import { resolveSpectrumCompany } from './spectrumCompany'
 import { searchUsers, userDisplayName } from './users'
@@ -242,6 +243,7 @@ export function leadFromDetail(detail: LeadDetail, existing?: Lead): { lead: Lea
     spectrum: {
       leadNo: detail.leadNo,
       code: detail.code ?? undefined,
+      statusRemarks: detail.leadStatusRemarks ?? undefined,
       ownerLoginNo: detail.leadOwner?.loginNo,
       businessEntityNo: detail.businessEntity?.businessEntityNo,
       contactPersonDetailNos: contactNosOf(contacts),
@@ -379,7 +381,12 @@ export async function loginNoForName(name: string): Promise<number | undefined> 
  * Apply an in-app patch (names, as the inline editors send them) to a server lead: resolve the names to
  * server numbers, save, then reload it. Contact changes are not sent — contacts are picked per entity.
  */
-export async function updateServerLead(current: Lead, patch: Partial<Lead>): Promise<Lead> {
+export async function updateServerLead(
+  current: Lead,
+  patch: Partial<Lead>,
+  /** `statusRemarks`: the remark of a status change (null clears it); otherwise the saved one is kept. */
+  options: { statusRemarks?: string | null } = {},
+): Promise<Lead> {
   if (!current.spectrum) fail('VALIDATION', 'This lead is not stored on the server.')
   const company = await resolveSpectrumCompany()
   if (!company) fail('UNAUTHENTICATED')
@@ -424,6 +431,7 @@ export async function updateServerLead(current: Lead, patch: Partial<Lead>): Pro
     requireEntityAndContact: false,
     productNos,
     notes: [],
+    statusRemarks: options.statusRemarks !== undefined ? options.statusRemarks : (ref.statusRemarks ?? null),
   }, fill)
   if (built.errors) fail('VALIDATION', Object.values(built.errors)[0])
   await saveLead(built.body)
@@ -555,7 +563,9 @@ export async function saveServerLeadNote(note: CrmNote): Promise<void> {
     originatedBy: note.by.trim() || undefined,
     notesDate: noteDateToIso(note.date),
     notesDiscussion: note.text.trim() || undefined,
+    ...noteAttachmentBody(note),
   })
+  forgetNoteAttachments([note.id])
   await refreshServerLead(leadNo)
 }
 
@@ -576,5 +586,6 @@ export async function deleteServerLeadNote(note: Pick<CrmNote, 'id' | 'relatedLe
   const detailNo = childNo(note.id, 'SN')
   if (!leadNo || !detailNo) fail('VALIDATION', 'This note is not saved on the server.')
   await deleteLeadNotes([detailNo])
+  forgetNoteAttachments([note.id])
   await refreshServerLead(leadNo)
 }

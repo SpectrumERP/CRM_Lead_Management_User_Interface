@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { sameList, useCrmSelector } from '../contexts/CrmStoreContext'
 import { useAuth } from '../auth/AuthContext'
-import { Button, FileField, SearchSelectField, TextAreaField, TextField } from '../ui'
+import { Button, SearchSelectField, TextAreaField, TextField } from '../ui'
+import type { Attachment } from '../api/attachments'
+import { NoteAttachmentsField } from './NoteAttachments'
 import { useSheetClose } from './useSheetClose'
 import { FIELD_LIMITS } from '../constants/fieldLimits'
 import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
@@ -17,6 +19,8 @@ interface NoteDrawerProps {
     relatedLeadId: string
     relatedLeadName: string
     attachmentName?: string
+    /** Uploaded with detailType 1; the note save links them. */
+    attachments: Attachment[]
     date: string
     by: string
   }) => void
@@ -32,7 +36,8 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
   const [text, setText] = useState('')
   const [leadId, setLeadId] = useState(preselectedLead?.id ?? '')
   const [leadName, setLeadName] = useState(preselectedLead?.name ?? '')
-  const [attachmentName, setAttachmentName] = useState('')
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [uploadsBusy, setUploadsBusy] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const { closing, requestClose } = useSheetClose(onClose)
@@ -54,6 +59,10 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
       setErrors(errs)
       return
     }
+    if (uploadsBusy) {
+      setErrors({ attachments: 'Please wait for the attachments to finish uploading.' })
+      return
+    }
     if (!(await confirm(saveConfirm('Note')))) return
     setSaving(true)
     setTimeout(() => {
@@ -63,7 +72,8 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
         text: text.trim(),
         relatedLeadId: leadId,
         relatedLeadName: leadName,
-        attachmentName: attachmentName || undefined,
+        attachmentName: attachments.length === 1 ? attachments[0]!.name : attachments.length ? `${attachments.length} files` : undefined,
+        attachments,
         // Stored as an ISO stamp; screens format it (utils/dateFormat).
         date: new Date().toISOString(),
         by: user?.name ?? '',
@@ -178,13 +188,19 @@ export default function NoteDrawer({ preselectedLead, onClose, onSave }: NoteDra
               </div>
             )}
           />
-          <FileField
-            label="Attachment"
-            fileName={attachmentName}
-            onFile={(file) => setAttachmentName(file.name)}
-            onClear={() => setAttachmentName('')}
-            buttonLabel="Choose file"
+          <NoteAttachmentsField
+            value={attachments}
+            onChange={(next) => {
+              setAttachments(next)
+              clearError('attachments')
+            }}
+            onBusyChange={setUploadsBusy}
           />
+          {errors.attachments ? (
+            <p className="text-xs text-accent" role="alert">
+              {errors.attachments}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 justify-end gap-2 border-t border-line-subtle bg-surface px-5 py-4">

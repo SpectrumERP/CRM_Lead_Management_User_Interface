@@ -2,12 +2,21 @@
  * Attachments on lead / opportunity activities.
  *
  * Files are uploaded to the document store as they are picked (AttachmentsField), filed under the parent
- * record's form (Lead 377 / Opportunity 380). Linking them to the activity is a pending backend change
- * (docs/Point3_Point4_Backend_Schema.md): `attachments: [{ docNo }]` on the activity save models, and the
- * files back on load-data. Until then (mock mode) the activity → files link is kept in this browser.
+ * record's form (Lead 377 / Opportunity 380). The activity save (leads / opportunities save-activity-detail)
+ * links them: `attachments: [{ docNo }]`. Mock mode also keeps the activity → files link in this browser.
+ *
+ * Viewing: a saved activity's files are listed from the store (GET document-attachments with the activity's
+ * detail number, its parent's form and the activity detailType), cached per activity until it is saved again.
  */
 import type { Activity } from '../data/activities'
-import { ATTACHMENT_FORM_NO, attachmentLinks, type Attachment } from './attachments'
+import {
+  ACTIVITY_ATTACHMENT_DETAIL_TYPE,
+  ATTACHMENT_FORM_NO,
+  attachmentLinks,
+  forgetCachedAttachments,
+  listAttachmentsCached,
+  type Attachment,
+} from './attachments'
 import type { ServerActivityAttachment } from './leads'
 import { getState } from './db'
 import { PENDING_API_MODE, getPendingData, updatePendingData } from './pendingApiStore'
@@ -15,6 +24,32 @@ import { PENDING_API_MODE, getPendingData, updatePendingData } from './pendingAp
 /** Form the files are filed under: the activity's opportunity, else its lead. */
 export function activityAttachmentFormNo(activity: Pick<Activity, 'opportunityId'>): number {
   return activity.opportunityId ? ATTACHMENT_FORM_NO.opportunity : ATTACHMENT_FORM_NO.lead
+}
+
+/** Store entry `detailType` for the files: opportunity activity 3, lead activity 2. */
+export function activityAttachmentDetailType(activity: Pick<Activity, 'opportunityId'>): number {
+  return activity.opportunityId ? ACTIVITY_ATTACHMENT_DETAIL_TYPE.opportunity : ACTIVITY_ATTACHMENT_DETAIL_TYPE.lead
+}
+
+/** Store query for a saved activity's files (`SA-…` lead / `SOA-…` opportunity ids); null when not saved yet. */
+export function activityAttachmentSource(
+  activity: Pick<Activity, 'id' | 'serverDetailNo'>,
+): { transactionId: number; formNo: number; detailType: number } | null {
+  const match = /^(SA|SOA)-(\d+)$/.exec(activity.id)
+  if (!match) return null
+  const opportunity = match[1] === 'SOA'
+  const transactionId = opportunity ? (activity.serverDetailNo ?? Number(match[2])) : Number(match[2])
+  if (!(transactionId > 0)) return null
+  return opportunity
+    ? { transactionId, formNo: ATTACHMENT_FORM_NO.opportunity, detailType: ACTIVITY_ATTACHMENT_DETAIL_TYPE.opportunity }
+    : { transactionId, formNo: ATTACHMENT_FORM_NO.lead, detailType: ACTIVITY_ATTACHMENT_DETAIL_TYPE.lead }
+}
+
+/** A saved activity's files from the document store ([] for activities not saved yet), cached per activity. */
+export function loadActivityAttachments(activity: Pick<Activity, 'id' | 'serverDetailNo'>): Promise<Attachment[]> {
+  const source = activityAttachmentSource(activity)
+  if (!source) return Promise.resolve([])
+  return listAttachmentsCached(activity.id, source.transactionId, source.formNo, source.detailType)
 }
 
 function fromServerRows(rows: readonly ServerActivityAttachment[] | null | undefined): Attachment[] {
@@ -40,14 +75,15 @@ export function activityAttachmentFields(
   }
 }
 
-/** Save-body field: the files to link (server mode only; the mock links them after the save). */
+/** Save-body field: the files to link (`CrmAttachmentSaveModel[]`); left out when the form did not touch them. */
 export function activityAttachmentBody(activity: Pick<Activity, 'attachments'>): { attachments?: { docNo: number }[] } {
-  if (PENDING_API_MODE !== 'server' || !activity.attachments) return {}
+  if (!activity.attachments) return {}
   return { attachments: attachmentLinks(activity.attachments) }
 }
 
-/** Mock: link the files to the saved activity (`undefined` = the form did not touch them). */
+/** After a save: drop the activity's cached store list; mock: link the files to it (`undefined` = the form did not touch them). */
 export function rememberActivityAttachments(activityId: string, files: readonly Attachment[] | undefined) {
+  forgetCachedAttachments([activityId])
   if (PENDING_API_MODE === 'server' || files === undefined) return
   updatePendingData((data) => {
     const next = { ...data.activityAttachments }
@@ -57,8 +93,9 @@ export function rememberActivityAttachments(activityId: string, files: readonly 
   })
 }
 
-/** Mock: drop the link when the activity is deleted. */
+/** After a delete: drop the cached store list; mock: drop the link. */
 export function forgetActivityAttachments(activityIds: readonly string[]) {
+  forgetCachedAttachments(activityIds)
   if (PENDING_API_MODE === 'server') return
   const known = getPendingData().activityAttachments
   if (!activityIds.some((id) => id in known)) return

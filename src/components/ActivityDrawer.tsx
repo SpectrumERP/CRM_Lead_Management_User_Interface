@@ -25,7 +25,7 @@ import { formatDate } from '../utils/dateFormat'
 import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 import AttachmentsField from './AttachmentsField'
 import type { Attachment } from '../api/attachments'
-import { activityAttachmentFormNo } from '../api/activityAttachments'
+import { activityAttachmentDetailType, activityAttachmentFormNo, activityAttachmentSource } from '../api/activityAttachments'
 import { useSpectrumCompany } from '../auth/useSpectrumCompany'
 
 interface ActivityDrawerProps {
@@ -93,7 +93,11 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
   const [attachments, setAttachments] = useState<Attachment[]>(editing?.attachments ?? [])
   const [uploadsBusy, setUploadsBusy] = useState(false)
   const spectrumCompany = useSpectrumCompany()
-  const attachmentFormNo = activityAttachmentFormNo({ opportunityId: editing?.opportunityId ?? (forOpportunity ? 'opportunity' : undefined) })
+  const attachmentParent = { opportunityId: editing?.opportunityId ?? (forOpportunity ? 'opportunity' : undefined) }
+  const attachmentFormNo = activityAttachmentFormNo(attachmentParent)
+  const attachmentDetailType = activityAttachmentDetailType(attachmentParent)
+  // Editing a saved activity: its files already in the document store are listed in the field.
+  const savedAttachmentNo = editing ? activityAttachmentSource(editing)?.transactionId : undefined
   const { closing, requestClose } = useSheetClose(onClose)
   const dismiss = inline ? onClose : requestClose
   const fromLeadForm = Boolean(preselectedLead)
@@ -319,9 +323,11 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
         ) : null}
       </FormGrid>
 
-      {/* <AttachmentsField
+      <AttachmentsField
         formNo={attachmentFormNo}
         companyNo={spectrumCompany.enabled ? spectrumCompany.headOfficeNo : null}
+        detailType={attachmentDetailType}
+        transactionId={savedAttachmentNo}
         value={attachments}
         onChange={(next) => {
           setAttachments(next)
@@ -329,7 +335,7 @@ export default function ActivityDrawer({ preselectedLead, followUpFrom, editing,
         }}
         onBusyChange={setUploadsBusy}
         noun="activity"
-      /> */}
+      />
 
       {Object.keys(errors).length > 0 ? (
         <p className="text-xs text-accent" role="alert">

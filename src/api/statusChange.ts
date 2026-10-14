@@ -1,16 +1,21 @@
 /**
  * Lead / opportunity status changes with a remark, Won order details and a status history.
  *
- * Backend contract (pending — docs/Point3_Point4_Backend_Schema.md):
+ * The remark rule is the server's: `isRemarkRequired` on the status fill values (StatusOption.isRemarkMandatory).
+ * The remark is saved with the status on leads/save (`leadStatusRemarks`) · opportunities/save
+ * (`opportunityStatusRemarks`).
+ *
+ * Still pending (docs/Point3_Point4_Backend_Schema.md):
  *   POST /api/crm/leads/change-status                  { leadNo, leadStatusNo, remark? }
  *   POST /api/crm/opportunities/change-status          { opportunityNo, opportunityStatusNo, remark?, orderValue?, orderDate? }
  *   GET  /api/crm/{leads|opportunities}/status-history/{id}   latest first
- *   isRemarkMandatory / isWon on the status masters and their fill values
+ *   isWon on the opportunity status master
  *
- * Mock mode (default, see pendingApiStore.ts): the status itself is saved on the server through the existing
- * leads/save · opportunities/save; the remark, order details, history and rules are kept in this browser.
+ * Mock mode (default, see pendingApiStore.ts): the Won rule, order details and history are kept in this browser.
  */
 import type { Lead, LeadStatus, LeadStatusLog } from '../data/leads'
+import type { LeadFormFillValues } from './leadFormFillValues'
+import type { OpportunityFormFillValues } from './opportunityFormFillValues'
 import type { Opportunity, OpportunityStatus } from '../data/opportunities'
 import { isAdmin } from '../auth/users'
 import { spectrumEndpoints } from './endpoints'
@@ -38,12 +43,28 @@ export type { StatusHistoryEntry, StatusRecordType } from './pendingApiStore'
 /** Remark length the backend stores (nvarchar(1000)). */
 export const STATUS_REMARK_MAX = 1000
 
-/** A status as the fill values list it (number, name and the pending flags). */
+/** A status as the fill values list it (number, name and the flags). */
 export interface StatusOption {
   no: number
   name: string
+  /** The fill values' `isRemarkRequired`. */
   isRemarkMandatory?: boolean
   isWon?: boolean
+}
+
+/** The lead statuses of the fill values, as the Change Status drawer lists them (with the remark rule). */
+export function leadStatusOptions(fill: Pick<LeadFormFillValues, 'leadStatuses'> | null | undefined): StatusOption[] {
+  return (fill?.leadStatuses ?? []).map((s) => ({ no: s.leadStatusNo, name: s.leadStatusName, isRemarkMandatory: s.isRemarkRequired }))
+}
+
+/** The opportunity statuses of the fill values, as the Change Status drawer lists them. */
+export function opportunityStatusOptions(fill: Pick<OpportunityFormFillValues, 'opportunityStatuses'> | null | undefined): StatusOption[] {
+  return (fill?.opportunityStatuses ?? []).map((s) => ({
+    no: s.opportunityStatusNo,
+    name: s.opportunityStatusName,
+    isRemarkMandatory: s.isRemarkRequired,
+    isWon: s.isWon,
+  }))
 }
 
 export interface StatusRule {
@@ -57,17 +78,16 @@ const WON_NAME = /^(closed\s+)?won$/i
 
 const ruleKey = (record: StatusRecordType) => (record === 'Lead' ? 'lead' : 'opportunity')
 
-/** The rules for one status: the server's flags (server mode) or the ones saved in Settings (mock). */
+/**
+ * The rules for one status: the remark from the server's `isRemarkRequired`; Won from the server's flag
+ * (server mode) or the one saved in Settings (mock).
+ */
 export function statusRule(record: StatusRecordType, option: StatusOption | undefined, data: PendingApiData = getPendingData()): StatusRule {
   if (!option) return { isRemarkMandatory: false, isWon: false }
-  if (PENDING_API_MODE === 'server') {
-    return { isRemarkMandatory: Boolean(option.isRemarkMandatory), isWon: record === 'Opportunity' && Boolean(option.isWon) }
-  }
+  const isRemarkMandatory = Boolean(option.isRemarkMandatory)
+  if (PENDING_API_MODE === 'server') return { isRemarkMandatory, isWon: record === 'Opportunity' && Boolean(option.isWon) }
   const stored = data.rules[ruleKey(record)][option.no]
-  return {
-    isRemarkMandatory: stored?.isRemarkMandatory ?? false,
-    isWon: record === 'Opportunity' && (stored?.isWon ?? WON_NAME.test(option.name.trim())),
-  }
+  return { isRemarkMandatory, isWon: record === 'Opportunity' && (stored?.isWon ?? WON_NAME.test(option.name.trim())) }
 }
 
 /** Mock: save the status rules (admins only). In server mode the flags are saved with the status masters. */
@@ -147,6 +167,22 @@ function appendHistory(entry: Omit<StatusHistoryEntry, 'statusChangeHistoryNo' |
   }))
 }
 
+/**
+ * A lead status changed on the lead form (saved with the form's own save): the history entry the Change
+ * Status drawer would write. Mock only; the server keeps its own log.
+ */
+export function recordLeadStatusChange(leadNo: number, previousStatusName: string, newStatus: StatusOption, remark: string) {
+  if (PENDING_API_MODE === 'server') return
+  appendHistory({
+    recordType: 'Lead',
+    recordNo: leadNo,
+    previousStatusName: previousStatusName || undefined,
+    newStatusNo: newStatus.no,
+    newStatusName: newStatus.name,
+    remark: remark.trim() || undefined,
+  })
+}
+
 export interface LeadStatusChange {
   newStatus: StatusOption
   remark: string
@@ -171,8 +207,8 @@ export async function changeLeadStatus(lead: Lead, change: LeadStatusChange): Pr
     return
   }
 
-  // Saved on the server first; the history entry is written only once that succeeded.
-  await updateServerLead(lead, { leadStatus: change.newStatus.name as LeadStatus })
+  // Saved on the server first (with its remark); the history entry is written only once that succeeded.
+  await updateServerLead(lead, { leadStatus: change.newStatus.name as LeadStatus }, { statusRemarks: remark ?? null })
   appendHistory({
     recordType: 'Lead',
     recordNo: leadNo,
@@ -214,7 +250,15 @@ export async function changeOpportunityStatus(opportunity: Opportunity, change: 
     return
   }
 
-  await updateServerOpportunity(opportunity, { status: change.newStatus.name as OpportunityStatus })
+  // Won: the order value / date become the opportunity value and expected closure date of the save.
+  await updateServerOpportunity(
+    opportunity,
+    {
+      status: change.newStatus.name as OpportunityStatus,
+      ...(order ? { dealValue: order.orderValue, closingDate: order.orderDate } : {}),
+    },
+    { statusRemarks: remark ?? null },
+  )
   if (order) updatePendingData((data) => ({ ...data, orders: { ...data.orders, [opportunityNo]: order } }))
   appendHistory({
     recordType: 'Opportunity',

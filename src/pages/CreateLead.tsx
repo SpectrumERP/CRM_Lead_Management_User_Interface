@@ -22,11 +22,14 @@ import {
   LeadCurrency,
   LeadPriority,
   displayLeadName,
+  isLeadLocked,
   leadContactsOf,
+  leadLockedReason,
   leadPriorityOf,
   leadProductList,
 } from '../data/leads'
 import { OptionLookupField, type LookupOption } from '../components/OptionLookupField'
+import { STATUS_REMARK_MAX, leadStatusOptions, recordLeadStatusChange, statusRule, validateStatusChange } from '../api/statusChange'
 import type { ActivityFormStatus } from '../data/activities'
 import { productsFromLeadNames, type Product } from '../data/products'
 import { matchesOperTaskType, type OperTaskType } from '../data/operTaskTypes'
@@ -35,6 +38,8 @@ import { FIELD_LIMITS } from '../constants/fieldLimits'
 import AttachmentsField from '../components/AttachmentsField'
 import { LeadActivitiesPanel } from '../components/LeadActivities'
 import { LeadNotesPanel } from '../components/LeadNotes'
+import { AttachmentChips } from '../components/ActivityAttachments'
+import { NoteAttachmentsField } from '../components/NoteAttachments'
 import { useOptionalToast } from '../contexts/ToastContext'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
 import { linkNewLeadActivityFiles } from '../api/activityAttachments'
@@ -194,6 +199,10 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   const spectrumCompany = useSpectrumCompany()
   // Saved through POST /api/crm/leads/save only: new leads, and edits of leads that came from the server.
   const serverRef = existing?.spectrum
+  // Editing: the status is changed right here (inline); a new status takes a remark, mandatory when the
+  // status has isRemarkRequired. Unchanged, the saved remark is kept.
+  const savedStatus = existing?.leadStatus ?? ''
+  const [statusRemark, setStatusRemark] = useState('')
   const saveToServer = Boolean(fill && spectrumCompany.headOfficeNo && (!isEdit || serverRef))
   // Numbers the server wants; the pickers report them alongside the names the form displays.
   const [ownerLoginNo, setOwnerLoginNo] = useState<number | undefined>(serverRef?.ownerLoginNo)
@@ -281,7 +290,10 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   const [noteDateTime, setNoteDateTime] = useState(() => toIsoDate())
   const [noteCreatedBy, setNoteCreatedBy] = useState(userName)
   const [noteDiscussion, setNoteDiscussion] = useState('')
-  const [addedNotes, setAddedNotes] = useState<{ key: string; date: string; time: string; by: string; text: string; at: string }[]>([])
+  const [addedNotes, setAddedNotes] = useState<{ key: string; date: string; time: string; by: string; text: string; at: string; attachments: Attachment[] }[]>([])
+  // Files of the note being typed (detailType 1); they go out with that note in the lead save.
+  const [noteFiles, setNoteFiles] = useState<Attachment[]>([])
+  const [noteUploadsBusy, setNoteUploadsBusy] = useState(false)
   // Uploaded to the document store as they are picked; the save links them by docNo.
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploadsBusy, setUploadsBusy] = useState(false)
@@ -440,6 +452,11 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   }
 
   function addLeadNote() {
+    // A file still uploading would land on the next note once the fields reset.
+    if (noteUploadsBusy) {
+      addToast('info', 'Attachments still uploading', 'Please wait for the note attachments to finish before adding the note.')
+      return
+    }
     const dateTime = noteDateTime.trim()
     const by = noteCreatedBy.trim()
     const text = noteDiscussion.trim()
@@ -464,11 +481,13 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
         by,
         text,
         at: dateTime,
+        attachments: noteFiles,
       },
     ])
     setNoteDateTime(toIsoDate())
     setNoteCreatedBy(userName)
     setNoteDiscussion('')
+    setNoteFiles([])
     clearErr('noteDateTime')
     clearErr('noteCreatedBy')
     clearErr('noteDiscussion')
@@ -485,6 +504,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     setNoteDateTime(item.at)
     setNoteCreatedBy(item.by)
     setNoteDiscussion(item.text)
+    setNoteFiles(item.attachments)
     setAddedNotes((prev) => prev.filter((n) => n.key !== key))
   }
 
@@ -492,18 +512,27 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     setAddedNotes((prev) => prev.filter((item) => item.key !== key))
   }
 
-  /** Date and Created By are pre-filled, so only the discussion text starts a note. */
+  /** Date and Created By are pre-filled, so the discussion text (or a file) starts a note. */
   function notesDirty() {
-    return Boolean(noteDiscussion.trim())
+    return Boolean(noteDiscussion.trim()) || noteFiles.length > 0
   }
 
   // Activity / notes are optional: their fields are required only once the user starts filling them.
   const activityActive = activityDirty()
   const notesActive = notesDirty()
 
+  const statusChoices = leadStatusOptions(fill)
+  const pickedStatus = statusChoices.find((s) => s.name.trim().toLowerCase() === lead.status.trim().toLowerCase())
+  const statusChanged = isEdit && lead.status.trim().toLowerCase() !== savedStatus.trim().toLowerCase()
+  const statusRemarkRule = statusRule('Lead', pickedStatus)
+
   function validate() {
     const errs: Record<string, string> = {}
     if (!lead.name.trim()) errs.name = 'Lead name is required'
+    if (statusChanged && pickedStatus) {
+      const remarkError = validateStatusChange({ newStatus: pickedStatus, currentStatusName: savedStatus, remark: statusRemark }, statusRemarkRule).remark
+      if (remarkError) errs.statusRemark = remarkError
+    }
     if (!selectedEntity) errs.entity = 'Select a business entity'
     if (!entityContacts.primary?.name.trim()) errs.contact = 'Select the primary contact person'
     if (!lead.owner) errs.owner = 'Lead owner is required'
@@ -526,7 +555,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   async function saveLeadToServer(): Promise<number | null> {
     if (!fill || !spectrumCompany.headOfficeNo) return null
     const pendingNote = !isEdit && noteDateTime.trim() && noteCreatedBy.trim() && noteDiscussion.trim()
-      ? [{ originatedBy: noteCreatedBy, notesDate: new Date(noteDateTime), notesDiscussion: noteDiscussion.slice(0, NOTE_DISCUSSION_MAX) }]
+      ? [{ originatedBy: noteCreatedBy, notesDate: new Date(noteDateTime), notesDiscussion: noteDiscussion.slice(0, NOTE_DISCUSSION_MAX), attachments: noteFiles }]
       : []
     const built = buildLeadSaveBody({
       leadNo: serverRef?.leadNo,
@@ -571,10 +600,12 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
           : []),
       ],
       notes: [
-        ...addedNotes.map((n) => ({ originatedBy: n.by, notesDate: new Date(n.at), notesDiscussion: n.text })),
+        ...addedNotes.map((n) => ({ originatedBy: n.by, notesDate: new Date(n.at), notesDiscussion: n.text, attachments: n.attachments })),
         ...pendingNote,
       ],
       attachmentNos: attachments.map((a) => a.id),
+      // Update: keep the current status remark (status changes set it in the Change Status drawer).
+      statusRemarks: !isEdit ? undefined : statusChanged ? statusRemark.trim() || null : (serverRef?.statusRemarks ?? null),
     }, fill)
     if (built.errors) {
       setErrors(built.errors)
@@ -604,6 +635,8 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
       setSaving(false)
       return
     }
+    // The status changed here: the history entry the Change Status drawer would have written.
+    if (statusChanged && pickedStatus) recordLeadStatusChange(leadNo, savedStatus, pickedStatus, statusRemark)
     if (!isEdit) {
       // Mock: link each activity's files to the activity the server created for it.
       const filed = [
@@ -626,7 +659,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     if (saving) return
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    if (uploadsBusy || activityUploadsBusy) {
+    if (uploadsBusy || activityUploadsBusy || noteUploadsBusy) {
       setErrors({ form: 'Please wait for all attachments to finish uploading before saving the lead.' })
       return
     }
@@ -745,11 +778,25 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 placeholder="Select status"
                 options={statusOptions}
                 value={lead.status}
-                onValueChange={(v) => updateLead('status', v)}
-                // Editing: the status changes only through Change Status on the lead (remark + history).
-                disabled={isEdit}
-                hint={isEdit ? 'Change it with Change Status on the lead page' : undefined}
+                onValueChange={(v) => { updateLead('status', v); clearErr('statusRemark') }}
+                // A converted / completed lead keeps its status.
+                disabled={Boolean(isEdit && existing && isLeadLocked(existing))}
+                hint={isEdit && existing && isLeadLocked(existing) ? leadLockedReason(existing) : undefined}
               />
+              {statusChanged ? (
+                <TextAreaField
+                  fieldClassName="lg:col-span-2"
+                  label="Status Remark"
+                  required={statusRemarkRule.isRemarkMandatory}
+                  hint={statusRemarkRule.isRemarkMandatory ? `Required for status ${lead.status}` : 'Optional'}
+                  error={errors.statusRemark}
+                  rows={2}
+                  maxLength={STATUS_REMARK_MAX}
+                  value={statusRemark}
+                  onValueChange={(v) => { setStatusRemark(v); clearErr('statusRemark') }}
+                  placeholder="Reason for the status change…"
+                />
+              ) : null}
               <OptionLookupField
                 label="Sales Organization"
                 required={saveToServer}
@@ -883,7 +930,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 />
               ) : null}
             </FormGrid>
-            {/* <div className="mt-3">
+            <div className="mt-3">
               <AttachmentsField
                 noun="activity"
                 formNo={ATTACHMENT_FORM_NO.lead}
@@ -891,8 +938,9 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 value={activityFiles}
                 onChange={setActivityFiles}
                 onBusyChange={setActivityUploadsBusy}
+                detailType={2}
               />
-            </div> */}
+            </div>
             <div className="mt-3 flex justify-end">
               <Button variant="solid" className="!min-h-8 !px-3 !py-2 text-xs" onClick={addLeadActivity}>
                 Add Activity
@@ -974,6 +1022,9 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                   placeholder="Enter internal discussion note"
                 />
               </FormGrid>
+              <div className="mt-3">
+                <NoteAttachmentsField value={noteFiles} onChange={setNoteFiles} onBusyChange={setNoteUploadsBusy} />
+              </div>
               <div className="mt-3 flex justify-end">
                 <Button variant="solid" className="!min-h-8 !px-3 !py-2 text-xs" onClick={addLeadNote}>
                   Add Note
@@ -1009,6 +1060,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                     <div className="p-2 5">
                       <p className="text-xs text-ink-faint">{formatDateTime(item.at)}</p>
                       <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{item.text}</p>
+                      <AttachmentChips files={item.attachments} className="mt-1.5" />
                     </div>
                     </Card>
                   ))}

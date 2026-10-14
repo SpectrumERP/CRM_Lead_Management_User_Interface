@@ -13,6 +13,7 @@ import { http } from './http'
 import { repeatedQuery, withQuery } from './query'
 import type { LeadFormFillValues } from './leadFormFillValues'
 import { activityAttachmentBody } from './activityAttachments'
+import { noteAttachmentBody } from './noteAttachments'
 import type { Attachment } from './attachments'
 
 export interface LeadSaveContact {
@@ -49,6 +50,8 @@ export interface LeadSaveNote {
   /** ISO date-time. */
   notesDate: string
   notesDiscussion?: string
+  /** Uploaded document-store files to link (detailType 1). */
+  attachments?: { docNo: number }[]
 }
 
 /** Body of `POST /api/crm/leads/save`. */
@@ -64,6 +67,8 @@ export interface LeadSaveBody {
   salesOrganizationNo?: number
   leadStageNo: number
   leadStatusNo: number
+  /** Remark for the current status (required when the status has isRemarkRequired). */
+  leadStatusRemarks?: string | null
   currencyNo?: number
   estimatedAmount?: number
   businessEntityNo?: number
@@ -213,6 +218,7 @@ export interface LeadDetail {
   leadNo: number
   code?: string | null
   description?: string | null
+  leadStatusRemarks?: string | null
   leadName?: string | null
   leadDate?: string | null
   leadOwner?: ServerUserRef | null
@@ -345,7 +351,9 @@ export interface LeadFormDraft {
   productNos: number[]
   /** Activities to create with the lead (the new-lead form can add several). */
   activities?: LeadDraftActivity[]
-  notes: { originatedBy: string; notesDate: Date; notesDiscussion: string }[]
+  notes: { originatedBy: string; notesDate: Date; notesDiscussion: string; attachments?: readonly Attachment[] }[]
+  /** Remark for the status (`leadStatusRemarks`); left out when undefined. */
+  statusRemarks?: string | null
   /** docNos of files uploaded through the document store. */
   attachmentNos?: number[]
 }
@@ -438,10 +446,12 @@ export function buildLeadSaveBody(
           originatedBy: n.originatedBy.trim() || undefined,
           notesDate: n.notesDate.toISOString(),
           notesDiscussion: n.notesDiscussion.trim() || undefined,
+          ...noteAttachmentBody(n),
         }))
       : undefined,
   }
   if (draft.attachmentNos?.length) body.attachments = draft.attachmentNos.filter((no) => no > 0).map((docNo) => ({ docNo }))
+  if (draft.statusRemarks !== undefined) body.leadStatusRemarks = draft.statusRemarks
   if (draft.leadNo) body.leadNo = draft.leadNo
   return { body }
 }

@@ -137,6 +137,8 @@ export interface SpectrumLeadRef {
   stageCompleted?: boolean
   /** Status log from load-data (`statusLogs`), oldest first. */
   statusLogs?: LeadStatusLog[]
+  /** Remark of the current status (load-data `leadStatusRemarks`), sent back unchanged on other saves. */
+  statusRemarks?: string
 }
 
 /** One row of a lead's server status log. */

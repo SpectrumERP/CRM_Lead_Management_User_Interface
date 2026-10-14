@@ -27,7 +27,7 @@ import { formatDateTime, type Activity } from '../data/activities'
 import { formatMoney } from '../data/leads'
 import { useAuth } from '../auth/AuthContext'
 import { usePendingData } from '../api/pendingApiStore'
-import { changeOpportunityStatus, opportunityOrder, statusRule, type StatusOption } from '../api/statusChange'
+import { changeOpportunityStatus, opportunityOrder, opportunityStatusOptions, statusRule, type StatusOption } from '../api/statusChange'
 import StatusChangeDialog from '../components/StatusChangeDialog'
 import StatusHistory from '../components/StatusHistory'
 import ActivityAttachments from '../components/ActivityAttachments'
@@ -331,12 +331,7 @@ export default function OpportunityDetail({
   const [showStatusChange, setShowStatusChange] = useState(false)
   const pending = usePendingData()
   const { user } = useAuth()
-  const statusOptions: StatusOption[] = (oppFill?.opportunityStatuses ?? []).map((s) => ({
-    no: s.opportunityStatusNo,
-    name: s.opportunityStatusName,
-    isRemarkMandatory: s.isRemarkMandatory,
-    isWon: s.isWon,
-  }))
+  const statusOptions: StatusOption[] = opportunityStatusOptions(oppFill)
 
   const relatedActivities = useMemo(() => {
     if (!opportunity) return []
@@ -487,7 +482,7 @@ export default function OpportunityDetail({
                   : 'Whether work on this opportunity is active · click to change'
               }
               tone={opportunityStatusClass(opportunity.status)}
-              // onEdit={opportunity.spectrum ? () => setShowStatusChange(true) : undefined}
+              onEdit={opportunity.spectrum ? () => setShowStatusChange(true) : undefined}
             />
             <HeaderFact
               label="Opportunity Owner"
@@ -574,7 +569,7 @@ export default function OpportunityDetail({
                       <p className="mt-0.5 text-[11px] text-ink-faint">
                         {item.type} · {formatDateTime(item.scheduleDate, item.scheduleTime)} · {item.assignedTo}
                       </p>
-                      <ActivityAttachments files={item.attachments} className="mt-1.5" />
+                      <ActivityAttachments activity={item} className="mt-1.5" />
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <span className="badge stage-contacted">{item.status}</span>
@@ -678,6 +673,7 @@ export default function OpportunityDetail({
           currentStatusName={opportunity.status}
           statuses={statusOptions}
           currencyLabel={opportunity.valueCurrency}
+          orderDefaults={{ orderValue: opportunity.dealValue, orderDate: opportunity.closingDate }}
           changedBy={user?.name ?? ''}
           onClose={() => setShowStatusChange(false)}
           onSubmit={async (change) => {

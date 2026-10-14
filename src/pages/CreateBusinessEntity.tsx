@@ -10,6 +10,7 @@ import {
   emptyLocation,
   loadBusinessEntity,
   saveBusinessEntity,
+  saveBusinessEntityContact,
   type BusinessEntityDraft,
   type ContactDraft,
   type LocationDraft,
@@ -232,13 +233,37 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
     clearErrors(`locations.${index}`)
   }
 
-  function saveContact(contact: ContactDraft) {
-    setDraft((prev) => {
-      const contacts = [...prev.contacts]
-      if (contactEdit?.index != null) contacts[contactEdit.index] = { ...contacts[contactEdit.index], ...contact }
-      else contacts.push(contact)
-      return { ...prev, contacts }
-    })
+  async function saveContact(contact: ContactDraft) {
+    const index = contactEdit?.index ?? null
+    const applyLocally = () =>
+      setDraft((prev) => {
+        const contacts = [...prev.contacts]
+        if (index != null) contacts[index] = { ...contacts[index], ...contact }
+        else contacts.push(contact)
+        return { ...prev, contacts }
+      })
+    const entityNo = draft.businessEntityNo
+    // A saved entity's Update sends only the primary contact: the others are saved on the server straight away.
+    if (entityNo) {
+      try {
+        await saveBusinessEntityContact(entityNo, index != null ? { ...draft.contacts[index], ...contact } : contact)
+      } catch (err) {
+        toast('error', 'Failed to save contact', toApiError(err).message)
+        return
+      }
+      toast('success', index != null ? 'Contact updated' : 'Contact added')
+      // The server returns no number for a new contact: reload the list so it can be edited / deleted later.
+      try {
+        if (!headOfficeNo) throw new Error('No company')
+        const { contacts } = businessEntityFromDetail(await loadBusinessEntity(entityNo, headOfficeNo))
+        setDraft((prev) => ({ ...prev, contacts }))
+      } catch {
+        applyLocally()
+        toast('error', 'Contact list could not be refreshed', 'Reopen this business entity before changing the contact again.')
+      }
+    } else {
+      applyLocally()
+    }
     clearErrors(...draft.contacts.map((_, i) => `contacts.${i}`))
     setContactEdit(null)
   }

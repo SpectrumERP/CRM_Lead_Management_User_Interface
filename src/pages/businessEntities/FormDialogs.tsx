@@ -113,17 +113,26 @@ export function ContactDialog({
 }: {
   initial: ContactDraft
   isNew: boolean
-  onSave: (contact: ContactDraft) => void
+  /** May save on the server (editing a saved entity); the drawer shows Saving… until it settles. */
+  onSave: (contact: ContactDraft) => void | Promise<void>
   onClose: () => void
 }) {
   const { value, errors, setErrors, patch } = useClearingPatch(initial)
+  const [saving, setSaving] = useState(false)
   const L = BUSINESS_ENTITY_LIMITS
 
-  function save() {
+  async function save() {
+    if (saving) return
     const e = contactErrors(value, { emailRequired: true })
     if (e.name) e.name = 'Representative Name is required'
     setErrors(e)
-    if (Object.keys(e).length === 0) onSave(value)
+    if (Object.keys(e).length) return
+    setSaving(true)
+    try {
+      await onSave(value)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -133,7 +142,7 @@ export function ContactDialog({
       icon={<Icon d={ICON.user} size={17} />}
       widthClass="w-[32rem]"
       onClose={onClose}
-      footer={(requestClose) => <Footer onCancel={requestClose} onSave={save} saveLabel={isNew ? 'Add Contact' : 'Update Contact'} />}
+      footer={(requestClose) => <Footer onCancel={requestClose} onSave={() => void save()} saving={saving} saveLabel={isNew ? 'Add Contact' : 'Update Contact'} />}
     >
       <div className="grid grid-cols-1 gap-x-3 gap-y-3.5 sm:grid-cols-2">
         <TextField fieldClassName="sm:col-span-2" label="Contact Person Name" required error={errors.name} maxLength={L.contactName} autoFocus

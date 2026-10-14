@@ -59,6 +59,12 @@ describe('buildLeadSaveBody', () => {
     })
   })
 
+  it('sends the status remark only when given (null clears it)', () => {
+    expect(buildLeadSaveBody(draft({ statusRemarks: 'Waiting for budget' }), fill).body?.leadStatusRemarks).toBe('Waiting for budget')
+    expect(buildLeadSaveBody(draft({ statusRemarks: null }), fill).body?.leadStatusRemarks).toBeNull()
+    expect(buildLeadSaveBody(draft(), fill).body).not.toHaveProperty('leadStatusRemarks')
+  })
+
   it('links uploaded attachments by docNo', () => {
     expect(buildLeadSaveBody(draft({ attachmentNos: [91, 0, 92] }), fill).body?.attachments).toEqual([{ docNo: 91 }, { docNo: 92 }])
     expect(buildLeadSaveBody(draft(), fill).body).not.toHaveProperty('attachments')
@@ -76,6 +82,16 @@ describe('buildLeadSaveBody', () => {
       { activityTypeNo: 2, subject: 'Intro call', dueDate: '2026-10-05T00:00:00.000Z', assignToLoginNo: 12, notesOutcome: undefined, statusNo: 1 },
     ])
     expect(body?.notes).toEqual([{ originatedBy: 'EDP', notesDate: '2026-09-29T09:30:00.000Z', notesDiscussion: 'Met at expo' }])
+  })
+
+  it('links the files of each new note on the lead save', () => {
+    const { body } = buildLeadSaveBody(
+      draft({
+        notes: [{ originatedBy: 'EDP', notesDate: new Date('2026-09-29T09:30:00.000Z'), notesDiscussion: 'Met', attachments: [{ id: 9, name: 'card.jpg' }] }],
+      }),
+      fill,
+    )
+    expect(body?.notes?.[0]).toMatchObject({ notesDiscussion: 'Met', attachments: [{ docNo: 9 }] })
   })
 
   it('sends several activities with the new lead', () => {

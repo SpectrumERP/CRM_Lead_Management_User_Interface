@@ -1,7 +1,7 @@
 /**
  * Spectrum master APIs (Save / Load Data / Search / Delete) under /api/master/*, called through `http`.
  * Every master shares one contract that differs by route, field names and a few extra fields
- * (lead stage colour, opportunity status flags), so one factory builds them all.
+ * (lead stage colour, status flags and status type), so one factory builds them all.
  */
 import { spectrumEndpoints } from './endpoints'
 import { fail, serverErrorMessage } from './errors'
@@ -58,6 +58,8 @@ export interface MasterDetail {
   colorCoding?: string
   flags?: Record<string, boolean>
   numbers?: Record<string, number | undefined>
+  /** The `lookup` pick (status type number); null when none. */
+  lookupNo?: number | null
   documentStatus: { documentStatusNo: number; documentStatusName: string } | null
   companies: MasterCompanyLink[]
   createdBy: MasterUserRef | null
@@ -79,6 +81,14 @@ export interface MasterSaveInput {
   colorCoding?: string
   flags?: Record<string, boolean>
   numbers?: Record<string, number | undefined>
+  /** The `lookup` pick (status type number); empty sends null. */
+  lookupNo?: number | null
+}
+
+/** One option of a master's `fill-values` list (e.g. a status type). */
+export interface MasterLookupOption {
+  no: number
+  name: string
 }
 
 export interface MasterSearchFilters {
@@ -107,11 +117,19 @@ export interface MasterDefinition {
   /** Has a `colorCoding` hex colour (lead stages). */
   hasColor?: boolean
   /**
-   * Required yes / no fields sent on save (opportunity statuses: isFirstActivity / isLastActivity).
+   * Required yes / no fields sent on save (lead / opportunity statuses: isRemarkRequired; opportunity statuses
+   * also isOpportunityValueRequired).
    * `pending`: a field the backend does not have yet — in mock mode it is not sent; the Settings form keeps it
    * in the browser instead (see statusRecord).
    */
-  flags?: readonly { key: string; label: string; hint?: string; pending?: boolean }[]
+  flags?: readonly {
+    key: string
+    label: string
+    hint?: string
+    pending?: boolean
+    /** Not shown on the form: set from the picked `lookup` option's name (true when it matches). */
+    fromLookupName?: RegExp
+  }[]
   /** Lead / opportunity status master: its pending flags are the status rules of api/statusChange.ts. */
   statusRecord?: 'Lead' | 'Opportunity'
   /**
@@ -119,14 +137,38 @@ export interface MasterDefinition {
    * so the list shows it as a column.
    */
   numbers?: readonly { key: string; label: string; min?: number; max?: number; suffix?: string; hint?: string; inList?: boolean }[]
+  /**
+   * A pick from the master's own `fill-values?companyNo=` (lead / opportunity status type): the options are
+   * `data[listKey]` rows with `noKey` / `nameKey`; saved as `saveKey`, read back from load-data's `loadKey` object.
+   * Optional (the save takes null).
+   */
+  lookup?: { label: string; listKey: string; noKey: string; nameKey: string; saveKey: string; loadKey: string }
   /** `search-data` accepts name / code filters (products take only CompanyNo). Default true. */
   searchFilters?: boolean
   label: string
 }
 
+/**
+ * The flags to save: `flags` plus those set from the picked lookup option's name (`fromLookupName`, e.g. a Won
+ * status type → opportunity value required). `lookupName`: null = no option picked (false); undefined = the
+ * picked option's name is unknown, so the value in `flags` (loaded with the record) is kept.
+ */
+export function withLookupFlags(
+  def: MasterDefinition,
+  flags: Record<string, boolean>,
+  lookupName: string | null | undefined,
+): Record<string, boolean> {
+  const next = { ...flags }
+  for (const flag of def.flags ?? []) {
+    if (!flag.fromLookupName) continue
+    next[flag.key] = lookupName === undefined ? flags[flag.key] === true : lookupName !== null && flag.fromLookupName.test(lookupName)
+  }
+  return next
+}
+
 /** Fields only load-data returns: editing must load the record first so saving keeps them. */
 export function needsDetailForEdit(def: MasterDefinition): boolean {
-  return Boolean(def.hasColor || def.flags?.length)
+  return Boolean(def.hasColor || def.flags?.length || def.lookup)
 }
 
 export const NAME_MAX = 100
@@ -156,6 +198,13 @@ export function createMasterApi(def: MasterDefinition) {
   function flagsOf(raw: RawRecord): Record<string, boolean> | undefined {
     if (!def.flags?.length) return undefined
     return Object.fromEntries(def.flags.map((f) => [f.key, raw[f.key] === true]))
+  }
+
+  function lookupNoOf(raw: RawRecord): number | null | undefined {
+    if (!def.lookup) return undefined
+    const picked = raw[def.lookup.loadKey] as RawRecord | null | undefined
+    const no = Number(picked?.[def.lookup.noKey] ?? raw[def.lookup.saveKey])
+    return Number.isInteger(no) && no > 0 ? no : null
   }
 
   function numbersOf(raw: RawRecord): Record<string, number | undefined> | undefined {
@@ -191,6 +240,7 @@ export function createMasterApi(def: MasterDefinition) {
       colorCoding: def.hasColor ? (text(raw.colorCoding) ?? undefined) : undefined,
       flags: flagsOf(raw),
       numbers: numbersOf(raw),
+      lookupNo: lookupNoOf(raw),
       documentStatus: (raw.documentStatus as MasterDetail['documentStatus']) ?? null,
       companies: Array.isArray(raw.companies) ? (raw.companies as MasterCompanyLink[]) : [],
       createdBy: (raw.createdBy as MasterUserRef) ?? null,
@@ -215,6 +265,18 @@ export function createMasterApi(def: MasterDefinition) {
       })
       const data = unwrap(await http.get<Envelope<RawRecord[] | null>>(url))
       return (data ?? []).map(toRow)
+    },
+
+    /** The `lookup` options from `fill-values` ([] for masters without one). */
+    async lookupOptions(companyNo: number): Promise<MasterLookupOption[]> {
+      const lookup = def.lookup
+      if (!lookup) return []
+      assertPositive(companyNo, 'Company')
+      const data = unwrap(await http.get<Envelope<RawRecord | null>>(withQuery(`${base}/fill-values`, { companyNo })))
+      const list = Array.isArray(data?.[lookup.listKey]) ? (data![lookup.listKey] as RawRecord[]) : []
+      return list
+        .map((row) => ({ no: Number(row[lookup.noKey]), name: text(row[lookup.nameKey]) ?? '' }))
+        .filter((option) => Number.isInteger(option.no) && option.no > 0)
     },
 
     async load(id: number, companyNo: number): Promise<MasterDetail> {
@@ -250,6 +312,7 @@ export function createMasterApi(def: MasterDefinition) {
         body.companyNo = input.companyNo
       }
       if (def.hasColor) body.colorCoding = input.colorCoding?.trim() || undefined
+      if (def.lookup) body[def.lookup.saveKey] = input.lookupNo && input.lookupNo > 0 ? input.lookupNo : null
       // Required booleans: always sent (false when not ticked). Pending ones only once the backend has them.
       for (const flag of def.flags ?? []) {
         if (flag.pending && PENDING_API_MODE !== 'server') continue
@@ -294,9 +357,16 @@ export const masterApis = {
     path: 'lead-statuses',
     field: 'leadStatus',
     hasSequence: false,
+    lookup: {
+      label: 'Status Type',
+      listKey: 'leadStatusTypes',
+      noKey: 'leadStatusTypeNo',
+      nameKey: 'leadStatusTypeName',
+      saveKey: 'leadStatusTypeNo',
+      loadKey: 'leadStatusType',
+    },
     flags: [
-      { key: 'isFirstActivity', label: 'First activity', hint: 'Status a new lead starts with' },
-      { key: 'isLastActivity', label: 'Last activity', hint: 'Status that closes the lead' },
+      { key: 'isRemarkRequired', label: 'Remark required', hint: 'A remark is required when a lead moves to this status' },
       // { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when a lead moves to this status', pending: true },
     ],
     statusRecord: 'Lead',
@@ -306,9 +376,18 @@ export const masterApis = {
     path: 'opportunity-statuses',
     field: 'opportunityStatus',
     hasSequence: true,
+    lookup: {
+      label: 'Status Type',
+      listKey: 'oppStatusTypes',
+      noKey: 'oppStatusTypeNo',
+      nameKey: 'oppStatusTypeName',
+      saveKey: 'oppStatusTypeNo',
+      loadKey: 'oppStatusType',
+    },
     flags: [
-      { key: 'isFirstActivity', label: 'First activity', hint: 'Status a new opportunity starts with' },
-      { key: 'isLastActivity', label: 'Last activity', hint: 'Status that closes the opportunity' },
+      { key: 'isRemarkRequired', label: 'Remark required', hint: 'A remark is required when an opportunity moves to this status' },
+      // Set from the status type: a Won type requires the opportunity value.
+      { key: 'isOpportunityValueRequired', label: 'Opportunity value required', fromLookupName: /\bwon\b/i },
       // { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when an opportunity moves to this status', pending: true },
       // { key: 'isWon', label: 'Won (Order Value + Order Date required)', hint: 'Order Value and Order Date are required for this status', pending: true },
     ],

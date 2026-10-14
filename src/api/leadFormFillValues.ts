@@ -41,8 +41,8 @@ export interface LeadStatusOption {
   leadStatusName: string
   /** Not sent by the server today; the first item (by sequence) is used instead. */
   isDefault?: boolean
-  /** Remark required when a lead moves to this status (pending backend field; see api/statusChange.ts). */
-  isRemarkMandatory?: boolean
+  /** A remark is required when a lead moves to this status (sent as leadStatusRemarks). */
+  isRemarkRequired?: boolean
 }
 
 export interface LeadPriorityOption {

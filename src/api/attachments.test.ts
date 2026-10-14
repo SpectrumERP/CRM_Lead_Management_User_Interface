@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  ACTIVITY_ATTACHMENT_DETAIL_TYPE,
   ATTACHMENT_FORM_NO,
   attachmentLinks,
   deleteAttachment,
@@ -72,6 +73,21 @@ describe('attachment API', () => {
     const statusUrl = new URL(String(fetchMock.mock.calls[2]![0]))
     expect(statusUrl.pathname).toBe('/api/document-attachments/status')
     expect(statusUrl.searchParams.get('DocNo')).toBe('91')
+  })
+
+  it.each([
+    ['lead', 377, ACTIVITY_ATTACHMENT_DETAIL_TYPE.lead, 2],
+    ['opportunity', 380, ACTIVITY_ATTACHMENT_DETAIL_TYPE.opportunity, 3],
+  ])('sends detailType on the entry for %s activity files', async (_parent, formNo, detailType, expected) => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { success: true, message: '', data: [{ id: 92, name: 'call.pdf' }] }))
+      .mockResolvedValueOnce(jsonResponse(200, { success: true, message: '', data: true }))
+      .mockResolvedValueOnce(jsonResponse(200, { success: true, message: '', data: [{ docNo: 92, statusNo: 1 }] }))
+
+    await uploadAttachment(file('call.pdf', 10, 'application/pdf'), 1, formNo, detailType)
+
+    const [, entry] = fetchMock.mock.calls[0]!
+    expect(JSON.parse(entry.body)).toEqual([{ fileName: 'call.pdf', companyNo: 1, formNo, detailType: expected }])
   })
 
   it('stops when the entry cannot be created', async () => {

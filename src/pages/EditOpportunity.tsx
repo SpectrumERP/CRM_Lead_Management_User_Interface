@@ -12,6 +12,8 @@ import EntityContactsFields, {
 } from '../components/EntityContactsFields'
 import { stageWeight } from '../api/opportunityFormFillValues'
 import { OptionLookupField } from '../components/OptionLookupField'
+import StatusChangeField from '../components/StatusChangeField'
+import { changeOpportunityStatus, opportunityStatusOptions, parseOrderValue } from '../api/statusChange'
 import CurrencyAmountField from '../components/CurrencyAmountField'
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
 import { bySequence, guessIsoCurrency } from '../api/fillValues'
@@ -110,7 +112,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
   const confirm = useConfirm()
   const [name, setName] = useState(existing.name)
   const [description, setDescription] = useState(existing.description ?? '')
-  // Business entity (fixed after creation) + primary / secondary contacts, shared with the lead form.
+  // Business entity + primary / secondary contacts, shared with the lead form. A new entity starts the contacts over.
   const [entityContacts, setEntityContacts] = useState<EntityContactsValue>(() => ({
     entity: {
       id: existing.spectrum?.businessEntityNo ? spectrumEntityId(existing.spectrum.businessEntityNo) : `name:${existing.companyName}`,
@@ -158,6 +160,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
   function validate() {
     const next: Record<string, string> = {}
     if (!name.trim()) next.name = 'Opportunity name is required'
+    if (!entityContacts.entity?.businessEntityNo) next.companyName = 'Select the business entity from the list'
     if (!entityContacts.primary?.name.trim()) next.contactPerson = 'Select the primary contact person'
     const value = Number(dealValue)
     if (!Number.isFinite(value) || value < 0) next.dealValue = 'Enter a valid opportunity value'
@@ -185,6 +188,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
     // Wait for the server: a rejected save shows its error (toast) and keeps the form open.
     const saved = await patchOpportunity(existing.id, {
       name: name.trim(),
+      companyName: entityContacts.entity?.name ?? existing.companyName,
       description: description.trim(),
       contactPerson: entityContacts.primary?.name.trim() ?? '',
       email: entityContacts.primary?.email.trim() ?? '',
@@ -203,6 +207,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
       // detail never loaded keeps its server contacts.
       spectrum: {
         ...serverRef,
+        businessEntityNo: entityContacts.entity?.businessEntityNo ?? serverRef.businessEntityNo,
         currencyNo,
         ownerLoginNo,
         ...(contactsTouched.current ? { contactPersonDetailNos: contactDetailNos(entityContacts) } : {}),
@@ -230,7 +235,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
             </svg>
           </div>
           <h2 className="ui-title mb-1 text-lg">Opportunity Updated!</h2>
-          <p className="ui-subtitle mb-6 text-sm">{existing.companyName} has been saved.</p>
+          <p className="ui-subtitle mb-6 text-sm">{entityContacts.entity?.name ?? existing.companyName} has been saved.</p>
           <p className="text-xs text-ink-faint">Redirecting…</p>
         </Card>
       </div>
@@ -286,14 +291,15 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
                 onValueChange={setName}
                 placeholder="Enter opportunity name"
               />
-              {/* <TextAreaField
+              <TextAreaField
                 fieldClassName="lg:col-span-2"
                 label="Opportunity Description"
                 rows={3}
+                maxLength={FIELD_LIMITS.opportunityDescription}
                 value={description}
                 onValueChange={setDescription}
                 placeholder="Enter description"
-              /> */}
+              />
               <div className="lg:col-span-2">
                 <ProductPicker
                   label="Products Required"
@@ -312,13 +318,12 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
           <Section title="Business Entity & Contacts" icon={SECTION_ICONS.contact}>
             <EntityContactsFields
               value={entityContacts}
-              entityLocked
               onChange={(next) => {
                 contactsTouched.current = true
                 setEntityContacts(next)
-                setErrors(({ contactPerson: _cleared, ...rest }) => rest)
+                setErrors(({ companyName: _entity, contactPerson: _contact, ...rest }) => rest)
               }}
-              errors={{ contact: errors.contactPerson }}
+              errors={{ entity: errors.companyName, contact: errors.contactPerson }}
             />
           </Section>
 
@@ -333,18 +338,25 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
                 onValueChange={(value) => setDealStage(value as DealStage)}
                 options={bySequence(oppFill?.opportunityStages ?? []).map((stage) => ({ value: stage.opportunityStageName, label: stage.opportunityStageName, code: stage.code, detail: `${stageWeight(stage)}%` }))}
               />
-              <OptionLookupField
+              {/* The status changes through the Change Status drawer (remark, Won order details, history), saved straight away. */}
+              <StatusChangeField
+                record="Opportunity"
                 label="Opportunity Status"
-                sortByCode
-                required
-                error={errors.status}
-                placeholder="Select status"
                 value={status}
-                // The status changes only through Change Status on the opportunity (remark, Won order details, history).
-                disabled
-                hint="Change it with Change Status on the opportunity page"
-                onValueChange={(value) => setStatus(value as OpportunityStatus)}
-                options={(oppFill?.opportunityStatuses ?? []).map((st) => ({ value: st.opportunityStatusName, label: st.opportunityStatusName, code: st.code }))}
+                statuses={opportunityStatusOptions(oppFill)}
+                recordLabel={`Opportunity ${serverRef?.code ?? existing.id} · ${existing.name}`}
+                currencyLabel={existing.valueCurrency}
+                // The values on the form (they may be edited and not saved yet).
+                orderDefaults={{ orderValue: Number(dealValue) || undefined, orderDate: closingDate }}
+                disabledReason={serverRef ? undefined : 'Only opportunities saved on the server can change status'}
+                onChange={async (change) => {
+                  await changeOpportunityStatus({ ...existing, status }, change)
+                  setStatus(change.newStatus.name as OpportunityStatus)
+                  // Won: the saved order value / date are now the opportunity value and expected closure date.
+                  if (change.orderValue !== undefined) setDealValue(String(parseOrderValue(change.orderValue)))
+                  if (change.orderDate) setClosingDate(change.orderDate)
+                  addToast('success', 'Status Changed', `Opportunity status is now ${change.newStatus.name}.`)
+                }}
               />
               <UserSelectField
                 label="Opportunity Owner"

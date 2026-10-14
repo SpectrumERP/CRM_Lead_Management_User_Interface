@@ -9,6 +9,8 @@ export const FIELD_LIMITS = {
   leadDescription: 1000,
   /** OpportunityMain.OpportunityName varchar(200) */
   opportunityName: 200,
+  /** OpportunityMain.Description — no size in the swagger; kept to LeadMain.Description's 1000. */
+  opportunityDescription: 1000,
   /** Lead / OpportunityActivityDetail.Subject varchar(200) */
   activitySubject: 200,
   /** Lead / OpportunityActivityDetail.NotesOutcome varchar(1000) */
