@@ -1,4 +1,4 @@
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, useLocation } from 'react-router-dom'
 import { Suspense, type ReactNode } from 'react'
 import { AppProviders } from './app/providers'
 import { AppRouter } from './app/routes'
@@ -15,7 +15,12 @@ export function RouteFallback() {
 
 export function AppErrors({ children }: { children: ReactNode }) {
   const { handleError } = useErrorHandler()
-  return <AppErrorBoundary onError={handleError}>{children}</AppErrorBoundary>
+  const { pathname } = useLocation()
+  return (
+    <AppErrorBoundary onError={handleError} resetKey={pathname}>
+      {children}
+    </AppErrorBoundary>
+  )
 }
 
 export default function App() {
