@@ -6,7 +6,9 @@ import {
   deleteBusinessEntity,
   deleteBusinessEntityContact,
   emptyBusinessEntityDraft,
+  entityNameKey,
   findBusinessEntityNames,
+  findDuplicateEntityName,
   loadBusinessEntity,
   saveBusinessEntity,
   saveBusinessEntityContact,
@@ -283,5 +285,23 @@ describe('business entity record', () => {
     const { url } = lastCall(fetchMock)
     expect(url.pathname).toBe('/api/master/business-entities')
     expect(url.searchParams.get('BusinessEntityName')).toBe('Tata')
+  })
+
+  it('compares entity names ignoring case, accents, punctuation and spacing', () => {
+    expect(entityNameKey('Verdés S.A.')).toBe(entityNameKey('  verdes sa '))
+    expect(entityNameKey('Tata Steel')).not.toBe(entityNameKey('Tata Steels'))
+  })
+
+  it('finds the existing entity with the same name, not one that only contains it', async () => {
+    fetchMock.mockImplementation(async () =>
+      jsonResponse(200, { success: true, message: '', data: [{ businessEntityName: 'Tata Steel Ltd' }, { businessEntityName: 'TATA STEEL' }] }),
+    )
+    await expect(findDuplicateEntityName('Tata Steel')).resolves.toBe('TATA STEEL')
+    await expect(findDuplicateEntityName('Tata')).resolves.toBeNull()
+  })
+
+  it('does not report the entity being edited as its own duplicate', async () => {
+    await expect(findDuplicateEntityName('Tata Steel', { exclude: 'TATA STEEL' })).resolves.toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

@@ -87,7 +87,7 @@ function placeOfCity(city: CityComboRow): Partial<LocationDraft> {
   }
 }
 
-/** "Analyze Image" menu of the header: pick an image, or capture one with the camera. */
+/** "Fill from image" menu of the header: pick an image, or capture one with the camera. */
 function AnalyzeMenu({ onPickImage, onCamera }: { onPickImage: () => void; onCamera: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -102,16 +102,17 @@ function AnalyzeMenu({ onPickImage, onCamera }: { onPickImage: () => void; onCam
   const item = 'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs font-medium text-ink hover:bg-surface-hover'
   return (
     <div ref={ref} className="relative">
-      <OutlineButton title="Analyze Image" active iconOnly onClick={() => setOpen((o) => !o)}>
+      <OutlineButton title="Fill from image" active iconOnly onClick={() => setOpen((o) => !o)}>
         <Icon d={ICON.idCard} />
       </OutlineButton>
       {open ? (
-        <div role="menu" className="absolute right-0 top-full z-50 mt-1.5 w-48 rounded-lg border border-line bg-surface p-1 shadow-overlay">
+        <div role="menu" aria-labelledby="fill-from-image-menu-title" className="absolute right-0 top-full z-50 mt-1.5 w-48 rounded-lg border border-line bg-surface p-1 shadow-overlay">
+          <p id="fill-from-image-menu-title" className="px-2.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Fill from image</p>
           <button type="button" role="menuitem" className={item} onClick={() => { setOpen(false); onPickImage() }}>
-            <Icon d={ICON.file} size={16} className="text-ink-muted" /> Direct Analyze
+            <Icon d={ICON.file} size={16} className="text-ink-muted" /> Upload image
           </button>
           <button type="button" role="menuitem" className={item} onClick={() => { setOpen(false); onCamera() }}>
-            <Icon d={ICON.camera} size={16} className="text-ink-muted" /> Camera Capture
+            <Icon d={ICON.camera} size={16} className="text-ink-muted" /> Take photo
           </button>
         </div>
       ) : null}
@@ -134,7 +135,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
   const [fill, setFill] = useState<BusinessEntityFillValues | null>(null)
   const [fillError, setFillError] = useState<string | null>(null)
   const [draft, setDraft] = useState<BusinessEntityDraft>(() => emptyBusinessEntityDraft())
-  const [meta, setMeta] = useState<{ code: string; createdBy: string | null; createdDate: string | null } | null>(null)
+  const [meta, setMeta] = useState<{ code: string; name: string; createdBy: string | null; createdDate: string | null } | null>(null)
   const [loadingRecord, setLoadingRecord] = useState(isEdit)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
@@ -178,7 +179,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
         if (cancelled) return
         const { code, createdBy, createdDate, ...rest } = businessEntityFromDetail(raw, attachments)
         setDraft(rest)
-        setMeta({ code, createdBy, createdDate })
+        setMeta({ code, name: rest.name, createdBy, createdDate })
       })
       .catch((err) => { if (!cancelled) setLoadError(toApiError(err).message) })
       .finally(() => { if (!cancelled) setLoadingRecord(false) })
@@ -584,7 +585,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
             <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
               <EntitySection
                 icon={ICON.pin}
-                title="Locations"
+                title="Business Location"
                 description="Other offices, sites or warehouses"
                 collapsible
                 count={draft.locations.length}
@@ -727,6 +728,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
             uploadFile={scan.uploadFile}
             companyNo={headOfficeNo}
             formNo={formNo}
+            entityName={meta?.name}
             onDone={(result) => void scanDone(result)}
             onClose={() => setScan(null)}
           />

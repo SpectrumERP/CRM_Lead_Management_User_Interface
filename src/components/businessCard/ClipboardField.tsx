@@ -23,6 +23,10 @@ export interface ClipboardFieldProps {
   value: string
   onValueChange: (value: string) => void
   fieldClassName?: string
+  /** Shown under the field, which is marked invalid (it does not block anything by itself). */
+  error?: string
+  /** Values to pick from while the field has focus (company: existing business entity names). */
+  suggestions?: readonly string[]
 }
 
 /** One scanned card in the history: click lines to build a value, or paste the card's own value for this field. */
@@ -99,7 +103,7 @@ function EntryView({ entry, field, pasteLabel, onSelect }: {
  * Text field with Task Management's business card clipboard: copy the value, pick from the history of
  * scanned cards (hover buttons), or right-click for Copy / Paste / Clipboard History.
  */
-export default function ClipboardField({ label, pasteLabel, field, value, onValueChange, fieldClassName }: ClipboardFieldProps) {
+export default function ClipboardField({ label, pasteLabel, field, value, onValueChange, fieldClassName, error, suggestions = [] }: ClipboardFieldProps) {
   const id = useId()
   const entries = useClipboardEntries()
   const [open, setOpen] = useState(false)
@@ -108,6 +112,17 @@ export default function ClipboardField({ label, pasteLabel, field, value, onValu
   const panelRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const panelStyle = useFixedMenu(open, rootRef, { width: () => 384, maxHeight: 448, align: 'end' })
+  // Suggestions: a list under the field while it has focus, like the Business Entity Name field.
+  const [listOpen, setListOpen] = useState(false)
+  const [active, setActive] = useState(-1)
+  const showList = listOpen && !open && !menu && suggestions.length > 0
+  const listStyle = useFixedMenu(showList, rootRef, { maxHeight: 192 })
+
+  function pick(text: string) {
+    onValueChange(text)
+    setListOpen(false)
+    setActive(-1)
+  }
 
   // Outside click or Escape closes the history and the context menu.
   useEffect(() => {
@@ -163,9 +178,23 @@ export default function ClipboardField({ label, pasteLabel, field, value, onValu
   const menuItem = 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-ink hover:bg-surface-hover'
 
   return (
-    <Field label={label} htmlFor={id} className={fieldClassName}>
+    <Field label={label} htmlFor={id} className={fieldClassName} error={error}>
       <div id={`${id}-wrap`} ref={rootRef} className="group relative" onContextMenu={openMenu}>
-        <TextInput id={id} value={value} onValueChange={onValueChange} className="!pr-16" />
+        <TextInput id={id} value={value} invalid={Boolean(error)} aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined} className="!pr-16" autoComplete="off"
+          role={suggestions.length ? 'combobox' : undefined}
+          aria-expanded={suggestions.length ? showList : undefined}
+          aria-controls={showList ? `${id}-list` : undefined}
+          onValueChange={(next) => { onValueChange(next); setListOpen(true); setActive(-1) }}
+          onFocus={() => setListOpen(true)}
+          onBlur={() => window.setTimeout(() => setListOpen(false), 200)}
+          onKeyDown={(e) => {
+            if (!showList) return
+            if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, suggestions.length - 1)) }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
+            else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(suggestions[active]) }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setListOpen(false) }
+          }} />
         <div className={`absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${open ? 'opacity-100' : 'opacity-0'}`}>
           <button
             type="button"
@@ -189,6 +218,23 @@ export default function ClipboardField({ label, pasteLabel, field, value, onValu
           </button>
         </div>
       </div>
+
+      {showList
+        ? createPortal(
+            <div id={`${id}-list`} role="listbox" aria-label={`Existing ${label.toLowerCase()} names`}
+              className="menu-select-panel overflow-auto rounded-lg border border-line bg-surface" style={listStyle}>
+              {suggestions.map((name, i) => (
+                <div key={name} role="option" aria-selected={i === active}
+                  className={`cursor-pointer px-3 py-2 text-xs text-ink ${i === active ? 'bg-surface-hover' : 'hover:bg-surface-hover'}`}
+                  onMouseEnter={() => setActive(i)}
+                  onMouseDown={(e) => { e.preventDefault(); pick(name) }}>
+                  {name}
+                </div>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
 
       {open
         ? createPortal(

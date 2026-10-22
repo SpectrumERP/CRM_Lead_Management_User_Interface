@@ -1,8 +1,11 @@
 /**
- * Read a business card image: the server's card reader first; if it fails or reads nothing,
- * Tesseract on the device (after OpenCV clean-up) and the text parser.
+ * Read a business card image: the business-card scan API first, then the vision (annotate) API if
+ * that fails or reads nothing; if they read nothing, Tesseract on the device (after OpenCV clean-up)
+ * and the text parser. If both server readers fail, the error is shown and the user can retry or
+ * read on the device.
  */
-import { parseCardText, parseVisionCard, readCardWithVision, type BusinessCardData } from '../../api/businessCard'
+import { parseCardText, parseVisionCard, readCardWithVision, scanBusinessCard, type BusinessCardData } from '../../api/businessCard'
+import { toApiError } from '../../api/errors'
 import { loadOpenCv, preprocessForOcr } from './imaging'
 
 type TesseractWorker = Awaited<ReturnType<typeof import('tesseract.js')['createWorker']>>
@@ -43,16 +46,50 @@ export interface CardReading {
   text: string
 }
 
-export async function readCard(image: Blob, progress: (fraction: number) => void): Promise<CardReading> {
+/** The server's card reader failed; `message` is for the user. Reading on the device is still possible. */
+export class CardReaderError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CardReaderError'
+  }
+}
+
+const hasAny = (data: BusinessCardData) => Object.values(data).some(Boolean)
+
+/** The server readers in order: each returns the card fields and its raw text, or throws. */
+const SERVER_READERS: { name: string; read: (image: Blob) => Promise<{ data: BusinessCardData; text: string }> }[] = [
+  { name: 'business-card scan', read: scanBusinessCard },
+  {
+    name: 'vision annotate',
+    read: async (image) => {
+      const text = await readCardWithVision(image)
+      return { data: text ? parseVisionCard(text) : {}, text }
+    },
+  },
+]
+
+/**
+ * `onDevice`: skip the server (the user chose to after it failed). The server readers are tried in
+ * turn; when every one fails, CardReaderError (the first failure's message) so it can be shown. When
+ * one answers but reads nothing, the device reader takes over silently.
+ */
+export async function readCard(image: Blob, progress: (fraction: number) => void, { onDevice = false } = {}): Promise<CardReading> {
   progress(0.1)
-  try {
-    const text = await readCardWithVision(image)
-    if (text) {
-      const data = parseVisionCard(text)
-      if (Object.values(data).some(Boolean)) return { data, source: 'server', text }
+  if (!onDevice) {
+    const failures: string[] = []
+    for (const reader of SERVER_READERS) {
+      try {
+        const { data, text } = await reader.read(image)
+        if (hasAny(data)) return { data, source: 'server', text }
+      } catch (err) {
+        const message = toApiError(err).message
+        failures.push(message)
+        console.warn(`Business card: the ${reader.name} API failed — ${message}`)
+      }
     }
-  } catch {
-    // Fall through to the on-device reader.
+    if (failures.length === SERVER_READERS.length) {
+      throw new CardReaderError(failures[0] || 'The card reader is unavailable.')
+    }
   }
 
   progress(0.15)

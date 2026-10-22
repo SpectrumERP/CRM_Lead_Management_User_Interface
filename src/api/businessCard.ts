@@ -1,14 +1,15 @@
 /**
- * Business card reading (Task Management's scanner):
+ * Business card reading, two server readers:
  *
- *   POST /api/utility/google-vision/images/annotate
+ *   POST /api/utility/google-vision/business-card/scan — the card fields in one call (tried first)
+ *   POST /api/utility/google-vision/images/annotate     — Gemini-style `generateContent` request
+ *        (image + instruction + JSON schema), raw response; the card fields are the JSON text in
+ *        `candidates[0].content.parts[0].text` (the fallback)
  *
- * The server forwards a Gemini-style `generateContent` request (image + instruction + JSON schema)
- * and returns its raw response; the card fields are the JSON text in `candidates[0].content.parts[0].text`.
- * When that is unavailable the image is read on the device (Tesseract) and the text is parsed here.
+ * When neither reads the card, it is read on the device (Tesseract) and the text is parsed here.
  */
 import { spectrumEndpoints } from './endpoints'
-import { fail } from './errors'
+import { fail, serverErrorMessage } from './errors'
 import { http } from './http'
 
 export interface BusinessCardData {
@@ -70,17 +71,92 @@ async function blobToBase64(blob: Blob): Promise<string> {
 
 interface VisionResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[]
+  promptFeedback?: { blockReason?: string } | null
   error?: { message?: string } | string | null
+  // The server's own failure envelope (sent with HTTP 200).
+  success?: boolean
+  isSuccess?: boolean
+  statusCode?: number
+  message?: string
 }
 
-/** The card's JSON text from the server, or '' when it read nothing. */
+/**
+ * The card's JSON text from the server, or '' when it read nothing. Throws when the server reports
+ * a failure — as an HTTP error, or in a 200 body (the model's `error`, the server's failure envelope,
+ * a blocked image, or no result at all).
+ */
 export async function readCardWithVision(image: Blob, signal?: AbortSignal): Promise<string> {
   const response = await http.post<VisionResponse>(spectrumEndpoints.utility.visionAnnotate, visionRequest(await blobToBase64(image)), { signal })
-  if (response?.error) {
+  if (!response || typeof response !== 'object') fail('SERVER', 'The card reader returned no result.')
+  if (response.error) {
     const message = typeof response.error === 'string' ? response.error : response.error.message
     fail('SERVER', message || 'The card reader is unavailable.')
   }
-  return response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
+  if (response.success === false || response.isSuccess === false || (typeof response.statusCode === 'number' && response.statusCode >= 400)) {
+    fail('SERVER', serverErrorMessage(response) || 'The card reader is unavailable.')
+  }
+  if (response.promptFeedback?.blockReason) fail('VALIDATION', 'The card reader could not process this image. Try another photo.')
+  if (!Array.isArray(response.candidates)) fail('SERVER', 'The card reader returned no result.')
+  return response.candidates[0]?.content?.parts?.[0]?.text?.trim() ?? ''
+}
+
+/** `BusinessCardScanResultModel`: several values per field (a card can list more than one). */
+interface ScanResultModel {
+  personName?: string | null
+  designation?: string | null
+  organization?: string | null
+  phoneNumber?: string[] | null
+  email?: string[] | null
+  website?: string[] | null
+  address?: string[] | null
+  country?: string[] | null
+  state?: string[] | null
+  city?: string[] | null
+  smHandles?: Record<string, string> | null
+  qrCode?: boolean
+}
+
+interface ScanResponse {
+  success?: boolean
+  message?: string | null
+  data?: ScanResultModel | null
+  error?: string | null
+  errors?: { propertyName?: string | null; errorMessage?: string | null }[] | null
+}
+
+const first = (values?: (string | null)[] | null) => values?.map((x) => (x ?? '').trim()).find(Boolean) ?? ''
+
+/** The scan result as card fields. Websites are all kept ("a.com, b.in"); the form takes the first. */
+export function fromScanResult(model: ScanResultModel): BusinessCardData {
+  return {
+    name: (model.personName ?? '').trim(),
+    designation: (model.designation ?? '').trim(),
+    company: (model.organization ?? '').trim(),
+    email: first(model.email),
+    phone: first(model.phoneNumber),
+    website: (model.website ?? []).map((x) => (x ?? '').trim()).filter(Boolean).join(', '),
+    address: first(model.address),
+    city: first(model.city),
+    state: first(model.state),
+    country: first(model.country),
+  }
+}
+
+/**
+ * Card fields from the business-card scan API, with its raw result as text (for the clipboard).
+ * Throws when the server reports a failure (HTTP error, e.g. 502/503, or `success: false`).
+ */
+export async function scanBusinessCard(image: Blob, signal?: AbortSignal): Promise<{ data: BusinessCardData; text: string }> {
+  const response = await http.post<ScanResponse>(
+    spectrumEndpoints.utility.businessCardScan,
+    { imageBase64: await blobToBase64(image), mimeType: image.type || 'image/jpeg' },
+    { signal },
+  )
+  if (!response || typeof response !== 'object') fail('SERVER', 'The card reader returned no result.')
+  if (response.success === false || !response.data) {
+    fail('SERVER', serverErrorMessage(response) || 'The card reader could not read this card.')
+  }
+  return { data: fromScanResult(response.data), text: JSON.stringify(response.data, null, 2) }
 }
 
 function asText(value: unknown): string {

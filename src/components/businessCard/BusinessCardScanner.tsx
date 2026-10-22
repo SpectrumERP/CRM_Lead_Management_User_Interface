@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import ReactCrop, { type Crop, type PercentCrop, type PixelCrop } from 'react-image-crop'
+import ReactCrop, { type Crop, type PercentCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import { uploadAttachment, type Attachment } from '../../api/attachments'
 import type { BusinessCardData } from '../../api/businessCard'
+import { duplicateEntityName, findBusinessEntityNames } from '../../api/businessEntities'
 import { toApiError } from '../../api/errors'
 import { Button, FormGrid, Spinner } from '../../ui'
 import FormDrawer from '../FormDrawer'
 import { ICON, Icon } from '../../pages/businessEntities/ui'
-import { cropImage, defaultLogoCrop, detectCard, detectLogo, loadOpenCv, Steadiness, type Detection, type Rect } from './imaging'
-import { readCard, stopCardReader } from './readCard'
+import { cropImage, detectCard, loadOpenCv, Steadiness, type Detection, type Rect } from './imaging'
+import { CardReaderError, readCard, stopCardReader } from './readCard'
 import ClipboardField from './ClipboardField'
 import { addClipboardEntry } from './clipboardStore'
 
@@ -26,6 +27,8 @@ export interface BusinessCardScannerProps {
   uploadFile?: boolean
   companyNo: number
   formNo: number
+  /** Name of the entity being edited: its own card's company is not a duplicate. */
+  entityName?: string
   onDone: (result: ScanResult) => void
   onClose: () => void
 }
@@ -73,12 +76,39 @@ function pixelsOf(crop: PercentCrop | undefined, img: HTMLImageElement): Rect | 
 }
 
 /**
+ * Revokes the object URLs once none of `held` refers to them, and all of them on unmount. Deferred,
+ * so StrictMode's dev-only cleanup-and-rerun of effects does not revoke an image still on screen.
+ */
+function useObjectUrlCleanup(held: (string | undefined)[]) {
+  const state = useRef({ alive: false, held: new Set<string>(), seen: new Set<string>() })
+  const key = held.join('|')
+  useEffect(() => {
+    const s = state.current
+    s.alive = true
+    s.held = new Set(key.split('|').filter(Boolean))
+    s.held.forEach((url) => s.seen.add(url))
+    return () => {
+      s.alive = false
+      setTimeout(() => {
+        for (const url of [...s.seen]) {
+          if (s.alive && s.held.has(url)) continue
+          URL.revokeObjectURL(url)
+          s.seen.delete(url)
+        }
+      }, 0)
+    }
+  }, [key])
+}
+
+/**
  * Business card scanner (Task Management's camera): live camera with automatic capture when a card
  * is held steady, crop, read (server, else on the device), review, optional logo, then upload.
  */
-export default function BusinessCardScanner({ file, uploadFile = true, companyNo, formNo, onDone, onClose }: BusinessCardScannerProps) {
+export default function BusinessCardScanner({ file, uploadFile = true, companyNo, formNo, entityName, onDone, onClose }: BusinessCardScannerProps) {
   const [step, setStep] = useState<Step>(file ? 'preview' : 'idle')
   const [error, setError] = useState('')
+  // The server's card reader failed on the last read: offer reading on the device instead.
+  const [serverFailed, setServerFailed] = useState(false)
   const [cvReady, setCvReady] = useState(false)
   const [image, setImage] = useState<{ file: File; url: string } | null>(() => (file ? { file, url: URL.createObjectURL(file) } : null))
   const [crop, setCrop] = useState<Crop>()
@@ -88,11 +118,15 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
   const [source, setSource] = useState<'server' | 'device' | null>(null)
   const [readImage, setReadImage] = useState<{ blob: Blob; url: string } | null>(null)
   const [logo, setLogo] = useState<{ blob: Blob; url: string } | null>(null)
-  const [logoCrop, setLogoCrop] = useState<Crop>()
-  const [logoPixels, setLogoPixels] = useState<PixelCrop>()
+  // The user's box around the logo: kept for "Adjust", and the one being drawn in the logo step.
+  const [logoCrop, setLogoCrop] = useState<PercentCrop>()
+  const [logoDraft, setLogoDraft] = useState<PercentCrop>()
   const [mirrored, setMirrored] = useState(false)
   const [detection, setDetection] = useState<Detection>({ detected: false, confidence: 0 })
   const [steady, setSteady] = useState(false)
+  // Existing entity names like the card's company: listed under the field, and a duplicate warning
+  // when one is the same name (the user can still continue).
+  const [similar, setSimilar] = useState<{ company: string; names: string[] } | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const frameCanvas = useRef<HTMLCanvasElement>(null)
@@ -103,9 +137,7 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
   const readFor = useRef<File | null>(null)
 
   // Object URLs are released when replaced or on close.
-  useEffect(() => () => { if (image) URL.revokeObjectURL(image.url) }, [image])
-  useEffect(() => () => { if (readImage) URL.revokeObjectURL(readImage.url) }, [readImage])
-  useEffect(() => () => { if (logo) URL.revokeObjectURL(logo.url) }, [logo])
+  useObjectUrlCleanup([image?.url, readImage?.url, logo?.url])
 
   useEffect(() => {
     let cancelled = false
@@ -151,28 +183,52 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
     void videoRef.current.play().catch(() => undefined)
   }, [step])
 
-  const read = useCallback(async (target: { file: File; url: string }, cropRect: Rect | null) => {
+  const read = useCallback(async (target: { file: File; url: string }, cropRect: Rect | null, onDevice = false) => {
     setStep('reading')
     setError('')
+    setServerFailed(false)
     setProgress(0)
     try {
       const blob = cropRect ? await cropImage(target.url, cropRect) : target.file
-      const reading = await readCard(blob, setProgress)
+      const reading = await readCard(blob, setProgress, { onDevice })
       // Every read goes to the clipboard, as in Task Management.
       addClipboardEntry({ source: 'BusinessCard', data: reading.data, formattedText: reading.text })
       const url = URL.createObjectURL(blob)
       setReadImage({ blob, url })
       setData(reading.data)
       setSource(reading.source)
-      // The logo guess is the card's top-left corner (as in Task Management); it can be adjusted or removed.
-      const guess = await defaultLogoCrop(url)
-      setLogo(guess ? { blob: guess, url: URL.createObjectURL(guess) } : null)
+      // No logo until the user selects one on the card.
+      setLogo(null)
+      setLogoCrop(undefined)
       setStep('review')
     } catch (err) {
-      setError(toApiError(err).message || 'The card could not be read. Adjust the crop and try again.')
+      if (err instanceof CardReaderError) {
+        setServerFailed(true)
+        setError(`The card reader failed: ${err.message.replace(/[.!]?\s*$/, '.')} Try again, or read the card on this device (less accurate).`)
+      } else {
+        setError(toApiError(err).message || 'The card could not be read. Adjust the crop and try again.')
+      }
       setStep('preview')
     }
   }, [])
+
+  // Look the company up among existing entities while it is reviewed (and edited).
+  const company = data?.company?.trim() ?? ''
+  useEffect(() => {
+    if (!company) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      findBusinessEntityNames(company, controller.signal)
+        .then((names) => setSimilar({ company, names }))
+        .catch(() => undefined)
+    }, 300)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [company])
+  const similarNames = similar && similar.company === company ? similar.names : []
+  const duplicateOf = duplicateEntityName(similarNames, company, entityName)
 
   // A picked image is read straight away (no crop), as in Task Management.
   useEffect(() => {
@@ -238,8 +294,11 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
   }, [step, cvReady, capture])
 
   function retake() {
+    setError('')
+    setServerFailed(false)
     setData(null)
     setLogo(null)
+    setLogoCrop(undefined)
     setReadImage(null)
     setCrop(undefined)
     setPercentCrop(undefined)
@@ -253,28 +312,22 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
 
   function startLogo() {
     setStep('logo')
-    setLogoCrop(undefined)
-  }
-
-  function onLogoImageLoad() {
-    const img = logoImg.current
-    if (!img) return
-    void loadOpenCv().then(({ cv }) => {
-      const found = detectLogo(cv, img)
-      const p = found ? percentOf(found, img.naturalWidth, img.naturalHeight) : ({ unit: '%', x: 5, y: 5, width: 40, height: 30 } as PercentCrop)
-      setLogoCrop(p)
-      setLogoPixels({ unit: 'px', x: (p.x / 100) * img.width, y: (p.y / 100) * img.height, width: (p.width / 100) * img.width, height: (p.height / 100) * img.height })
-    })
+    setLogoDraft(logo ? logoCrop : undefined)
   }
 
   async function saveLogo() {
     const img = logoImg.current
-    if (!img || !readImage || !logoPixels?.width || !logoPixels.height) return
-    const sx = img.naturalWidth / img.width
-    const sy = img.naturalHeight / img.height
-    const blob = await cropImage(readImage.url, { x: logoPixels.x * sx, y: logoPixels.y * sy, width: logoPixels.width * sx, height: logoPixels.height * sy }, 'image/png')
+    const rect = img ? pixelsOf(logoDraft, img) : null
+    if (!rect || !readImage) return
+    const blob = await cropImage(readImage.url, rect, 'image/png')
     setLogo({ blob, url: URL.createObjectURL(blob) })
+    setLogoCrop(logoDraft)
     setStep('review')
+  }
+
+  function removeLogo() {
+    setLogo(null)
+    setLogoCrop(undefined)
   }
 
   /** Upload the card (and logo), then hand back the details. */
@@ -331,9 +384,14 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
         <>
           <Button variant="secondary" onClick={retake}>{file ? 'Reset Crop' : 'Retake'}</Button>
           {!file || uploadFile ? <Button variant="secondary" onClick={() => void confirm(false)}>Upload Image Only</Button> : null}
+          {serverFailed ? (
+            <Button variant="secondary" onClick={() => {
+              if (image) void read(image, previewImg.current ? pixelsOf(percentCrop, previewImg.current) : null, true)
+            }}>Read on This Device</Button>
+          ) : null}
           <Button variant="solid" onClick={() => {
             if (image) void read(image, previewImg.current ? pixelsOf(percentCrop, previewImg.current) : null)
-          }}>Read Details</Button>
+          }}>{serverFailed ? 'Try Again' : 'Read Details'}</Button>
         </>
       )
     }
@@ -341,7 +399,7 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
       return (
         <>
           <Button variant="secondary" onClick={() => setStep('review')}>Cancel</Button>
-          <Button variant="solid" onClick={() => void saveLogo()} disabled={!logoPixels?.width}>Save Logo</Button>
+          <Button variant="solid" onClick={() => void saveLogo()} disabled={!logoDraft?.width || !logoDraft.height}>Save Logo</Button>
         </>
       )
     }
@@ -448,15 +506,15 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
                   <span className="text-[11px] font-bold text-ink-muted">Logo</span>
                   <div className="flex gap-2">
                     <button type="button" className="text-xs font-semibold text-primary hover:underline" onClick={startLogo}>
-                      {logo ? 'Adjust' : 'Extract Logo'}
+                      {logo ? 'Adjust' : 'Select Logo'}
                     </button>
-                    {logo ? <button type="button" className="text-xs font-semibold text-accent hover:underline" onClick={() => setLogo(null)}>Remove</button> : null}
+                    {logo ? <button type="button" className="text-xs font-semibold text-accent hover:underline" onClick={removeLogo}>Remove</button> : null}
                   </div>
                 </div>
                 {logo ? (
                   <div className="flex justify-center rounded-lg bg-surface p-2"><img src={logo.url} alt="Logo" className="max-h-20 object-contain" /></div>
                 ) : (
-                  <p className="text-xs text-ink-faint">No logo — it will not be uploaded.</p>
+                  <p className="text-xs text-ink-faint">No logo selected. Use Select Logo to mark it on the card.</p>
                 )}
               </div>
             </div>
@@ -475,6 +533,8 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
                     field={f.key}
                     value={data[f.key] ?? ''}
                     onValueChange={(v) => setData((prev) => ({ ...(prev ?? {}), [f.key]: v }))}
+                    error={f.key === 'company' && duplicateOf ? `"${duplicateOf}" already exists as a business entity.` : undefined}
+                    suggestions={f.key === 'company' ? similarNames : undefined}
                   />
                 ))}
               </FormGrid>
@@ -484,10 +544,10 @@ export default function BusinessCardScanner({ file, uploadFile = true, companyNo
 
         {step === 'logo' && readImage ? (
           <div className="space-y-2">
-            <p className="text-xs text-ink-muted">Adjust the box around the logo. The first guess is automatic.</p>
+            <p className="text-xs text-ink-muted">Drag a box around the logo on the card.</p>
             <div className="flex justify-center rounded-xl bg-surface-muted p-3">
-              <ReactCrop crop={logoCrop} onChange={(c) => setLogoCrop(c)} onComplete={(c) => setLogoPixels(c)}>
-                <img ref={logoImg} src={readImage.url} alt="Card" className="block max-h-[50vh] object-contain" onLoad={onLogoImageLoad} />
+              <ReactCrop crop={logoDraft} onChange={(_, p) => setLogoDraft(p)}>
+                <img ref={logoImg} src={readImage.url} alt="Card" className="block max-h-[50vh] object-contain" />
               </ReactCrop>
             </div>
           </div>

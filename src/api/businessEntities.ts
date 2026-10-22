@@ -750,3 +750,24 @@ export async function findBusinessEntityNames(name: string, signal?: AbortSignal
   const names = rows.map((row) => text(row.businessEntityName ?? row.BusinessEntityName ?? row.name).trim()).filter(Boolean)
   return names.filter((n, i) => names.indexOf(n) === i)
 }
+
+/** An entity name for comparing: case, accents, punctuation and spacing ignored ("Verdés S.A." = "verdes sa"). */
+export function entityNameKey(name: string): string {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+/**
+ * The name in `names` that is the same as `name` (see entityNameKey), or null. `exclude`: the entity
+ * being edited, which is not a duplicate of itself.
+ */
+export function duplicateEntityName(names: readonly string[], name: string, exclude?: string): string | null {
+  const key = entityNameKey(name)
+  if (!key || (exclude && entityNameKey(exclude) === key)) return null
+  return names.find((existing) => entityNameKey(existing) === key) ?? null
+}
+
+/** The existing entity with the same name as `name`, or null (see duplicateEntityName). */
+export async function findDuplicateEntityName(name: string, { exclude, signal }: { exclude?: string; signal?: AbortSignal } = {}): Promise<string | null> {
+  if (!duplicateEntityName([name], name, exclude)) return null
+  return duplicateEntityName(await findBusinessEntityNames(name, signal), name, exclude)
+}

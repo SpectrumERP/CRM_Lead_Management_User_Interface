@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __resetAuthStoreForTests } from './authStore'
 import { emptyBusinessEntityDraft } from './businessEntities'
-import { parseCardText, parseVisionCard, readCardWithVision } from './businessCard'
+import { parseCardText, parseVisionCard, readCardWithVision, scanBusinessCard } from './businessCard'
 import { mergeScannedCard } from '../pages/businessEntities/applyScannedCard'
 
 const FILL = {
@@ -31,6 +31,52 @@ describe('business card reading', () => {
     const body = JSON.parse(String((init as RequestInit).body))
     expect(body.contents[0].parts[0].inline_data).toEqual({ mime_type: 'image/jpeg', data: btoa('img') })
     expect(body.generationConfig.response_schema.required).toEqual(['full_name'])
+  })
+
+  it.each([
+    ['an HTTP error', new Response(JSON.stringify({ message: 'Vision quota exceeded.' }), { status: 500 }), 'Vision quota exceeded.'],
+    ['the model error in a 200', new Response(JSON.stringify({ error: { code: 503, message: 'The model is overloaded.' } }), { status: 200 }), 'The model is overloaded.'],
+    ['a failure envelope in a 200', new Response(JSON.stringify({ success: false, message: 'Image too large.' }), { status: 200 }), 'Image too large.'],
+    ['a blocked image', new Response(JSON.stringify({ promptFeedback: { blockReason: 'OTHER' } }), { status: 200 }), 'could not process this image'],
+    ['no result', new Response(JSON.stringify({}), { status: 200 }), 'returned no result'],
+  ])('rejects %s with a message for the user', async (_, response, message) => {
+    fetchMock.mockResolvedValue(response)
+    await expect(readCardWithVision(new Blob(['img'], { type: 'image/jpeg' }))).rejects.toThrow(message)
+  })
+
+  it('returns empty text when the model read nothing', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [] } }] }), { status: 200 }))
+    await expect(readCardWithVision(new Blob(['img'], { type: 'image/jpeg' }))).resolves.toBe('')
+  })
+
+  it('scans with the business-card API and maps its fields', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: {
+        personName: 'Sergi Conesa', designation: 'Sales Area Manager', organization: 'Verdés',
+        phoneNumber: ['', '+34 607 164 143', '+34 93 846 04 96'], email: ['sconesa@verdes.com'],
+        website: ['www.verdes.com/briquetting', 'verdes.es'], address: ['c/ Metal·lúrgia, 1'],
+        country: ['Spain'], state: null, city: ['Barcelona'], qrCode: false,
+      },
+    }), { status: 200 }))
+    const { data, text } = await scanBusinessCard(new Blob(['img'], { type: 'image/png' }))
+    expect(data).toMatchObject({
+      name: 'Sergi Conesa', designation: 'Sales Area Manager', company: 'Verdés', phone: '+34 607 164 143',
+      email: 'sconesa@verdes.com', website: 'www.verdes.com/briquetting, verdes.es', address: 'c/ Metal·lúrgia, 1',
+      city: 'Barcelona', state: '', country: 'Spain',
+    })
+    expect(text).toContain('Sergi Conesa')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(new URL(String(url)).pathname).toBe('/api/utility/google-vision/business-card/scan')
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ imageBase64: btoa('img'), mimeType: 'image/png' })
+  })
+
+  it.each([
+    ['a 503', new Response(JSON.stringify({ success: false, error: 'Vision service is unavailable.' }), { status: 503 }), 'Vision service is unavailable.'],
+    ['success: false in a 200', new Response(JSON.stringify({ success: false, message: 'Image could not be decoded.' }), { status: 200 }), 'Image could not be decoded.'],
+  ])('rejects a scan failure (%s) with its message', async (_, response, message) => {
+    fetchMock.mockResolvedValue(response)
+    await expect(scanBusinessCard(new Blob(['img']))).rejects.toThrow(message)
   })
 
   it('parses the model JSON, fenced or bare', () => {

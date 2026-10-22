@@ -147,6 +147,27 @@ describe('business entity type and country masters', () => {
     })
   })
 
+  it('searches, saves and deletes business entity location types with their Default flag', async () => {
+    fetchMock.mockResolvedValue(ok([{ locationTypeNo: 4, code: 'LT004', locationTypeName: 'Head Office', isDefault: true, inactive: false }]))
+    const [row] = await masterApis.businessEntityLocationTypes.search(3, { name: 'Head' })
+    expect(row).toMatchObject({ no: 4, code: 'LT004', name: 'Head Office', flags: { isDefault: true } })
+    let call = lastCall(fetchMock)
+    expect(call.url.pathname).toBe('/api/master/location-types/search-data')
+    expect(call.url.searchParams.get('locationTypeName')).toBe('Head')
+
+    fetchMock.mockResolvedValue(ok({ locationTypeNo: 5 }))
+    await expect(masterApis.businessEntityLocationTypes.save({ name: ' Plant ', flags: { isDefault: false } })).resolves.toBe(5)
+    call = lastCall(fetchMock)
+    expect(call.url.pathname).toBe('/api/master/location-types/save')
+    expect(JSON.parse(String(call.init.body))).toEqual({ locationTypeNo: null, locationTypeName: 'Plant', isDefault: false })
+
+    fetchMock.mockResolvedValue(ok(true))
+    await masterApis.businessEntityLocationTypes.remove(5)
+    call = lastCall(fetchMock)
+    expect(call.url.pathname).toBe('/api/master/location-types/delete')
+    expect(call.url.searchParams.get('locationTypeNo')).toBe('5')
+  })
+
   it('saves a country with the head office as companyNo', async () => {
     fetchMock.mockResolvedValue(ok({ countryNo: 1 }))
     await masterApis.countries.save({ name: 'India', companyNo: 3 })

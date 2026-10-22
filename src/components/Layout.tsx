@@ -135,6 +135,22 @@ const settingsNavItem = {
   ),
 };
 
+const MODULE_NAME = 'CRM'
+
+/** This module's name in place of the Spectrum ERP logo: white on the blue rail, blue in the white header. */
+function ModuleTitle({ tone = 'dark', className = '' }: { tone?: 'dark' | 'light'; className?: string }) {
+  return (
+    <span
+      title={MODULE_NAME}
+      className={`block min-w-0 truncate text-[15px] font-semibold leading-tight tracking-tight ${
+        tone === 'dark' ? 'text-white' : 'text-primary dark:text-white'
+      } ${className}`}
+    >
+      {MODULE_NAME}
+    </span>
+  )
+}
+
 function SidebarHeader({
   collapsed,
   onToggleCollapsed,
@@ -177,19 +193,15 @@ function SidebarHeader({
         <div className="flex w-full min-w-0 items-center gap-2.5">
           {/* The shell's app launcher before the logo (as in the shell's left panel). */}
           <div data-spectrum-launcher-slot="dark" className="flex shrink-0 items-center" />
-          <img src="/spectrum-erp-logo-on-dark.png" alt="Spectrum ERP" className="block h-8 min-w-0 flex-1 object-contain object-left" />
+          <ModuleTitle className="flex-1" />
         </div>
       ) : launcher ? (
         <div className="flex w-full min-w-0 items-center gap-2.5">
           <div className="flex shrink-0 items-center">{launcher}</div>
-          <img src="/spectrum-erp-logo-on-dark.png" alt="Spectrum ERP" className="block h-8 min-w-0 flex-1 object-contain object-left" />
+          <ModuleTitle className="flex-1" />
         </div>
       ) : (
-        <img
-          src="/spectrum-erp-logo-on-dark.png"
-          alt="Spectrum ERP"
-          className="block h-9 w-full object-contain object-left"
-        />
+        <ModuleTitle />
       )}
       </div>
       {onClose && (
@@ -750,13 +762,9 @@ export default function Layout({ children, detailName }: LayoutProps) {
             {sidebarCollapsed || focusMode ? (
               // Focus mode with the sidebar open: the logo is in the sidebar, not twice.
               focusMode && focusSidebarOpen ? null : (
-              // The logo only (no link): the apps launcher and the account menu lead elsewhere.
+              // The module name only (no link): the apps launcher and the account menu lead elsewhere.
               <span className="hidden min-w-0 items-center lg:inline-flex">
-                <img
-                  src="/spectrum-erp-logo.png"
-                  alt="Spectrum ERP"
-                  className="block h-8 w-auto max-w-[10.5rem] object-contain object-left"
-                />
+                <ModuleTitle tone="light" />
               </span>
               )
             ) : (

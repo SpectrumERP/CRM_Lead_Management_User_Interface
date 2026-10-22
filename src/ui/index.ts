@@ -21,6 +21,7 @@ export {
 } from './CountBadge'
 export { SortChevrons, type SortChevronsProps } from './SortChevrons'
 export { IconTooltip, type IconTooltipProps } from './IconTooltip'
+export { ImagePreview, type ImagePreviewProps } from './ImagePreview'
 export { ContactHoverCard, type ContactHoverCardProps } from './ContactHoverCard'
 export { Tag, type TagProps } from './Tag'
 export {

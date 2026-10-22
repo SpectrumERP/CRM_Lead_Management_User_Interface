@@ -3,6 +3,7 @@ import {
   checkAttachmentStatus,
   createAttachmentEntry,
   deleteAttachment,
+  fetchAttachmentBlob,
   listAttachments,
   openAttachment,
   renameAttachment,
@@ -15,11 +16,12 @@ import {
   UPLOAD_HELP_TEXT,
   formatUploadSize,
   getFileExtension,
+  isImageFileName,
   validateUploadFile,
 } from '../api/uploadFiles'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useOptionalToast } from '../contexts/ToastContext'
-import { Button, IconTooltip, Spinner } from '../ui'
+import { Button, IconTooltip, ImagePreview, Spinner } from '../ui'
 
 type QueueStatus = 'pending' | 'uploading' | 'verifying' | 'failed'
 
@@ -101,6 +103,10 @@ export default function AttachmentsField({
   const [loadingList, setLoadingList] = useState(false)
   const [renaming, setRenaming] = useState<{ id: number; base: string; ext: string } | null>(null)
   const [busyId, setBusyId] = useState<number | null>(null)
+  // An image being viewed over the page (url null while it loads); `request` drops a late answer.
+  const [preview, setPreview] = useState<{ request: number; name: string; url: string | null } | null>(null)
+  const previewRequest = useRef(0)
+  const previewUrl = useRef<string | null>(null)
 
   // Latest value for async callbacks (uploads finish after other state changes).
   const valueRef = useRef(value)
@@ -175,7 +181,37 @@ export default function AttachmentsField({
     items.forEach((item) => void startUpload(item.tempId, item.file))
   }
 
+  function closePreview() {
+    previewRequest.current += 1
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
+    previewUrl.current = null
+    setPreview(null)
+  }
+
+  // Leaving the page with an image open releases it.
+  useEffect(() => () => { if (previewUrl.current) URL.revokeObjectURL(previewUrl.current) }, [])
+
+  /** Images open in the preview over the page; PDFs in a new tab; other files download. */
   async function view(item: Attachment) {
+    if (isImageFileName(item.name)) {
+      closePreview()
+      const request = previewRequest.current
+      setPreview({ request, name: item.name, url: null })
+      try {
+        const url = URL.createObjectURL(await fetchAttachmentBlob(item.id, item.name))
+        if (previewRequest.current !== request) {
+          URL.revokeObjectURL(url)
+          return
+        }
+        previewUrl.current = url
+        setPreview({ request, name: item.name, url })
+      } catch (error) {
+        if (previewRequest.current !== request) return
+        closePreview()
+        addToast('error', 'Could not open the image', toApiError(error).message)
+      }
+      return
+    }
     try {
       await openAttachment(item)
     } catch (error) {
@@ -412,6 +448,7 @@ export default function AttachmentsField({
           })}
         </div>
       )}
+      {preview ? <ImagePreview src={preview.url} alt={preview.name} onClose={closePreview} /> : null}
     </div>
   )
 }

@@ -129,6 +129,8 @@ export interface MasterDefinition {
     pending?: boolean
     /** Not shown on the form: set from the picked `lookup` option's name (true when it matches). */
     fromLookupName?: RegExp
+    /** search-data returns it too, so the list shows it as a column (location types: Default). */
+    inList?: boolean
   }[]
   /** Lead / opportunity status master: its pending flags are the status rules of api/statusChange.ts. */
   statusRecord?: 'Lead' | 'Opportunity'
@@ -423,6 +425,13 @@ export const masterApis = {
     descriptionMax: 500,
     searchFilters: false,
     label: 'Business entity type',
+  }),
+  businessEntityLocationTypes: createMasterApi({
+    path: 'location-types',
+    field: 'locationType',
+    hasSequence: false,
+    flags: [{ key: 'isDefault', label: 'Default', hint: 'Selected first for a new business entity address', inList: true }],
+    label: 'Location type',
   }),
   countries: createMasterApi({
     path: 'countries',

@@ -12,7 +12,7 @@ import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
 import type { ToastType } from '../components/Toast';
 import { PAGE_COPY } from '../constants/messages';
 import { useFormRights } from '../contexts/FormRightsContext';
-import { Button, IconTooltip, PageHeader, PageLoader, Spinner, nextSort, type SortDir } from '../ui';
+import { Button, IconTooltip, ImagePreview, PageHeader, PageLoader, Spinner, nextSort, type SortDir } from '../ui';
 import { downloadCsv } from '../utils/csv';
 import { AttachmentGroups, ContactAlbum, ContactTable, EntityAlbum, EntityTable } from './businessEntities/ListViews';
 import {
@@ -391,15 +391,7 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
         />
       ) : null}
 
-      {preview ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-modal="true" aria-label="Image preview"
-          onClick={() => setPreview(null)}>
-          <img src={preview} alt="Attachment preview" className="max-h-full max-w-full rounded-lg object-contain shadow-overlay" />
-          <button type="button" className="absolute right-4 top-4 rounded-full bg-surface/90 px-3 py-1 text-xs font-bold text-ink" onClick={() => setPreview(null)}>
-            Close
-          </button>
-        </div>
-      ) : null}
+      {preview ? <ImagePreview src={preview} alt="Attachment preview" onClose={() => setPreview(null)} /> : null}
     </div>
   );
 }

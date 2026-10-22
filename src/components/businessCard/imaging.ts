@@ -1,7 +1,7 @@
 /**
  * Image work for the business card scanner (OpenCV in the browser), ported from Task Management:
  * live card detection on camera frames, a steadiness check before auto-capture, OCR preprocessing,
- * logo detection, and crops. OpenCV is ~10 MB, so only the lazily loaded scanner imports this file.
+ * and crops. OpenCV is ~10 MB, so only the lazily loaded scanner imports this file.
  */
 import cvModule from '@techstark/opencv-js'
 
@@ -173,63 +173,6 @@ export async function preprocessForOcr(cv: CV, image: Blob): Promise<Blob> {
   }
 }
 
-/**
- * Likely logo area of a card image (natural pixels): a compact, not-too-wide shape, favouring the
- * top of the card, padded by 10 %. Null when nothing fits.
- */
-export function detectLogo(cv: CV, img: HTMLImageElement): Rect | null {
-  const width = img.naturalWidth
-  const height = img.naturalHeight
-  if (!width || !height) return null
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-  ctx.drawImage(img, 0, 0, width, height)
-  const src = new cv.Mat(height, width, cv.CV_8UC4)
-  src.data.set(ctx.getImageData(0, 0, width, height).data)
-  const gray = new cv.Mat()
-  const blurred = new cv.Mat()
-  const edges = new cv.Mat()
-  const contours = new cv.MatVector()
-  const hierarchy = new cv.Mat()
-  try {
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
-    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0)
-    cv.Canny(blurred, edges, 50, 150)
-    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-    let best: Rect | null = null
-    let bestScore = -1
-    for (let i = 0; i < contours.size(); i++) {
-      const contour = contours.get(i)
-      const r = cv.boundingRect(contour)
-      contour.delete()
-      const area = r.width * r.height
-      const ratio = r.width / r.height
-      if (area < width * height * 0.01 || area > width * height * 0.3 || ratio > 4 || ratio < 0.2) continue
-      const score = area * (1 - (r.y + r.height / 2) / height)
-      if (score > bestScore) {
-        bestScore = score
-        best = { x: r.x, y: r.y, width: r.width, height: r.height }
-      }
-    }
-    if (!best) return null
-    const pad = Math.max(best.width, best.height) * 0.1
-    return {
-      x: Math.max(0, best.x - pad),
-      y: Math.max(0, best.y - pad),
-      width: Math.min(width - best.x, best.width + pad * 2),
-      height: Math.min(height - best.y, best.height + pad * 2),
-    }
-  } catch {
-    return null
-  } finally {
-    for (const mat of [src, gray, blurred, edges, hierarchy]) mat.delete()
-    contours.delete()
-  }
-}
-
 /** A region of an image as a new image file. */
 export async function cropImage(source: string | HTMLVideoElement, rect: Rect | null, type = 'image/jpeg'): Promise<Blob> {
   const media = typeof source === 'string' ? await loadImage(source) : source
@@ -243,14 +186,4 @@ export async function cropImage(source: string | HTMLVideoElement, rect: Rect | 
   if (!ctx) throw new Error('Could not crop the image.')
   ctx.drawImage(media, r.x, r.y, r.width, r.height, 0, 0, canvas.width, canvas.height)
   return canvasBlob(canvas, type, 0.95)
-}
-
-/** First guess at the logo when none is detected: the card's top-left 40 % × 35 %. */
-export async function defaultLogoCrop(imageUrl: string): Promise<Blob | null> {
-  try {
-    const img = await loadImage(imageUrl)
-    return await cropImage(imageUrl, { x: 0, y: 0, width: img.naturalWidth * 0.4, height: img.naturalHeight * 0.35 }, 'image/png')
-  } catch {
-    return null
-  }
 }

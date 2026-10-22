@@ -60,6 +60,9 @@ export const spectrumEndpoints = {
   },
   /** Business card reading (see businessCard.ts). */
   utility: {
+    /** Card fields in one call — tried first. */
+    businessCardScan: '/api/utility/google-vision/business-card/scan',
+    /** Raw Gemini `generateContent` — the fallback. */
     visionAnnotate: '/api/utility/google-vision/images/annotate',
   },
   leads: {

@@ -114,6 +114,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, lookup, state.companyNo]);
   const listedNumbers = numberDefs.filter((n) => n.inList);
+  const listedFlags = shownFlags.filter((flag) => flag.inList);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [editing, setEditing] = useState<MasterRow | null>(null);
@@ -142,6 +143,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
     // ISO date-times sort correctly as text.
     modified: (x) => x.modifiedDate ?? x.createdDate,
     ...Object.fromEntries(listedNumbers.map((n) => [`number:${n.key}`, (x: MasterRow) => x.numbers?.[n.key]])),
+    ...Object.fromEntries(listedFlags.map((f) => [`flag:${f.key}`, (x: MasterRow) => (x.flags?.[f.key] ? 1 : 0)])),
   }, () => setPage(1));
 
   const query = search.trim().toLowerCase();
@@ -305,6 +307,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
           <Th narrow {...columnSort.th('code')}>Code</Th><Th {...columnSort.th('name')}>Name</Th>
           {hasDescription ? <Th {...columnSort.th('description')}>Description</Th> : null}
           {listedNumbers.map((n) => <Th key={n.key} narrow {...columnSort.th(`number:${n.key}`)}>{n.label}{n.suffix ? ` (${n.suffix})` : ''}</Th>)}
+          {listedFlags.map((f) => <Th key={f.key} narrow {...columnSort.th(`flag:${f.key}`)}>{f.label}</Th>)}
           <Th {...columnSort.th('status')}>Status</Th><Th {...columnSort.th('modified')}>Modified</Th><Th right narrow>Actions</Th>
         </tr></thead>
         <tbody>
@@ -329,6 +332,13 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
                   <span className="text-xs font-semibold" style={{ color: C.sub }}>
                     {item.numbers?.[n.key] ?? ''}{item.numbers?.[n.key] !== undefined && n.suffix ? n.suffix : ''}
                   </span>
+                </Td>
+              ))}
+              {listedFlags.map((f) => (
+                <Td key={f.key} narrow>
+                  {item.flags?.[f.key] ? (
+                    <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: C.blueBg, color: C.blue }}>Yes</span>
+                  ) : null}
                 </Td>
               ))}
               <Td><StatusBadge status={item.inactive ? 'Inactive' : 'Active'} /></Td>
