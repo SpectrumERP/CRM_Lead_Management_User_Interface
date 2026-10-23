@@ -2,6 +2,7 @@ import { defineConfig, type Plugin, type UserConfig } from 'vite'
 import { federation } from '@module-federation/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import http from 'node:http'
 import path from 'node:path'
 
 import microfrontends from './microfrontends.json'
@@ -51,6 +52,49 @@ function remoteProxy(remote: (typeof remotes)[number]) {
             '<p style="font-family:system-ui">Start everything with <code>npm run dev</code> ' +
             '(or the remote apps alone with <code>npm run dev:remotes</code>), then reload.</p>',
         )
+      })
+    },
+  }
+}
+
+/**
+ * Dev: a remote's root-relative API calls (`devApiPaths`, e.g. /api/...) land on this origin, and
+ * several remotes can use the same path. Each call goes to the dev server of the remote whose page
+ * made it (its Referer, e.g. /task/...), whose own proxy forwards it to the backend in its .env.
+ * A call without such a page goes to the first remote that lists the path.
+ */
+function remoteApiRouter(): Plugin {
+  const routes = remotes.flatMap((remote) =>
+    (remote.devApiPaths ?? []).map((apiPath) => ({ remote, pattern: new RegExp(`^${apiPath.replace(/\/+$/, '')}(?:/|$)`) })),
+  )
+  return {
+    name: 'remote-api-router',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = (req.url ?? '').split('?')[0] ?? ''
+        const claims = routes.filter((route) => route.pattern.test(pathname))
+        if (claims.length === 0) return next()
+        let page = ''
+        try {
+          page = new URL(req.headers.referer ?? '').pathname
+        } catch {
+          // No (valid) Referer: the first claim below.
+        }
+        const { remote } = claims.find((route) => new RegExp(route.remote.pathPattern).test(page)) ?? claims[0]
+        const upstream = http.request(
+          { host: 'localhost', port: remote.devPort, method: req.method, path: req.url, headers: req.headers },
+          (answer) => {
+            res.writeHead(answer.statusCode ?? 502, answer.headers)
+            answer.pipe(res)
+          },
+        )
+        upstream.on('error', () => {
+          if (res.headersSent) return res.end()
+          res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' })
+          res.end(`${remote.title} is not running (localhost:${remote.devPort}). Start it with npm run dev, then retry.`)
+        })
+        req.pipe(upstream)
       })
     },
   }
@@ -117,7 +161,7 @@ function spectrumRemote(): UserConfig {
 }
 
 const standalone: UserConfig = {
-  plugins: [react(), tailwindcss(), remoteAppsPreviewFallback()],
+  plugins: [react(), tailwindcss(), remoteAppsPreviewFallback(), remoteApiRouter()],
   resolve: { alias },
   build: {
     // OpenCV alone is ~10 MB; it loads only when the business card scanner opens.
@@ -137,17 +181,8 @@ const standalone: UserConfig = {
     host: true,
     port: 5173,
     strictPort: true,
-    proxy: Object.fromEntries(
-      remotes.flatMap((remote) => [
-        [remote.pathPattern, remoteProxy(remote)],
-        // A remote's root-relative API calls (e.g. /api/...) land on this origin in dev; send them to its
-        // dev server, whose own proxy forwards them to the backend in its .env.
-        ...(remote.devApiPaths ?? []).map((apiPath) => [
-          `^${apiPath.replace(/\/+$/, '')}(?:/|$)`,
-          remoteProxy(remote),
-        ]),
-      ]),
-    ),
+    // Each remote's pages, assets and HMR. Its API calls (devApiPaths) go through remoteApiRouter.
+    proxy: Object.fromEntries(remotes.map((remote) => [remote.pathPattern, remoteProxy(remote)])),
   },
   preview: {
     host: true,

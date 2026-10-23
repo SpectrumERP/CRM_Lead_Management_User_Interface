@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { taskAppReturnPath, taskAppUrl } from '../app/paths'
+import { remoteAppReturnPath, taskAppUrl } from '../app/paths'
 import { isEmail } from '../api/sanitize'
 import { getErrorTitle, PAGE_COPY } from '../constants/messages'
 import { Button, FullPageSpinner, TextField } from '../ui'
@@ -11,10 +11,11 @@ type LoginField = 'email' | 'password'
 export default function Login() {
   const { user, ready, login } = useAuth()
   const location = useLocation()
-  // After login: Task Management opens — the /task/... page it sent the user from (?next=), else its first
-  // page. It is a separate app under its own path (shared sign-in), so this is a full page load.
-  const taskReturn = taskAppReturnPath(new URLSearchParams(location.search).get('next'))
-  const afterLogin = taskReturn ?? taskAppUrl
+  // After login: the remote app page that sent the user here (?next=, Task or Documents), else Task
+  // Management's first page. They are separate apps under their own paths (shared sign-in), so this is a
+  // full page load.
+  const remoteReturn = remoteAppReturnPath(new URLSearchParams(location.search).get('next'))
+  const afterLogin = remoteReturn ?? taskAppUrl
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<{ message: string; field?: LoginField } | null>(null)
@@ -34,7 +35,7 @@ export default function Login() {
   if (import.meta.env.VITE_CRM_ROUTE_BASE) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
-  if (user) return <FullPageSpinner label="Opening Tasks" />
+  if (user) return <FullPageSpinner label={remoteReturn?.includes('/documentsmanagement') ? 'Opening Documents' : 'Opening Tasks'} />
 
   function showError(message: string, field?: LoginField) {
     setError({ message, field })

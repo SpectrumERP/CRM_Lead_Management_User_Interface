@@ -108,11 +108,13 @@ export function LocationDialog({
 export function ContactDialog({
   initial,
   isNew,
+  subtitle = 'Another person at this business entity',
   onSave,
   onClose,
 }: {
   initial: ContactDraft
   isNew: boolean
+  subtitle?: string
   /** May save on the server (editing a saved entity); the drawer shows Saving… until it settles. */
   onSave: (contact: ContactDraft) => void | Promise<void>
   onClose: () => void
@@ -138,7 +140,7 @@ export function ContactDialog({
   return (
     <FormDrawer
       title={isNew ? 'Add Contact Person' : 'Edit Contact Person'}
-      subtitle="Another person at this business entity"
+      subtitle={subtitle}
       icon={<Icon d={ICON.user} size={17} />}
       widthClass="w-[32rem]"
       onClose={onClose}

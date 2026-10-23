@@ -193,7 +193,7 @@ describe('business entity record', () => {
     expect(result.errors).toMatchObject({
       name: 'Business entity name is required',
       typeNo: 'Business entity type is required',
-      vatgstNo: 'VAT / GST No is required for the selected document type',
+      vatgstNo: 'Tax Document No. is required for the selected tax document type',
       creditInsuranceLimit: 'Enter an amount of 0 or more',
       'primaryContact.name': 'Contact person name is required',
       'primaryContact.phone': 'Phone number is required',
@@ -231,6 +231,13 @@ describe('business entity record', () => {
     call = lastCall(fetchMock)
     expect(call.url.pathname).toBe('/api/master/business-entities/delete-contact-person')
     expect(call.url.searchParams.get('businessEntityContactPersonDetailNo')).toBe('31')
+  })
+
+  it('reads and saves the Contact Source as a lead source number, null when not chosen', () => {
+    expect(businessEntityFromDetail({ businessEntityNo: 5, leadSource: { leadSourceNo: 7, leadSourceName: 'Exhibition' } }).leadSourceNo).toBe('7')
+    expect(businessEntityFromDetail({ businessEntityNo: 5 }).leadSourceNo).toBe('')
+    expect(buildBusinessEntitySaveBody(draft({ leadSourceNo: '7' }), FILL).body!.leadSourceNo).toBe(7)
+    expect(buildBusinessEntitySaveBody(draft(), FILL).body!.leadSourceNo).toBeNull()
   })
 
   it('saves one other contact of a saved entity through save-contact-person', async () => {

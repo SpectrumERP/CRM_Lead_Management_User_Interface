@@ -40,7 +40,8 @@ for (const remote of remoteApps(root, mode)) {
 if (failed) process.exit(1)
 
 // CRM is hosted at the domain root. Send its client-side routes (for example /login) to the
-// CRM entry point, while leaving /task routes to the Task app's own nested IIS configuration.
+// CRM entry point, while leaving each remote's routes (/task, /documentsmanagement) to its own nested
+// IIS configuration.
 writeFileSync(
   resolve(root, 'dist', 'web.config'),
   `<?xml version="1.0" encoding="utf-8"?>
@@ -53,7 +54,9 @@ writeFileSync(
           <conditions logicalGrouping="MatchAll">
             <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
             <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
-            <add input="{URL}" pattern="^/task(/|$)" negate="true" />
+${remoteApps(root, mode)
+  .map((remote) => `            <add input="{URL}" pattern="^/${remote.basePath.replace(/^\/+|\/+$/g, '')}(/|$)" negate="true" />`)
+  .join('\n')}
           </conditions>
           <action type="Rewrite" url="/index.html" />
         </rule>

@@ -187,9 +187,9 @@ export function formatFileSize(bytes: number | null | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-/** Credit insurance limit as Task Management shows it (`$12,500`); blank when there is none. */
+/** Credit insurance limit as a plain number with separators (`12,500`, no currency); blank when there is none. */
 export function formatCreditLimit(limit: number | null): string {
-  return limit && limit > 0 ? `$${limit.toLocaleString()}` : ''
+  return limit && limit > 0 ? limit.toLocaleString() : ''
 }
 
 /** "No. 350, Hebbal…, Mysuru, Karnataka, India" — the list's Primary Address column. */
@@ -216,7 +216,7 @@ export function exportRows(mode: ListViewMode, rows: readonly AnyListRow[]): (st
     ]
   }
   return [
-    ['Sr. No.', 'Code', 'Business Entity Name', 'Type', 'Primary Address', 'City', 'State', 'Country', 'VAT/GST No.', 'Credit Limit'],
+    ['Sr. No.', 'Code', 'Business Entity Name', 'Type', 'Primary Address', 'City', 'State', 'Country', 'Tax Document No.', 'Credit Limit'],
     ...(rows as EntityListRow[]).map((r, i) => [
       i + 1, d(r.code), d(r.name), d(r.typeName), d(r.address), d(r.city), d(r.state), d(r.country), r.vatGst || 'N/A',
       r.creditLimit && r.creditLimit > 0 ? r.creditLimit : 'No Limit',

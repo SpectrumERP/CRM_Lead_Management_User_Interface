@@ -45,7 +45,7 @@ for (const port of ports) if (await portBusy(port)) busy.push(port)
 if (busy.length) {
   console.log(`
 The dev servers are already running (port ${busy.join(', ')} in use) — probably \`npm run dev\` in another terminal.
-  Open:  http://localhost:5173  ·  http://localhost:5173/task/
+  Open:  http://localhost:5173  ·  ${remotes.map((remote) => `http://localhost:5173${remote.basePath}`).join('  ·  ')}
   Restart: press Ctrl+C in that terminal, or run
            lsof -tiTCP:${ports.join(',')} -sTCP:LISTEN | xargs kill
            then \`npm run dev\` again.

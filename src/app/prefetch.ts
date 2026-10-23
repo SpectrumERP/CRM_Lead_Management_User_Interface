@@ -21,7 +21,6 @@ const PAGE_LOADERS: Partial<Record<AppPage, () => Promise<unknown>>> = {
   settings: () => import('../pages/Settings'),
   notifications: () => import('../pages/Notifications'),
   'audit-log': () => import('../pages/AuditLog'),
-  'my-profile': () => import('../pages/UserProfile'),
 }
 
 const queued = new Set<AppPage>()

@@ -39,6 +39,8 @@ export function useContactPersonOptions(entity: EntityOption | null) {
   const [options, setOptions] = useState<SpectrumContactOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Bumped to fetch the list again (a contact was added from the form).
+  const [version, setVersion] = useState(0)
   const requestId = useRef(0)
 
   // A different entity starts a fresh list and search.
@@ -68,7 +70,7 @@ export function useContactPersonOptions(entity: EntityOption | null) {
         })
     }, query ? SEARCH_DEBOUNCE_MS : 0)
     return () => window.clearTimeout(timer)
-  }, [businessEntityNo, opened, query])
+  }, [businessEntityNo, opened, query, version])
 
   return {
     active,
@@ -78,6 +80,11 @@ export function useContactPersonOptions(entity: EntityOption | null) {
     onQueryChange: active ? setQuery : undefined,
     onOpenChange: (open: boolean) => {
       if (open) setOpened(true)
+    },
+    /** Fetch the contact persons again (e.g. after adding one). */
+    reload: () => {
+      setOpened(true)
+      setVersion((v) => v + 1)
     },
   }
 }

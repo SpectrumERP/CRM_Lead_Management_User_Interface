@@ -56,25 +56,40 @@ function stripBase(pathname: string) {
  */
 export const taskAppUrl = remoteAppUrl('task')
 
-/** A `next` value inside the configured Task app (never an untrusted site), else null. */
-export function taskAppReturnPath(next: string | null | undefined): string | null {
-  if (!next) return null
-  try {
-    const taskBase = new URL(taskAppUrl, window.location.origin)
-    const candidate = new URL(next, window.location.origin)
-    const basePath = taskBase.pathname.replace(/\/+$/, '') || '/'
-    const isWithinTask =
-      basePath === '/' || candidate.pathname === basePath || candidate.pathname.startsWith(`${basePath}/`)
-    if (candidate.origin !== taskBase.origin || !isWithinTask) return null
+/** Documents Management, another remote app with the same shared sign-in (see taskAppUrl). */
+export const documentsAppUrl = remoteAppUrl('documentsmanagement')
 
-    // Keep the configured absolute Task origin when separately hosted; same-origin routes
+/** A `next` value inside `appUrl`'s app (never an untrusted site), else null. */
+function appReturnPath(appUrl: string, next: string): string | null {
+  try {
+    const appBase = new URL(appUrl, window.location.origin)
+    const candidate = new URL(next, window.location.origin)
+    const basePath = appBase.pathname.replace(/\/+$/, '') || '/'
+    const isWithinApp =
+      basePath === '/' || candidate.pathname === basePath || candidate.pathname.startsWith(`${basePath}/`)
+    if (candidate.origin !== appBase.origin || !isWithinApp) return null
+
+    // Keep the configured absolute origin when the app is separately hosted; same-origin routes
     // can remain relative so they work behind the CRM's configured base path.
-    return taskBase.origin === window.location.origin
+    return appBase.origin === window.location.origin
       ? `${candidate.pathname}${candidate.search}${candidate.hash}`
       : candidate.toString()
   } catch {
     return null
   }
+}
+
+/**
+ * A `next` value inside one of the remote apps that sign in here (Task, Documents) — never an
+ * untrusted site — else null.
+ */
+export function remoteAppReturnPath(next: string | null | undefined): string | null {
+  if (!next) return null
+  for (const appUrl of [taskAppUrl, documentsAppUrl]) {
+    const path = appReturnPath(appUrl, next)
+    if (path) return path
+  }
+  return null
 }
 
 export const paths = {

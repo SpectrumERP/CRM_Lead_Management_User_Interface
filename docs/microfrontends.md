@@ -1,6 +1,6 @@
 # Micro-frontends
 
-The CRM is the **shell**. Other apps (today: Task Management) are **remote apps**: each is its own
+The CRM is the **shell**. Other apps (today: Task Management and Documents Management) are **remote apps**: each is its own
 repository and its own React app, with its own layout. They can be built under a path on the CRM's origin
 or hosted separately. The shared-cookie sign-in
 contract works when the browser can read the CRM cookie from the remote (same origin, or a deliberately
@@ -11,7 +11,7 @@ All of it is described in [`microfrontends.json`](../microfrontends.json), the s
 
 | Used by | Reads |
 |---|---|
-| `vite.config.ts` | dev proxy (`basePath` and any `devApiPaths` → `localhost:devPort`) and the preview fallback for each remote |
+| `vite.config.ts` | dev proxy (`basePath` → `localhost:devPort`; `devApiPaths` → the dev server of the remote whose page made the call, by its Referer) and the preview fallback for each remote |
 | `scripts/dev-all.mjs` | which remotes to start, from where (`dirEnv` / `fallbackDirs`), with which base and port |
 | `scripts/build-remotes.mjs` | which remotes to build into `dist/<basePath>` |
 | `src/app/microfrontends.ts` | session cookie and channel names; the URL each remote opens at |
@@ -37,7 +37,13 @@ CRM folder), e.g.
 
 ```
 TASK_APP_DIR=../Task-Management-User-Interface
+DOCUMENTS_APP_DIR=../DocumentManagement-Web
 ```
+
+Every remote is started and built with `VITE_CRM_SSO=true` (and the CRM cookie secret as
+`VITE_CRM_COOKIE_SECRET`). Task Management always signs in through the CRM; Documents Management can
+also run on its own or in the Spectrum ERP shell, and switches to the CRM sign-in only with this flag
+(its `src/api/crmSso.ts`).
 
 Without it, the first of its `fallbackDirs` that has a `package.json` is used.
 
@@ -53,7 +59,8 @@ VITE_TASK_PUBLIC_URL=https://tasks-uat.example.com/
 VITE_COOKIE_DOMAIN=.example.com
 ```
 
-`VITE_CRM_LOGIN_URL` and `VITE_TASK_PUBLIC_URL` are copied into the Task remote build. The CRM's
+`VITE_CRM_LOGIN_URL`, `VITE_TASK_PUBLIC_URL` and `VITE_DOCUMENTS_PUBLIC_URL` are copied into the remote
+builds (Documents Management reads `VITE_DOCUMENTS_PUBLIC_URL` as Task reads `VITE_TASK_PUBLIC_URL`). The CRM's
 `VITE_TASK_APP_URL` must point at that same Task deployment so the CRM can validate the `next` return
 URL. Add equivalent values to `.env.development`, `.env.staging`, or `.env.production` as needed. These
 URLs are public configuration, not secrets. Set `VITE_COOKIE_DOMAIN` only when CRM and Task are
@@ -69,7 +76,8 @@ separate-origin development can use
    encrypted with a key derived from the CRM's `VITE_COOKIE_SECRET` (passed to the remote as
    `VITE_CRM_COOKIE_SECRET`), or `p.` + base64url JSON on plain-HTTP hosts. Its value is
    `{ token, expiresAt, companies, user }`. Keep the reader in step with the CRM's
-   `src/api/cookieVault.ts`. (Task Management: `src/lib/crmSso.ts`.)
+   `src/api/cookieVault.ts`. (Task Management: `src/lib/crmSso.ts`; Documents Management:
+   `src/api/crmSso.ts` with its `cookieVault.ts` / `authStore.ts`.)
 3. **No login of its own.** When the cookie is missing or expired, send the user to the CRM login with
    `?next=<remote URL>`; the CRM sends them back after signing in.
 4. **One session.** On sign-out, clear the CRM cookies and post `{ type: 'logout' }` on the
@@ -82,7 +90,10 @@ separate-origin development can use
 1. Add an entry to `remotes` in `microfrontends.json` (`name`, `title`, `basePath`, a free `devPort`,
    `dirEnv`, `fallbackDirs`, `urlEnv`). If the remote calls its API with root-relative paths in dev
    (Task Management: `/api/...`), list them in `devApiPaths` so the CRM dev server forwards them to
-   the remote's dev server instead of answering with its own `index.html`.
+   the remote's dev server instead of answering with its own `index.html`. Several remotes may list
+   the same path: each call goes to the remote whose page made it.
 2. Point its `dirEnv` at the checkout in `.env`.
 3. In the remote, implement the contract above.
-4. Link to it from the CRM with `remoteAppUrl('<name>')` (full page load — it is a separate app).
+4. Link to it from the CRM with `remoteAppUrl('<name>')` (full page load — it is a separate app): add it
+   to the module launcher (`src/components/ModuleLauncher.tsx`, and Task Management's copy), and to
+   `remoteAppReturnPath` in `src/app/paths.ts` so the CRM login can send users back to it.

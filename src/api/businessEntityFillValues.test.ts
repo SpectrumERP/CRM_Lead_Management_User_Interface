@@ -39,6 +39,7 @@ describe('business entity fill values', () => {
         { timeZoneNo: 6, timeZoneName: 'UTC', countryNo: null },
       ],
       gstinTypes: [{ id: 3, name: 'GSTIN' }, { gstinTypeNo: 0, gstinTypeName: 'bad' }],
+      leadSources: [{ leadSourceNo: 7, code: 'LS007', leadSourceName: 'Exhibition' }],
     })
     expect(fill.businessEntityTypes).toEqual([{ typeNo: 2, typeName: 'Customer' }])
     // The first of a repeated number wins.
@@ -50,6 +51,7 @@ describe('business entity fill values', () => {
     ])
     // Rows without a usable number are dropped.
     expect(fill.gstinTypes).toEqual([{ gstinTypeNo: 3, gstinTypeName: 'GSTIN' }])
+    expect(fill.leadSources).toEqual([{ leadSourceNo: 7, leadSourceName: 'Exhibition' }])
     expect(defaultLocationTypeNo(fill)).toBe(2)
   })
 
@@ -61,6 +63,7 @@ describe('business entity fill values', () => {
       locationTypes: [],
       timeZones: [],
       gstinTypes: [],
+      leadSources: [],
     })
     expect(defaultLocationTypeNo({ locationTypes: [] })).toBeNull()
   })

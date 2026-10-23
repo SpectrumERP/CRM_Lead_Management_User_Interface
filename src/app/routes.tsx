@@ -28,7 +28,6 @@ const SearchResults = lazy(() => import('../pages/SearchResults'))
 const Settings = lazy(() => import('../pages/Settings'))
 const Notifications = lazy(() => import('../pages/Notifications'))
 const AuditLog = lazy(() => import('../pages/AuditLog'))
-const UserProfile = lazy(() => import('../pages/UserProfile'))
 const Login = lazy(() => import('../pages/Login'))
 const Forbidden = lazy(() => import('../pages/Forbidden'))
 
@@ -342,17 +341,6 @@ function SettingsPage() {
   return <Settings onToast={addToast} />
 }
 
-function ProfilePage() {
-  const navigate = useNavigate()
-  const { addToast } = useToast()
-  return (
-    <UserProfile
-      onToast={addToast}
-      onNavigateNotifications={() => navigate(paths.notifications)}
-    />
-  )
-}
-
 function AuditLogPage() {
   const navigate = useNavigate()
   return (
@@ -405,7 +393,8 @@ export function AppRouter() {
           <Route path="meetings" element={<MeetingsListPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
-          <Route path="profile" element={<ProfilePage />} />
+          {/* The profile page is not available: an old link or typed address lands on the dashboard. */}
+          <Route path="profile" element={<Navigate to={paths.dashboard} replace />} />
           <Route path="forbidden" element={<Forbidden />} />
           <Route element={<AdminGuard />}>
             <Route path="settings" element={<SettingsPage />} />

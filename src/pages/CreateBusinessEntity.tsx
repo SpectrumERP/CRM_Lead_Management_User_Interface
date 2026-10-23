@@ -21,6 +21,7 @@ import {
   getBusinessEntityFillValues,
   type BusinessEntityFillValues,
   type BusinessEntityTypeOption,
+  type LeadSourceOption,
   type GstinTypeOption,
 } from '../api/businessEntityFillValues'
 import { toApiError } from '../api/errors'
@@ -439,6 +440,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
   const contactErrs = scoped(errors, 'primaryContact')
   const otherDetailsHaveData = Boolean(draft.gstinTypeNo || draft.vatgstNo || draft.creditInsuranceLimit || draft.creditInsuranceCompanyName || draft.ports.length || errors.vatgstNo)
   const selectedType = lists.businessEntityTypes.find((t) => String(t.typeNo) === draft.typeNo) ?? null
+  const selectedSource = lists.leadSources.find((s) => String(s.leadSourceNo) === draft.leadSourceNo) ?? null
   const selectedGstin = lists.gstinTypes.find((t) => String(t.gstinTypeNo) === draft.gstinTypeNo) ?? null
   const listErrors = Object.entries(errors).filter(([key]) => /^(locations|contacts|followUps)\./.test(key)).map(([, m]) => m)
 
@@ -506,7 +508,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
                 </div>
               ) : null}
 
-              <div className="grid grid-cols-1 gap-x-3 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-x-3 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-4">
                 <NameField value={draft.name} error={errors.name} onChange={(v) => update('name', v)} />
                 <SearchSelectField<BusinessEntityTypeOption>
                   label="Business Entity Type"
@@ -518,6 +520,16 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
                   getKey={(t) => String(t.typeNo)}
                   getLabel={(t) => t.typeName}
                   placeholder="Select business entity type"
+                  searchPlaceholder="Search…"
+                />
+                <SearchSelectField<LeadSourceOption>
+                  label="Contact Source"
+                  options={lists.leadSources}
+                  value={selectedSource}
+                  onChange={(s) => update('leadSourceNo', s ? String(s.leadSourceNo) : '')}
+                  getKey={(s) => String(s.leadSourceNo)}
+                  getLabel={(s) => s.leadSourceName}
+                  placeholder="Select contact source"
                   searchPlaceholder="Search…"
                 />
               </div>
@@ -550,22 +562,22 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
               </div>
             </EntitySection>
 
-            <EntitySection icon={ICON.info} title="Other Details" description="VAT / GST, credit insurance and preferred ports"
+            <EntitySection icon={ICON.info} title="Other Details" description="Tax document, credit insurance and preferred ports"
               collapsible autoOpen={otherDetailsHaveData}>
               <Subheading>Tax &amp; Credit Insurance</Subheading>
               <div className="grid grid-cols-1 gap-x-3 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-4">
                 <SearchSelectField<GstinTypeOption>
-                  label="Document Type"
+                  label="Tax Document Type"
                   options={lists.gstinTypes}
                   value={selectedGstin}
                   onChange={(t) => update('gstinTypeNo', t ? String(t.gstinTypeNo) : '', 'vatgstNo')}
                   getKey={(t) => String(t.gstinTypeNo)}
                   getLabel={(t) => t.gstinTypeName}
-                  placeholder="Select document type"
+                  placeholder="Select tax document type"
                   searchPlaceholder="Search…"
                 />
-                <TextField label="VAT / GST No" required={Boolean(toNo(draft.gstinTypeNo))} error={errors.vatgstNo} maxLength={L.vatgstNo}
-                  placeholder="Enter VAT No. / GST No." value={draft.vatgstNo} onValueChange={(v) => update('vatgstNo', v)} />
+                <TextField label="Tax Document No." required={Boolean(toNo(draft.gstinTypeNo))} error={errors.vatgstNo} maxLength={L.vatgstNo}
+                  placeholder="Enter tax document no." value={draft.vatgstNo} onValueChange={(v) => update('vatgstNo', v)} />
                 <TextField label="Credit Insurance Limit" error={errors.creditInsuranceLimit} type="number" min={0} className="!text-left"
                   placeholder="Enter credit insurance limit" value={draft.creditInsuranceLimit}
                   onValueChange={(v) => update('creditInsuranceLimit', v)} />

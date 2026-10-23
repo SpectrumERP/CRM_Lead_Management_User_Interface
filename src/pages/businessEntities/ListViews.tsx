@@ -102,7 +102,7 @@ const ENTITY_COLUMNS: (GridColumn<EntityColumnKey> & { sort?: string })[] = [
   { key: 'city', label: 'City', sort: 'city' },
   { key: 'state', label: 'State', sort: 'state' },
   { key: 'country', label: 'Country', sort: 'country' },
-  { key: 'vatGst', label: 'VAT/GST No.', sort: 'vatGst' },
+  { key: 'vatGst', label: 'Tax Document No.', sort: 'vatGst' },
   { key: 'creditLimit', label: 'Credit Limit', sort: 'creditLimit' },
   { key: 'actions', label: 'Actions', locked: true },
 ]
@@ -335,7 +335,7 @@ export function EntityAlbum({ rows, onEdit, onDelete }: { rows: EntityListRow[] 
                   <Detail wide label="Primary Location" text={row.address} />
                   <Detail label="City & PIN Code" text={[row.city, row.pinCode].filter(Boolean).join(' - ')} />
                   <Detail label="State & Country" text={[row.state, row.country].filter(Boolean).join(', ')} />
-                  <Detail wide label="Credit limit & GST" text={[formatCreditLimit(row.creditLimit), row.vatGst && `GST: ${row.vatGst}`].filter(Boolean).join(' | ')} />
+                  <Detail wide label="Credit limit & tax document" text={[formatCreditLimit(row.creditLimit), row.vatGst && `Tax Doc. No.: ${row.vatGst}`].filter(Boolean).join(' | ')} />
                 </div>
                 <div className="mt-auto flex items-center justify-between gap-2 pt-0.5 text-[10px] font-medium text-ink-faint">
                   <span className="flex min-w-0 items-center gap-1">

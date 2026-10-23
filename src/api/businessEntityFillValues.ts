@@ -34,7 +34,13 @@ export interface LocationTypeOption {
   isDefault: boolean
 }
 
-/** VAT / GST document type ("Document Type" on the form). */
+/** Lead source, offered as the entity's "Contact Source". */
+export interface LeadSourceOption {
+  leadSourceNo: number
+  leadSourceName: string
+}
+
+/** Tax document type — VAT, GST, IGV, … ("Tax Document Type" on the form). */
 export interface GstinTypeOption {
   gstinTypeNo: number
   gstinTypeName: string
@@ -49,6 +55,7 @@ export interface BusinessEntityFillValues {
   locationTypes: LocationTypeOption[]
   timeZones: TimeZoneOption[]
   gstinTypes: GstinTypeOption[]
+  leadSources: LeadSourceOption[]
 }
 
 export const EMPTY_BUSINESS_ENTITY_FILL_VALUES: BusinessEntityFillValues = {
@@ -58,6 +65,7 @@ export const EMPTY_BUSINESS_ENTITY_FILL_VALUES: BusinessEntityFillValues = {
   locationTypes: [],
   timeZones: [],
   gstinTypes: [],
+  leadSources: [],
 }
 
 type Raw = Record<string, unknown>
@@ -137,6 +145,14 @@ export function normaliseBusinessEntityFillValues(data: Raw | null | undefined):
         return gstinTypeNo ? { gstinTypeNo, gstinTypeName: str(row.gstinTypeName ?? row.name) } : null
       },
       (x) => x.gstinTypeNo,
+    ),
+    leadSources: list(
+      raw.leadSources,
+      (row) => {
+        const leadSourceNo = toNo(row.leadSourceNo ?? row.id)
+        return leadSourceNo ? { leadSourceNo, leadSourceName: str(row.leadSourceName ?? row.name) } : null
+      },
+      (x) => x.leadSourceNo,
     ),
   }
 }

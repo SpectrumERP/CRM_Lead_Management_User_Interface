@@ -287,6 +287,8 @@ export interface BusinessEntityDraft {
   businessEntityNo: number | null
   name: string
   typeNo: string
+  /** "Contact Source": a lead source number, or '' (optional). */
+  leadSourceNo: string
   website: string
   gstinTypeNo: string
   vatgstNo: string
@@ -337,6 +339,7 @@ export function emptyBusinessEntityDraft(defaultLocationTypeNo: number | null = 
     businessEntityNo: null,
     name: '',
     typeNo: '',
+    leadSourceNo: '',
     website: '',
     gstinTypeNo: '',
     vatgstNo: '',
@@ -479,6 +482,7 @@ export function businessEntityFromDetail(raw: Raw, attachments: Attachment[] = [
     code: businessEntityCode(businessEntityNo, text(raw.code)),
     name: text(raw.businessEntityName),
     typeNo: noText(obj(raw.businessEntityType).id ?? obj(raw.businessEntityType).operCRMBusinessEntityTypeNo ?? raw.crmBusinessEntityTypeNo),
+    leadSourceNo: noText(obj(raw.leadSource).leadSourceNo ?? raw.leadSourceNo),
     website: text(raw.website),
     gstinTypeNo: noText(raw.gstinTypeNo ?? gstinType.id ?? gstinType.gstinTypeNo),
     vatgstNo: text(raw.vatgstNo),
@@ -541,6 +545,8 @@ export interface BusinessEntitySaveBody {
   businessEntityNo: number | null
   businessEntityName: string
   crmBusinessEntityTypeNo: number
+  /** "Contact Source" (a lead source); null when not chosen. */
+  leadSourceNo: number | null
   /** Kept equal to the primary location's zone; the list still reads it from the entity. */
   crmTimeZoneNo: number | null
   gstinTypeNo: number | null
@@ -653,7 +659,7 @@ export function buildBusinessEntitySaveBody(
   const typeNo = toNo(draft.typeNo)
   if (!typeNo) errors.typeNo = 'Business entity type is required'
   if (draft.website.trim().length > L.website) errors.website = `Maximum ${L.website} characters`
-  if (toNo(draft.gstinTypeNo) && !draft.vatgstNo.trim()) errors.vatgstNo = 'VAT / GST No is required for the selected document type'
+  if (toNo(draft.gstinTypeNo) && !draft.vatgstNo.trim()) errors.vatgstNo = 'Tax Document No. is required for the selected tax document type'
   else if (draft.vatgstNo.trim().length > L.vatgstNo) errors.vatgstNo = `Maximum ${L.vatgstNo} characters`
   const limit = decimal(draft.creditInsuranceLimit)
   if (limit === 'invalid' || (typeof limit === 'number' && limit < 0)) errors.creditInsuranceLimit = 'Enter an amount of 0 or more'
@@ -691,6 +697,7 @@ export function buildBusinessEntitySaveBody(
     businessEntityNo,
     businessEntityName: name,
     crmBusinessEntityTypeNo: typeNo!,
+    leadSourceNo: toNo(draft.leadSourceNo),
     crmTimeZoneNo: primaryLocation.crmTimeZoneNo,
     gstinTypeNo: toNo(draft.gstinTypeNo),
     vatgstNo: draft.vatgstNo.trim() || null,

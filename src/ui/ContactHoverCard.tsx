@@ -14,6 +14,8 @@ export interface ContactHoverCardProps {
   placement?: 'below' | 'end'
   /** `overlay` sits above other popovers. */
   layer?: 'base' | 'overlay'
+  /** Custom trigger content (e.g. a chip's label) in place of the dotted-underline name. */
+  children?: ReactNode
 }
 
 function ActionLink({
@@ -53,8 +55,9 @@ export function ContactHoverCard({
   primary = true,
   placement = 'below',
   layer = 'base',
+  children,
 }: ContactHoverCardProps) {
-  const triggerRef = useRef<HTMLButtonElement>(null)
+  const triggerRef = useRef<HTMLElement | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const hideTimer = useRef<number>(0)
   const [open, setOpen] = useState(false)
@@ -112,19 +115,29 @@ export function ContactHoverCard({
     cardRef.current.style.left = `${left}px`
   }, [open, name, email, placement])
 
+  const triggerHandlers = {
+    'aria-haspopup': 'dialog' as const,
+    'aria-expanded': open,
+    'aria-label': `${name} — hover or focus for contact details`,
+    onMouseEnter: showCard,
+    onMouseLeave: scheduleHide,
+    onFocus: showCard,
+    onBlur: scheduleHide,
+  }
+
   return (
     <>
+      {children ? (
+        // Not a <button>: the content may sit next to its own buttons (a chip's remove button).
+        <span ref={triggerRef} tabIndex={0} className="min-w-0 cursor-default rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" {...triggerHandlers}>
+          {children}
+        </span>
+      ) : (
       <button
         type="button"
-        ref={triggerRef}
+        ref={(node) => { triggerRef.current = node }}
         className="inline-flex max-w-44 cursor-pointer items-center gap-1 rounded-md text-left text-xs font-semibold text-primary underline decoration-dotted decoration-primary/50 underline-offset-2 transition-colors hover:decoration-solid active:text-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={`${name} — hover or focus for contact details`}
-        onMouseEnter={showCard}
-        onMouseLeave={scheduleHide}
-        onFocus={showCard}
-        onBlur={scheduleHide}
+        {...triggerHandlers}
       >
         <span className="min-w-0 truncate">{name}</span>
         <svg
@@ -141,6 +154,7 @@ export function ContactHoverCard({
           <path strokeLinecap="round" d="M12 11v5M12 8h.01" />
         </svg>
       </button>
+      )}
       {open
         ? createPortal(
             <div

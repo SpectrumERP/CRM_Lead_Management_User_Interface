@@ -21,6 +21,16 @@
         "task-management/Task-Management-User-Interface"
       ],
       "urlEnv": "VITE_TASK_APP_URL"
+    },
+    {
+      "name": "documentsmanagement",
+      "title": "Documents Management",
+      "basePath": "/documentsmanagement/",
+      "devPort": 5175,
+      "devApiPaths": ["/api"],
+      "dirEnv": "DOCUMENTS_APP_DIR",
+      "fallbackDirs": ["../DocumentManagement-Web"],
+      "urlEnv": "VITE_DOCUMENTS_APP_URL"
     }
   ]
 }
