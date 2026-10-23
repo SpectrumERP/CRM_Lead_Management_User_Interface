@@ -31,9 +31,8 @@ export function remoteApps(root, mode = 'development') {
 }
 
 /**
- * Env for a remote's dev server / build: the CRM cookie secret under the name the remote reads, and
- * VITE_CRM_SSO=true — the remote runs inside the CRM and signs in through it (apps that can also run
- * elsewhere, e.g. Documents Management, switch to the CRM sign-in on it).
+ * Env for a remote's dev server / build: the CRM cookie secret and VITE_CRM_SSO=true for remotes that
+ * run inside the CRM and sign in through it.
  */
 export function remoteEnv(root, mode = 'development') {
   const { session } = loadManifest(root)
@@ -42,7 +41,7 @@ export function remoteEnv(root, mode = 'development') {
   const remoteEnv = { ...process.env, VITE_CRM_SSO: 'true' }
   if (secret) remoteEnv[session.remoteSecretEnv] = secret
   // Public routing config must follow the selected CRM build mode into remote bundles.
-  for (const key of ['VITE_CRM_LOGIN_URL', 'VITE_TASK_PUBLIC_URL', 'VITE_DOCUMENTS_PUBLIC_URL', 'VITE_COOKIE_DOMAIN']) {
+  for (const key of ['VITE_CRM_LOGIN_URL', 'VITE_DOCUMENTS_PUBLIC_URL', 'VITE_COOKIE_DOMAIN']) {
     if (process.env[key] || env[key]) remoteEnv[key] = process.env[key] || env[key]
   }
   if (remoteEnv.VITE_COOKIE_DOMAIN) remoteEnv.VITE_CRM_COOKIE_DOMAIN = remoteEnv.VITE_COOKIE_DOMAIN

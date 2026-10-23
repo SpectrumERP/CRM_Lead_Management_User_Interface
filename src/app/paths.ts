@@ -49,14 +49,7 @@ function stripBase(pathname: string) {
   return pathname
 }
 
-/**
- * Task Management is a separate app (a micro-frontend, see microfrontends.json), opened with a full page
- * load: on the same origin under its basePath (not a CRM route), or at `VITE_TASK_APP_URL` when it runs on
- * its own. It shares the CRM sign-in: its login sends users here with `?next=<task URL>` to come back.
- */
-export const taskAppUrl = remoteAppUrl('task')
-
-/** Documents Management, another remote app with the same shared sign-in (see taskAppUrl). */
+/** Documents Management remote app with the shared sign-in. */
 export const documentsAppUrl = remoteAppUrl('documentsmanagement')
 
 /** A `next` value inside `appUrl`'s app (never an untrusted site), else null. */
@@ -80,16 +73,11 @@ function appReturnPath(appUrl: string, next: string): string | null {
 }
 
 /**
- * A `next` value inside one of the remote apps that sign in here (Task, Documents) — never an
- * untrusted site — else null.
+ * A `next` value inside Documents Management, which signs in here — never an untrusted site — else null.
  */
 export function remoteAppReturnPath(next: string | null | undefined): string | null {
   if (!next) return null
-  for (const appUrl of [taskAppUrl, documentsAppUrl]) {
-    const path = appReturnPath(appUrl, next)
-    if (path) return path
-  }
-  return null
+  return appReturnPath(documentsAppUrl, next)
 }
 
 export const paths = {

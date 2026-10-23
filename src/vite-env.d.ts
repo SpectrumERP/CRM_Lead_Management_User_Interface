@@ -11,8 +11,6 @@ interface ImportMetaEnv {
   /** Spectrum form numbers the document store files lead / opportunity attachments under. */
   readonly VITE_LEAD_FORM_NO?: string
   readonly VITE_OPPORTUNITY_FORM_NO?: string
-  /** Task Management URL when it runs on its own origin (e.g. `http://localhost:5174/` locally); default: `/task/` here. */
-  readonly VITE_TASK_APP_URL?: string
 }
 
 interface ImportMeta {

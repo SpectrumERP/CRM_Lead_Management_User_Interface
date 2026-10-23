@@ -6,6 +6,22 @@ import { __resetSessionExpiryForTests, isSessionEnded, notifySessionExpired, onS
 
 const spectrumUser = { id: 'SPX-1', name: 'EDP TEMP', email: '', role: 'Admin' as const, jobTitle: 'Administrator', initials: 'ET' }
 
+function stubCookies() {
+  const jar = new Map<string, string>()
+  vi.stubGlobal('document', {
+    get cookie() {
+      return [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
+    },
+    set cookie(text: string) {
+      const [pair, ...attributes] = text.split(';')
+      const separator = pair!.indexOf('=')
+      const name = pair!.slice(0, separator).trim()
+      if (attributes.some((attribute) => /max-age=0\b/i.test(attribute.trim()))) jar.delete(name)
+      else jar.set(name, pair!.slice(separator + 1))
+    },
+  })
+}
+
 async function signIn(expiresAt: number) {
   await saveAuth({
     token: 'header.payload.sig',
@@ -26,6 +42,7 @@ describe('session expiry', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     __resetAuthStoreForTests()
     clearSession()
@@ -66,6 +83,22 @@ describe('session expiry', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(listener).toHaveBeenCalledWith('rejected')
     expect(await loadAuth()).toBeNull()
+  })
+
+  it('ends the session when a remote origin clears the shared auth cookie', async () => {
+    stubCookies()
+    await signIn(Date.now() + 60_000)
+    vi.useFakeTimers()
+    const listener = vi.fn()
+    const unsubscribe = onSessionExpired(listener)
+    document.cookie = 'fi-crm-auth=; Max-Age=0; Path=/'
+
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(listener).toHaveBeenCalledWith('other-tab')
+    expect(isSessionEnded()).toBe(true)
+    unsubscribe()
+    vi.useRealTimers()
   })
 
   it('a valid token is sent as a bearer token and nothing ends', async () => {

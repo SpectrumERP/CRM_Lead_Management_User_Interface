@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { remoteAppReturnPath, taskAppUrl } from '../app/paths'
+import { paths, remoteAppReturnPath } from '../app/paths'
 import { isEmail } from '../api/sanitize'
 import { getErrorTitle, PAGE_COPY } from '../constants/messages'
 import { Button, FullPageSpinner, TextField } from '../ui'
@@ -11,11 +11,9 @@ type LoginField = 'email' | 'password'
 export default function Login() {
   const { user, ready, login } = useAuth()
   const location = useLocation()
-  // After login: the remote app page that sent the user here (?next=, Task or Documents), else Task
-  // Management's first page. They are separate apps under their own paths (shared sign-in), so this is a
-  // full page load.
+  // After login, return to Documents when it sent the user here; otherwise open the CRM dashboard.
   const remoteReturn = remoteAppReturnPath(new URLSearchParams(location.search).get('next'))
-  const afterLogin = remoteReturn ?? taskAppUrl
+  const afterLogin = remoteReturn ?? paths.dashboard
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<{ message: string; field?: LoginField } | null>(null)
@@ -25,7 +23,7 @@ export default function Login() {
   const [pending, setPending] = useState(false)
   const copy = PAGE_COPY.login
 
-  // Already signed in: straight to Task Management.
+  // Already signed in: return to Documents or open the CRM dashboard.
   useEffect(() => {
     if (ready && user) window.location.replace(afterLogin)
   }, [ready, user, afterLogin])
@@ -35,7 +33,7 @@ export default function Login() {
   if (import.meta.env.VITE_CRM_ROUTE_BASE) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
-  if (user) return <FullPageSpinner label={remoteReturn?.includes('/documentsmanagement') ? 'Opening Documents' : 'Opening Tasks'} />
+  if (user) return <FullPageSpinner label={remoteReturn ? 'Opening Documents' : 'Opening CRM'} />
 
   function showError(message: string, field?: LoginField) {
     setError({ message, field })

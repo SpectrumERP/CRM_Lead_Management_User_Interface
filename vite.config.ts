@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin, type UserConfig } from 'vite'
+import { defineConfig, loadEnv, type Plugin, type UserConfig } from 'vite'
 import { federation } from '@module-federation/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -17,7 +17,7 @@ const remotes = microfrontends.remotes.map((remote) => {
   const segment = remote.basePath.replace(/^\/+|\/+$/g, '')
   return {
     ...remote,
-    /** /task, /task/, /task/<route> — not /tasks or other CRM paths. */
+    /** /documentsmanagement and its nested routes, not similarly prefixed CRM paths. */
     pathPattern: `^/${segment}(?:/|$)`,
   }
 })
@@ -60,7 +60,7 @@ function remoteProxy(remote: (typeof remotes)[number]) {
 /**
  * Dev: a remote's root-relative API calls (`devApiPaths`, e.g. /api/...) land on this origin, and
  * several remotes can use the same path. Each call goes to the dev server of the remote whose page
- * made it (its Referer, e.g. /task/...), whose own proxy forwards it to the backend in its .env.
+ * made it (its Referer, e.g. /documentsmanagement/...), whose own proxy forwards it to the backend in its .env.
  * A call without such a page goes to the first remote that lists the path.
  */
 function remoteApiRouter(): Plugin {
@@ -109,14 +109,12 @@ const alias = { '@': path.resolve(import.meta.dirname, './src') }
  * React Router.
  */
 const SPECTRUM_MODE = 'spectrum'
-const SPECTRUM_PORT = 5177
 
 /**
  * As a remote this server only feeds the shell. A page opened on it directly goes to the same page in the
  * shell, which has the one Spectrum ERP login. Module requests (Accept without text/html) pass through.
  */
-function redirectPagesToShell(routeBase: string): Plugin {
-  const shellUrl = (process.env.SPECTRUM_SHELL_URL ?? 'http://localhost:5173').replace(/\/+$/, '')
+function redirectPagesToShell(routeBase: string, shellUrl: string): Plugin {
   return {
     name: 'redirect-pages-to-spectrum-shell',
     configureServer(server) {
@@ -129,15 +127,18 @@ function redirectPagesToShell(routeBase: string): Plugin {
   }
 }
 
-function spectrumRemote(): UserConfig {
+function spectrumRemote(port: number, host: string | boolean, env: Record<string, string>): UserConfig {
   // Routes live under the shell's /crm (src/app/paths.ts reads this).
-  process.env.VITE_CRM_ROUTE_BASE ??= '/crm'
+  const routeBase = env.VITE_CRM_ROUTE_BASE || '/crm'
+  process.env.VITE_CRM_ROUTE_BASE = routeBase
+  const shellUrl = (env.SPECTRUM_SHELL_URL || `http://${env.REMOTE_DEV_HOST || 'localhost'}:${env.ERP_PORT || 5173}`).replace(/\/+$/, '')
   // Assets must load from this server when the shell, on another origin, imports the remote.
-  const publicUrl = process.env.CRM_PUBLIC_URL ?? `http://localhost:${SPECTRUM_PORT}/`
+  const publicUrl = env.CRM_PUBLIC_URL || `http://${env.REMOTE_DEV_HOST || 'localhost'}:${port}/`
+  const publicOrigin = new URL(publicUrl).origin
   return {
     base: publicUrl,
     plugins: [
-      redirectPagesToShell(process.env.VITE_CRM_ROUTE_BASE ?? '/crm'),
+      redirectPagesToShell(routeBase, shellUrl),
       react(),
       tailwindcss(),
       federation({
@@ -155,8 +156,8 @@ function spectrumRemote(): UserConfig {
     ],
     resolve: { alias },
     build: { target: 'esnext', chunkSizeWarningLimit: 11000 },
-    server: { port: SPECTRUM_PORT, strictPort: true, origin: `http://localhost:${SPECTRUM_PORT}` },
-    preview: { port: SPECTRUM_PORT, strictPort: true },
+    server: { host, port, strictPort: true, origin: publicOrigin },
+    preview: { host, port, strictPort: true },
   }
 }
 
@@ -179,18 +180,26 @@ const standalone: UserConfig = {
   },
   server: {
     host: true,
-    port: 5173,
     strictPort: true,
     // Each remote's pages, assets and HMR. Its API calls (devApiPaths) go through remoteApiRouter.
     proxy: Object.fromEntries(remotes.map((remote) => [remote.pathPattern, remoteProxy(remote)])),
   },
   preview: {
     host: true,
-    port: 5173,
     strictPort: true,
     // Serve the built dist/<basePath> remotes (not the dev proxy, which preview would otherwise inherit).
     proxy: {},
   },
 }
 
-export default defineConfig(({ mode }) => (mode === SPECTRUM_MODE ? spectrumRemote() : standalone))
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const port = Number(env.CRM_PORT || 5174)
+  const host = env.DEV_SERVER_HOST || true
+  if (mode === SPECTRUM_MODE) return spectrumRemote(port, host, env)
+  return {
+    ...standalone,
+    server: { ...standalone.server, host, port },
+    preview: { ...standalone.preview, host, port },
+  }
+})

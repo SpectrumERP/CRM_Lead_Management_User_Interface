@@ -1,5 +1,5 @@
 {
-  "$comment": "Route-based micro-frontends: the CRM is the shell; each remote app is its own repository, served under its basePath on the CRM origin and sharing the CRM sign-in. Read by vite.config.ts (dev proxy, preview fallback), scripts/dev-all.mjs, scripts/build-remotes.mjs and src/app/microfrontends.ts. See docs/microfrontends.md.",
+  "$comment": "Documents Management is a remote app served under its basePath on the CRM origin. Task Management is owned and launched by the Spectrum ERP shell. Read by vite.config.ts, scripts/dev-all.mjs, scripts/build-remotes.mjs and src/app/microfrontends.ts. See docs/microfrontends.md.",
   "session": {
     "authCookie": "fi-crm-auth",
     "sessionCookie": "fi-crm-session",
@@ -9,24 +9,10 @@
   },
   "remotes": [
     {
-      "name": "task",
-      "title": "Task Management",
-      "basePath": "/task/",
-      "devPort": 5174,
-      "devApiPaths": ["/api"],
-      "dirEnv": "TASK_APP_DIR",
-      "fallbackDirs": [
-        "../Task-Management-User-Interface",
-        "task-management",
-        "task-management/Task-Management-User-Interface"
-      ],
-      "urlEnv": "VITE_TASK_APP_URL"
-    },
-    {
       "name": "documentsmanagement",
       "title": "Documents Management",
       "basePath": "/documentsmanagement/",
-      "devPort": 5175,
+      "devPort": 5176,
       "devApiPaths": ["/api"],
       "dirEnv": "DOCUMENTS_APP_DIR",
       "fallbackDirs": ["../DocumentManagement-Web"],

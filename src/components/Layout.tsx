@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import GlobalSearchBar from './GlobalSearchBar';
 import QuickCreateMenu from './QuickCreateMenu';
 // import { useNotifications } from '../contexts/NotificationsContext';
-import { matchAppPage, navPaths, paths, taskAppUrl, type AppPage } from '../app/paths';
+import { matchAppPage, navPaths, paths, type AppPage } from '../app/paths';
 import { prefetchPage, prerenderApp } from '../app/prefetch';
 import ModuleLauncher from './ModuleLauncher';
 import { BreadcrumbActionsSlot } from './BreadcrumbActions';

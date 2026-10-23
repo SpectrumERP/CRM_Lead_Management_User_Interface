@@ -45,7 +45,10 @@ describe('cookieVault', () => {
     const { cookieVault } = await import('./cookieVault')
     await cookieVault.set('fi-test', value, 60)
     expect(jar.get('fi-test.0')!.startsWith('p.')).toBe(true)
+    expect(cookieVault.has('fi-test')).toBe(true)
     expect(await cookieVault.get('fi-test')).toEqual(value)
+    cookieVault.remove('fi-test')
+    expect(cookieVault.has('fi-test')).toBe(false)
   })
 
   it('reads a plain value later even where Web Crypto is available', async () => {

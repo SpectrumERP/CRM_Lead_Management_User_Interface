@@ -2,13 +2,12 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSP
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { IconTooltip } from '../ui'
-import { documentsAppUrl, paths, taskAppUrl } from '../app/paths'
+import { documentsAppUrl, paths } from '../app/paths'
 import { prerenderApp } from '../app/prefetch'
 
 /**
  * Spectrum ERP module launcher (the "waffle" next to the sidebar toggle) — Microsoft 365 style.
- * Add a future ERP module by adding one entry to MODULES; Task Management has the same list
- * (src/components/layout/ModuleLauncher.tsx there) — keep the two in step.
+ * Spectrum ERP owns Task Management in its shell launcher; this CRM launcher only opens CRM-side apps.
  */
 interface ErpModule {
   id: string
@@ -37,7 +36,7 @@ const glyph = {
 
 /**
  * Inside the Spectrum ERP shell (VITE_CRM_ROUTE_BASE) every module shares the shell's router: Dashboard is
- * the shell's home, CRM opens on its Sales Dashboard, and Task is a route there too, not a page load.
+ * the shell's home and CRM opens on its Sales Dashboard.
  */
 const IN_SPECTRUM = Boolean(import.meta.env.VITE_CRM_ROUTE_BASE)
 
@@ -72,20 +71,6 @@ const MODULES: ErpModule[] = [
         <path d="m21 3 1 11h-2" />
         <path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" />
         <path d="M3 4h8" />
-      </svg>
-    ),
-  },
-  {
-    id: 'task',
-    label: 'Task',
-    description: 'Tasks, meetings, reports',
-    color: '#7c3aed',
-    to: taskAppUrl,
-    external: !IN_SPECTRUM,
-    icon: (
-      <svg {...glyph}>
-        <rect x="3" y="3" width="18" height="18" rx="3" />
-        <path d="m8 12 3 3 5-6" />
       </svg>
     ),
   },

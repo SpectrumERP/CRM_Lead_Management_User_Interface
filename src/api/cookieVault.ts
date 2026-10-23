@@ -109,6 +109,16 @@ function removeChunks(name: string) {
 export const cookieVault = {
   available: canUseCookies,
 
+  has(name: string): boolean {
+    if (!canUseCookies()) return false
+    const count = Number(readRaw(name))
+    if (!Number.isInteger(count) || count < 1 || count > MAX_CHUNKS) return false
+    for (let i = 0; i < count; i += 1) {
+      if (readRaw(`${name}.${i}`) === null) return false
+    }
+    return true
+  },
+
   async set(name: string, value: unknown, maxAgeSeconds: number): Promise<void> {
     if (!canUseCookies()) return
     const encoded = await encrypt(value)
