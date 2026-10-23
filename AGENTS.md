@@ -4,11 +4,8 @@ React + Vite + Tailwind CSS CRM for Force Intellect lead management.
 
 ## Scripts
 
-- `npm run dev` — CRM on `CRM_PORT` (default 5174) plus configured CRM remote apps under their paths
-- `npm run dev:crm` — CRM alone
-- `npm run dev:remotes` — remote apps alone
+- `npm run dev` — CRM dev server on `CRM_PORT` (default 5174)
 - `npm run build` — production build
-- `npm run build:all` — CRM build, then every remote app into `dist/<basePath>`
 - `npm run preview` — serve `dist/` on `CRM_PORT` (default 5174)
 - `npm run test` — vitest
 
@@ -20,7 +17,7 @@ React + Vite + Tailwind CSS CRM for Force Intellect lead management.
 - `index.html` — Vite HTML shell (`#root`)
 - `package.json` — npm scripts and dependencies
 - `vite.config.ts` — Vite, React, Tailwind v4, `@` → `src`
-- `microfrontends.json` — CRM remote apps and the shared-session contract; Task Management is launched from Spectrum ERP; see `docs/microfrontends.md`
+- `src/api/sessionContract.ts` — shared CRM auth-cookie and session-channel names used by Spectrum ERP and Task Management
 
 ## Styling
 

@@ -1,6 +1,6 @@
 import type { AuthUser } from '../auth/types'
 import { cookieVault } from './cookieVault'
-import { sessionContract } from '../app/microfrontends'
+import { sessionContract } from './sessionContract'
 
 const COOKIE_NAME = sessionContract.sessionCookie
 const TTL_MS = 8 * 60 * 60 * 1000

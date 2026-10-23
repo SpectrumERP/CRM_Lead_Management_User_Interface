@@ -2,12 +2,10 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSP
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { IconTooltip } from '../ui'
-import { documentsAppUrl, paths } from '../app/paths'
-import { prerenderApp } from '../app/prefetch'
+import { paths } from '../app/paths'
 
 /**
  * Spectrum ERP module launcher (the "waffle" next to the sidebar toggle) — Microsoft 365 style.
- * Spectrum ERP owns Task Management in its shell launcher; this CRM launcher only opens CRM-side apps.
  */
 interface ErpModule {
   id: string
@@ -16,10 +14,8 @@ interface ErpModule {
   /** Tile colour (CRM palette). */
   color: string
   icon: ReactNode
-  /** In-app route (this CRM) or a full URL / path of another app on this origin. */
+  /** In-app route. */
   to: string
-  /** Another app: open with a full page load (and prerender on hover). */
-  external?: boolean
 }
 
 const glyph = {
@@ -71,19 +67,6 @@ const MODULES: ErpModule[] = [
         <path d="m21 3 1 11h-2" />
         <path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" />
         <path d="M3 4h8" />
-      </svg>
-    ),
-  },
-  {
-    id: 'documents',
-    label: 'Documents',
-    description: 'Document library and attachments',
-    color: '#15803d',
-    to: documentsAppUrl,
-    external: !IN_SPECTRUM,
-    icon: (
-      <svg {...glyph}>
-        <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
       </svg>
     ),
   },
@@ -155,10 +138,6 @@ export default function ModuleLauncher({
   function openModule(m: ErpModule) {
     setOpen(false)
     setQuery('')
-    if (m.external) {
-      window.location.assign(m.to)
-      return
-    }
     navigate(m.to)
   }
 
@@ -226,8 +205,6 @@ export default function ModuleLauncher({
                       <button
                         type="button"
                         onClick={() => openModule(m)}
-                        onPointerEnter={m.external ? () => prerenderApp(m.to) : undefined}
-                        onFocus={m.external ? () => prerenderApp(m.to) : undefined}
                         aria-current={current ? 'page' : undefined}
                         title={m.description}
                         className={`flex w-full flex-col items-center gap-2 rounded-lg px-2 py-3 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${

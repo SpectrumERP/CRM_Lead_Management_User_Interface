@@ -1,5 +1,3 @@
-import { remoteAppUrl } from './microfrontends'
-
 export type AppPage =
   | 'dashboard'
   | 'business-entities'
@@ -47,37 +45,6 @@ function stripBase(pathname: string) {
     return rest || '/'
   }
   return pathname
-}
-
-/** Documents Management remote app with the shared sign-in. */
-export const documentsAppUrl = remoteAppUrl('documentsmanagement')
-
-/** A `next` value inside `appUrl`'s app (never an untrusted site), else null. */
-function appReturnPath(appUrl: string, next: string): string | null {
-  try {
-    const appBase = new URL(appUrl, window.location.origin)
-    const candidate = new URL(next, window.location.origin)
-    const basePath = appBase.pathname.replace(/\/+$/, '') || '/'
-    const isWithinApp =
-      basePath === '/' || candidate.pathname === basePath || candidate.pathname.startsWith(`${basePath}/`)
-    if (candidate.origin !== appBase.origin || !isWithinApp) return null
-
-    // Keep the configured absolute origin when the app is separately hosted; same-origin routes
-    // can remain relative so they work behind the CRM's configured base path.
-    return appBase.origin === window.location.origin
-      ? `${candidate.pathname}${candidate.search}${candidate.hash}`
-      : candidate.toString()
-  } catch {
-    return null
-  }
-}
-
-/**
- * A `next` value inside Documents Management, which signs in here — never an untrusted site — else null.
- */
-export function remoteAppReturnPath(next: string | null | undefined): string | null {
-  if (!next) return null
-  return appReturnPath(documentsAppUrl, next)
 }
 
 export const paths = {

@@ -1,7 +1,7 @@
 import { cookieVault } from './cookieVault'
-import { sessionContract } from '../app/microfrontends'
+import { sessionContract } from './sessionContract'
 
-/** Read by the remote apps too (shared sign-in) — name from microfrontends.json. */
+/** Shared with Spectrum ERP and Task Management for single sign-on. */
 const COOKIE_NAME = sessionContract.authCookie
 const FALLBACK_TTL_SECONDS = 8 * 60 * 60
 

@@ -10,7 +10,7 @@
 import { clearAuth } from './authStore'
 import { cookieVault } from './cookieVault'
 import { clearSession } from './session'
-import { sessionContract } from '../app/microfrontends'
+import { sessionContract } from './sessionContract'
 
 export type SessionEndReason = 'expired' | 'rejected' | 'other-tab'
 

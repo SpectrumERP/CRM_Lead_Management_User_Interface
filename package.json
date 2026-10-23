@@ -4,17 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev-all.mjs",
+    "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "format": "oxfmt",
-    "dev:remotes": "node scripts/dev-all.mjs --remotes-only",
-    "dev:task": "node scripts/dev-all.mjs --remotes-only",
-    "build:remotes": "node scripts/build-remotes.mjs",
-    "build:task": "node scripts/build-remotes.mjs",
-    "build:all": "node scripts/build-all.mjs",
-    "setup:task": "npm --prefix task-management install",
     "dev:crm": "vite",
     "dev:spectrum": "vite --mode spectrum",
     "build:spectrum": "vite build --mode spectrum"
