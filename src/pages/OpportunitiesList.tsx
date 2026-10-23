@@ -466,6 +466,7 @@ function OpportunityRow({
             email={item.email}
             phone={item.phone}
             company={item.companyName}
+            designation={item.contacts?.find((c) => c.primary)?.designation}
           />
         </td>
       )}

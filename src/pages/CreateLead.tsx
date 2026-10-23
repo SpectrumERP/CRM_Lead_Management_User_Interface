@@ -29,7 +29,9 @@ import {
   leadProductList,
 } from '../data/leads'
 import { OptionLookupField, type LookupOption } from '../components/OptionLookupField'
-import { STATUS_REMARK_MAX, leadStatusOptions, recordLeadStatusChange, statusRule, validateStatusChange } from '../api/statusChange'
+import { STATUS_REMARK_MAX, isConvertedStatus, leadStatusOptions, leadStatusStageError, recordLeadStatusChange, statusRule, validateStatusChange } from '../api/statusChange'
+import ConvertOpportunityDialog from '../components/ConvertOpportunityDialog'
+import { useCrmActions } from '../contexts/CrmStoreContext'
 import type { ActivityFormStatus } from '../data/activities'
 import { productsFromLeadNames, type Product } from '../data/products'
 import { matchesOperTaskType, type OperTaskType } from '../data/operTaskTypes'
@@ -61,6 +63,8 @@ interface CreateLeadProps {
   prefillEntityId?: string
   prefillContactId?: string
   onCreated?: (lead: Lead) => void
+  /** Edit: the lead was converted from this form (a Converted status) — e.g. open the new opportunity. */
+  onConverted?: (opportunityId: string) => void
 }
 
 
@@ -180,7 +184,7 @@ function splitDateTime(value: string) {
 /** LeadNotesDetail.Discussion varchar(1000) */
 const NOTE_DISCUSSION_MAX = FIELD_LIMITS.noteDiscussion
 
-export default function CreateLead({ existing, onBack, onSuccess, embedded, prefillEntityId, prefillContactId, onCreated }: CreateLeadProps) {
+export default function CreateLead({ existing, onBack, onSuccess, embedded, prefillEntityId, prefillContactId, onCreated, onConverted }: CreateLeadProps) {
   const isEdit = Boolean(existing)
   const confirm = useConfirm()
   const { addToast } = useOptionalToast()
@@ -236,7 +240,10 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   // Lookup rows. Source / stage / status show the name only (no Code column); priority keeps its code.
   const sourceOptions: LookupOption[] = sourceNames.map((n) => ({ value: n, label: n }))
   const stageOptions: LookupOption[] = stageNames.map((n) => ({ value: n, label: n }))
-  const statusOptions: LookupOption[] = statusNames.map((n) => ({ value: n, label: n }))
+  // A new lead cannot be converted yet: Converted statuses are offered once it is saved.
+  const statusOptions: LookupOption[] = statusNames
+    .filter((n) => isEdit || !isConvertedStatus(leadStatusOptions(fill).find((s) => s.name === n)))
+    .map((n) => ({ value: n, label: n }))
   const priorityOptions: LookupOption[] = (fill ? bySequence(fill.leadPriorities) : []).map((x) => ({
     value: x.leadPriorityName,
     label: x.leadPriorityName,
@@ -269,6 +276,11 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     stage: 'New',
     status: 'Open',
   })
+  // As the form opened: a Converted status warns before unsaved changes are left behind.
+  const [initialLead] = useState(lead)
+  // Edit: a Converted status was picked — the Convert to Opportunity drawer is open.
+  const [converting, setConverting] = useState(false)
+  const { convertLead } = useCrmActions()
   const [selectedProducts, setSelectedProducts] = useState<Product[]>(() =>
     existing ? productsFromLeadNames(leadProductList(existing)) : [],
   )
@@ -529,6 +541,10 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
   function validate() {
     const errs: Record<string, string> = {}
     if (!lead.name.trim()) errs.name = 'Lead name is required'
+    // A status linked to a stage goes with that stage (checked when either is set or changed here).
+    const stageOrStatusChanged = !isEdit || lead.stage !== existing?.leadStage || lead.status !== savedStatus
+    const stageError = stageOrStatusChanged ? leadStatusStageError(pickedStatus, lead.stage) : undefined
+    if (stageError) errs.status = stageError
     if (statusChanged && pickedStatus) {
       const remarkError = validateStatusChange({ newStatus: pickedStatus, currentStatusName: savedStatus, remark: statusRemark }, statusRemarkRule).remark
       if (remarkError) errs.statusRemark = remarkError
@@ -549,6 +565,33 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
       }
     }
     return errs
+  }
+
+  /**
+   * Status picked. Edit: a Converted status converts the lead — the Convert to Opportunity drawer opens
+   * (as on the lead page) and the status stays as it is until the conversion is done.
+   */
+  async function pickStatus(name: string) {
+    const option = statusChoices.find((s) => s.name === name)
+    const alreadyConverted = isConvertedStatus(statusChoices.find((s) => s.name === savedStatus))
+    if (isEdit && existing && isConvertedStatus(option) && !alreadyConverted) {
+      if (!existing.spectrum?.leadNo) {
+        setErrors((e) => ({ ...e, status: 'Only leads saved on the server can be converted to an opportunity.' }))
+        return
+      }
+      // The opportunity is made from the saved lead: changes on this form would be left behind.
+      const unsaved = JSON.stringify(lead) !== JSON.stringify(initialLead)
+      if (unsaved && !(await confirm({
+        title: 'Convert to Opportunity',
+        message: 'The opportunity is created from the saved lead. Changes not saved on this form will be lost. Continue?',
+        confirmLabel: 'Continue',
+      }))) return
+      clearErr('status')
+      setConverting(true)
+      return
+    }
+    updateLead('status', name)
+    clearErr('statusRemark')
   }
 
   /** Posts the lead to the server. Returns its lead number, or null (having shown why) on failure. */
@@ -693,8 +736,25 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
     )
   }
 
+  const convertDialog = converting && existing ? (
+    <ConvertOpportunityDialog
+      lead={existing}
+      convertedBy={userName}
+      onCancel={() => setConverting(false)}
+      onConfirm={async (input) => {
+        const created = await convertLead(existing.id, input)
+        if (!created) return
+        setConverting(false)
+        addToast('success', 'Converted to Opportunity', `${existing.companyName} is now in the opportunity pipeline.`)
+        if (onConverted) onConverted(created.id)
+        else onBack()
+      }}
+    />
+  ) : null
+
   return (
-    <div className="bg-canvas form-labels-as-written">
+    <div className="bg-canvas">
+      {convertDialog}
       <div className="page-gutter py-4 pb-4">
         {!embedded && (
         <div className="mb-5">
@@ -770,7 +830,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 placeholder="Select stage"
                 options={stageOptions}
                 value={lead.stage}
-                onValueChange={(v) => updateLead('stage', v)}
+                onValueChange={(v) => { updateLead('stage', v); clearErr('status') }}
               />
               <OptionLookupField
                 label="Lead Status"
@@ -778,7 +838,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                 placeholder="Select status"
                 options={statusOptions}
                 value={lead.status}
-                onValueChange={(v) => { updateLead('status', v); clearErr('statusRemark') }}
+                onValueChange={(v) => void pickStatus(v)}
                 // A converted / completed lead keeps its status.
                 disabled={Boolean(isEdit && existing && isLeadLocked(existing))}
                 hint={isEdit && existing && isLeadLocked(existing) ? leadLockedReason(existing) : undefined}

@@ -30,7 +30,7 @@ import { FIELD_LIMITS } from '../constants/fieldLimits'
 import AttachmentsField from '../components/AttachmentsField'
 import { ATTACHMENT_FORM_NO, type Attachment } from '../api/attachments'
 import { usePendingData } from '../api/pendingApiStore'
-import { statusRule } from '../api/statusChange'
+import { opportunityStatusOptions, opportunityStatusStageError, statusRule } from '../api/statusChange'
 import { BreadcrumbActions } from '../components/BreadcrumbActions'
 
 interface CreateOpportunityProps {
@@ -204,6 +204,10 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
     if (!Number.isFinite(value) || value < 0) next.dealValue = 'Enter a valid opportunity value'
     if (!closingDate) next.closingDate = 'Expected closure date is required'
     if (!owner.trim()) next.owner = 'Opportunity owner is required'
+    // A Won / Lost status goes with the stage it is linked to.
+    const statusOption = opportunityStatusOptions(oppFill).find((s) => s.name === status)
+    const stageError = opportunityStatusStageError(statusOption, dealStage)
+    if (stageError) next.status = stageError
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -280,7 +284,7 @@ export default function CreateOpportunity({ onBack, onSuccess, embedded }: Creat
   }
 
   return (
-    <div className="bg-canvas form-labels-as-written">
+    <div className="bg-canvas">
       <div className={`page-gutter py-4 pb-4 ${embedded ? 'pt-2' : ''}`}>
         {!embedded ? (
           <div className="mb-5">

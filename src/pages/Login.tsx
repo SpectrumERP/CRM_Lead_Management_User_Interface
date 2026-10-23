@@ -146,7 +146,7 @@ export default function Login() {
             </h1>
             <p className="ui-subtitle mt-1 text-sm">{copy.subtitle}</p>
 
-            <form onSubmit={onSubmit} className="login-form form-labels-as-written mt-7 space-y-4" aria-labelledby="login-heading" noValidate>
+            <form onSubmit={onSubmit} className="login-form mt-7 space-y-4" aria-labelledby="login-heading" noValidate>
               <TextField
                 label={copy.idLabel}
                 htmlFor="login-email"

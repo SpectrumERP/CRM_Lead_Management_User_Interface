@@ -13,10 +13,10 @@
  *
  * Mock mode (default, see pendingApiStore.ts): the Won rule, order details and history are kept in this browser.
  */
-import type { Lead, LeadStatus, LeadStatusLog } from '../data/leads'
+import type { Lead, LeadStage, LeadStatus, LeadStatusLog } from '../data/leads'
 import type { LeadFormFillValues } from './leadFormFillValues'
 import type { OpportunityFormFillValues } from './opportunityFormFillValues'
-import type { Opportunity, OpportunityStatus } from '../data/opportunities'
+import type { DealStage, Opportunity, OpportunityStatus } from '../data/opportunities'
 import { isAdmin } from '../auth/users'
 import { spectrumEndpoints } from './endpoints'
 import { fail } from './errors'
@@ -50,21 +50,82 @@ export interface StatusOption {
   /** The fill values' `isRemarkRequired`. */
   isRemarkMandatory?: boolean
   isWon?: boolean
+  /** The stage the status belongs to (fill values `leadStageNo` / `opportunityStageNo`); none when unlinked. */
+  stageName?: string
+  stageNo?: number
+  /** The status type (Converted, Won, Lost, …) when the fill values carry it. */
+  typeName?: string
 }
 
-/** The lead statuses of the fill values, as the Change Status drawer lists them (with the remark rule). */
-export function leadStatusOptions(fill: Pick<LeadFormFillValues, 'leadStatuses'> | null | undefined): StatusOption[] {
-  return (fill?.leadStatuses ?? []).map((s) => ({ no: s.leadStatusNo, name: s.leadStatusName, isRemarkMandatory: s.isRemarkRequired }))
+/** The name of the item numbered `no` in `list`, or undefined. */
+function nameOfNo<T>(list: readonly T[] | undefined, no: number | null | undefined, key: (x: T) => number, name: (x: T) => string): string | undefined {
+  const hit = no ? (list ?? []).find((x) => key(x) === no) : undefined
+  return hit ? name(hit) : undefined
+}
+
+/** The lead statuses of the fill values, as the Change Status drawer lists them (with the remark rule and linked stage). */
+export function leadStatusOptions(
+  fill: Pick<LeadFormFillValues, 'leadStatuses'> & Partial<Pick<LeadFormFillValues, 'leadStages'>> | null | undefined,
+): StatusOption[] {
+  return (fill?.leadStatuses ?? []).map((s) => ({
+    no: s.leadStatusNo,
+    name: s.leadStatusName,
+    isRemarkMandatory: s.isRemarkRequired,
+    stageName: nameOfNo(fill?.leadStages, s.leadStageNo, (x) => x.leadStageNo, (x) => x.leadStageName),
+    stageNo: s.leadStageNo ?? undefined,
+    typeName: s.leadStatusTypeName ?? s.leadStatusType?.leadStatusTypeName ?? undefined,
+  }))
 }
 
 /** The opportunity statuses of the fill values, as the Change Status drawer lists them. */
-export function opportunityStatusOptions(fill: Pick<OpportunityFormFillValues, 'opportunityStatuses'> | null | undefined): StatusOption[] {
+export function opportunityStatusOptions(
+  fill: Pick<OpportunityFormFillValues, 'opportunityStatuses'> & Partial<Pick<OpportunityFormFillValues, 'opportunityStages'>> | null | undefined,
+): StatusOption[] {
   return (fill?.opportunityStatuses ?? []).map((s) => ({
     no: s.opportunityStatusNo,
     name: s.opportunityStatusName,
     isRemarkMandatory: s.isRemarkRequired,
     isWon: s.isWon,
+    stageName: nameOfNo(fill?.opportunityStages, s.opportunityStageNo, (x) => x.opportunityStageNo, (x) => x.opportunityStageName),
+    stageNo: s.opportunityStageNo ?? undefined,
+    typeName: s.oppStatusTypeName ?? s.oppStatusType?.oppStatusTypeName ?? undefined,
   }))
+}
+
+// ─── Status type and linked stage ─────────────────────────────────────────────
+// The fill values do not carry the status type yet: until they do, the status name stands in for it
+// ("Converted", "Won" / "Closed Won", "Lost" / "Closed Lost").
+
+const typeText = (status: StatusOption) => (status.typeName || status.name).trim()
+const sameStageName = (a: string, b: string) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ')
+
+/** A lead status of type Converted: choosing it converts the lead to an opportunity. */
+export function isConvertedStatus(status: StatusOption | undefined): boolean {
+  return Boolean(status && /\bconvert/i.test(typeText(status)))
+}
+
+/** Won or Lost, for an opportunity status of either type; undefined for the others. */
+export function closingStatusType(status: StatusOption | undefined): 'Won' | 'Lost' | undefined {
+  if (!status) return undefined
+  if (status.isWon || /\bwon\b/i.test(typeText(status))) return 'Won'
+  if (/\blost\b/i.test(typeText(status))) return 'Lost'
+  return undefined
+}
+
+/** Why `status` cannot go with the stage `stageName` (it belongs to another stage), or undefined. */
+export function stageMismatch(status: StatusOption | undefined, stageName: string): string | undefined {
+  if (!status?.stageName || sameStageName(status.stageName, stageName)) return undefined
+  return `Status "${status.name}" belongs to the stage "${status.stageName}". Select that stage, or another status.`
+}
+
+/** Lead: every status linked to a stage must go with that stage. */
+export function leadStatusStageError(status: StatusOption | undefined, stageName: string): string | undefined {
+  return stageMismatch(status, stageName)
+}
+
+/** Opportunity: a Won or Lost status must go with its linked stage. */
+export function opportunityStatusStageError(status: StatusOption | undefined, stageName: string): string | undefined {
+  return closingStatusType(status) ? stageMismatch(status, stageName) : undefined
 }
 
 export interface StatusRule {
@@ -194,12 +255,15 @@ export async function changeLeadStatus(lead: Lead, change: LeadStatusChange): Pr
   const draft: StatusChangeDraft = { ...change, currentStatusName: lead.leadStatus }
   assertValid(draft, statusRule('Lead', change.newStatus))
   const remark = change.remark.trim() || undefined
+  // A status linked to a stage moves the lead to that stage too.
+  const stage = change.newStatus.stageName
 
   if (PENDING_API_MODE === 'server') {
     assertSuccess(
       await http.post<SpectrumResponse<unknown>>(spectrumEndpoints.leads.changeStatus, {
         leadNo,
         leadStatusNo: change.newStatus.no,
+        ...(change.newStatus.stageNo ? { leadStageNo: change.newStatus.stageNo } : {}),
         remark,
       }),
     )
@@ -208,7 +272,11 @@ export async function changeLeadStatus(lead: Lead, change: LeadStatusChange): Pr
   }
 
   // Saved on the server first (with its remark); the history entry is written only once that succeeded.
-  await updateServerLead(lead, { leadStatus: change.newStatus.name as LeadStatus }, { statusRemarks: remark ?? null })
+  await updateServerLead(
+    lead,
+    { leadStatus: change.newStatus.name as LeadStatus, ...(stage ? { leadStage: stage as LeadStage } : {}) },
+    { statusRemarks: remark ?? null },
+  )
   appendHistory({
     recordType: 'Lead',
     recordNo: leadNo,
@@ -232,6 +300,8 @@ export async function changeOpportunityStatus(opportunity: Opportunity, change: 
   const rule = statusRule('Opportunity', change.newStatus)
   assertValid({ ...change, currentStatusName: opportunity.status }, rule)
   const remark = change.remark.trim() || undefined
+  // A status linked to a stage moves the opportunity to that stage too.
+  const stage = change.newStatus.stageName
   // Order details only go with the Won status.
   const order: OpportunityOrder | undefined = rule.isWon
     ? { orderValue: parseOrderValue(change.orderValue), orderDate: change.orderDate! }
@@ -242,6 +312,7 @@ export async function changeOpportunityStatus(opportunity: Opportunity, change: 
       await http.post<SpectrumResponse<unknown>>(spectrumEndpoints.opportunities.changeStatus, {
         opportunityNo,
         opportunityStatusNo: change.newStatus.no,
+        ...(change.newStatus.stageNo ? { opportunityStageNo: change.newStatus.stageNo } : {}),
         remark,
         ...order,
       }),
@@ -255,6 +326,7 @@ export async function changeOpportunityStatus(opportunity: Opportunity, change: 
     opportunity,
     {
       status: change.newStatus.name as OpportunityStatus,
+      ...(stage ? { dealStage: stage as DealStage } : {}),
       ...(order ? { dealValue: order.orderValue, closingDate: order.orderDate } : {}),
     },
     { statusRemarks: remark ?? null },

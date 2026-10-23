@@ -541,7 +541,7 @@ export function LeadSummaryEdit({
               email={catalogPrimary?.email || primary.email}
               phone={catalogPrimary?.mobile || primary.phones[0]}
               company={lead.companyName}
-              designation={catalogPrimary?.designation}
+              designation={catalogPrimary?.designation || primary.designation}
               primary
             />
           </Cell>

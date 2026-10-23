@@ -100,6 +100,9 @@ export interface ServerUserRef {
 export interface ContactPersonRef {
   businessEntityContactPersonDetailNo: number
   contactPersonName?: string | null
+  designation?: string | null
+  email?: string | null
+  phoneNo?: string | null
 }
 
 /** Product reference nested in detail rows. */

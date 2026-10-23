@@ -106,7 +106,8 @@ export function activityType(name?: string | null): ActivityType {
 
 /**
  * Contact rows (nested `businessEntityContactPerson`, or the earlier flat shape) → contact entries,
- * primary first. Emails the app already knew for the same person are kept (the rows carry none).
+ * primary first, with the person's designation, email and phone when the row carries them (search and
+ * load-data do); otherwise what the app already knew for the same person is kept.
  */
 export function contactEntriesFromRows(
   rows: readonly DetailContactRow[] | null | undefined,
@@ -117,12 +118,17 @@ export function contactEntriesFromRows(
     .sort((a, b) => Number(Boolean(b.isPrimary)) - Number(Boolean(a.isPrimary)))
     .map((row, i) => {
       const no = contactRowNo(row)
+      const person = row.businessEntityContactPerson
+      const before = no ? known?.find((e) => e.businessEntityContactPersonDetailNo === no) : undefined
+      const phone = person?.phoneNo?.trim()
+      const designation = person?.designation?.trim() || before?.designation
       return {
         name: contactRowName(row),
-        email: known?.find((e) => no && e.businessEntityContactPersonDetailNo === no)?.email ?? '',
-        phones: [],
+        email: person?.email?.trim() || before?.email || '',
+        phones: phone ? [phone] : (before?.phones ?? []),
         // The first row is primary even if the server flagged none.
         primary: i === 0,
+        ...(designation ? { designation } : {}),
         ...(no ? { businessEntityContactPersonDetailNo: no } : {}),
       }
     })
@@ -188,7 +194,7 @@ export function leadFromSearchRow(row: LeadSearchRow, existing?: Lead): Lead {
     companyName: row.businessEntity?.businessEntityName ?? row.businessEntityName ?? existing?.companyName ?? '',
     contactPerson: primary ? primary.name : (existing?.contactPerson ?? ''),
     email: primary ? primary.email || (primary.name === existing?.contactPerson ? existing.email : '') : (existing?.email ?? ''),
-    phone: primary ? (primary.name === existing?.contactPerson ? existing.phone : '') : (existing?.phone ?? ''),
+    phone: primary ? primary.phones[0] || (primary.name === existing?.contactPerson ? existing.phone : '') : (existing?.phone ?? ''),
     leadSource: (row.leadSource?.leadSourceName ?? existing?.leadSource ?? '') as LeadSource,
     leadStage: (row.leadStage?.leadStageName ?? row.leadStageName ?? existing?.leadStage ?? '') as LeadStage,
     leadStatus: (row.leadStatus?.leadStatusName ?? row.leadStatusName ?? existing?.leadStatus ?? '') as LeadStatus,
@@ -257,10 +263,10 @@ export function leadFromDetail(detail: LeadDetail, existing?: Lead): { lead: Lea
     },
     leadName,
     companyName: detail.businessEntity?.businessEntityName ?? existing?.companyName ?? '',
-    // The detail has contact names only — keep an email / phone the app already knew.
+    // The contact's email / phone from the detail, else what the app already knew for the same person.
     contactPerson: primary?.name ?? '',
-    email: primary && primary.name === existing?.contactPerson ? existing.email : '',
-    phone: primary && primary.name === existing?.contactPerson ? existing.phone : '',
+    email: primary ? primary.email || (primary.name === existing?.contactPerson ? existing.email : '') : '',
+    phone: primary ? primary.phones[0] || (primary.name === existing?.contactPerson ? existing.phone : '') : '',
     leadSource: (detail.leadSource?.leadSourceName ?? '') as LeadSource,
     leadStage: (detail.leadStage?.leadStageName ?? '') as LeadStage,
     leadStatus: (detail.leadStatus?.leadStatusName ?? '') as LeadStatus,

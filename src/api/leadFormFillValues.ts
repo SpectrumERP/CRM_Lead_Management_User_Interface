@@ -43,6 +43,11 @@ export interface LeadStatusOption {
   isDefault?: boolean
   /** A remark is required when a lead moves to this status (sent as leadStatusRemarks). */
   isRemarkRequired?: boolean
+  /** The lead stage this status belongs to (set on the Lead Status master); null when none. */
+  leadStageNo?: number | null
+  /** The status type, if the server sends it (not today: the status name stands in, see statusChange.ts). */
+  leadStatusTypeName?: string | null
+  leadStatusType?: { leadStatusTypeNo?: number; leadStatusTypeName?: string | null } | null
 }
 
 export interface LeadPriorityOption {

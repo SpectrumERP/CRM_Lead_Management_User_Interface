@@ -128,10 +128,10 @@ export function opportunityFromRow(
       ? (row.description ?? row.opportunityDescription ?? '')
       : (row.description ?? row.opportunityDescription ?? existing?.description ?? ''),
     companyName: row.businessEntity?.businessEntityName ?? existing?.companyName ?? '',
-    // Contact names come with the detail only; email / phone are not sent by the server.
+    // The primary contact's email / phone come with the contacts; else what the app already knew.
     contactPerson: primary ?? existing?.contactPerson ?? '',
-    email: primary && primary !== existing?.contactPerson ? '' : (existing?.email ?? ''),
-    phone: primary && primary !== existing?.contactPerson ? '' : (existing?.phone ?? ''),
+    email: contacts?.[0]?.email || (primary && primary !== existing?.contactPerson ? '' : (existing?.email ?? '')),
+    phone: contacts?.[0]?.phones[0] || (primary && primary !== existing?.contactPerson ? '' : (existing?.phone ?? '')),
     contacts: contacts ?? existing?.contacts,
     productsRequired: products ? products.names.join(', ') : (existing?.productsRequired ?? ''),
     dealValue: value,

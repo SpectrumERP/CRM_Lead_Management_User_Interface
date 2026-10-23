@@ -322,18 +322,12 @@ body.nav-lock {
 }
 
 .form-label {
-  font-size: 11.5px;
+  /* Running case, exactly as written (no all-caps) — every form, drawer and dialog. */
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--color-ink-soft);
   margin-bottom: 0.25rem;
   display: block;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-/* Lead and opportunity forms: labels in running case, exactly as written (no all-caps). */
-.form-labels-as-written .form-label {
-  font-size: 12.5px;
   letter-spacing: 0;
   text-transform: none;
 }

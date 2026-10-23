@@ -60,6 +60,8 @@ export interface MasterDetail {
   numbers?: Record<string, number | undefined>
   /** The `lookup` pick (status type number); null when none. */
   lookupNo?: number | null
+  /** The `otherLookups` picks by their `saveKey` (lead statuses: `leadStageNo`); null when none. */
+  otherLookupNos?: Record<string, number | null>
   documentStatus: { documentStatusNo: number; documentStatusName: string } | null
   companies: MasterCompanyLink[]
   createdBy: MasterUserRef | null
@@ -83,6 +85,8 @@ export interface MasterSaveInput {
   numbers?: Record<string, number | undefined>
   /** The `lookup` pick (status type number); empty sends null. */
   lookupNo?: number | null
+  /** The `otherLookups` picks by their `saveKey`; empty sends null. */
+  otherLookupNos?: Record<string, number | null>
 }
 
 /** One option of a master's `fill-values` list (e.g. a status type). */
@@ -94,6 +98,18 @@ export interface MasterLookupOption {
 export interface MasterSearchFilters {
   name?: string
   code?: string
+}
+
+/** A pick from a master's own `fill-values` (see MasterDefinition.lookup). */
+export interface MasterLookupDef {
+  label: string
+  /** `data[listKey]` rows with `noKey` / `nameKey`. */
+  listKey: string
+  noKey: string
+  nameKey: string
+  /** Sent on save as `saveKey`; read back from load-data's `loadKey` object. */
+  saveKey: string
+  loadKey: string
 }
 
 export interface MasterDefinition {
@@ -144,7 +160,12 @@ export interface MasterDefinition {
    * `data[listKey]` rows with `noKey` / `nameKey`; saved as `saveKey`, read back from load-data's `loadKey` object.
    * Optional (the save takes null).
    */
-  lookup?: { label: string; listKey: string; noKey: string; nameKey: string; saveKey: string; loadKey: string }
+  lookup?: MasterLookupDef
+  /**
+   * More picks from the same `fill-values`, saved by number only — unlike `lookup` they set no flags
+   * (lead statuses: the Lead Stage the status belongs to). Optional (the save takes null).
+   */
+  otherLookups?: readonly MasterLookupDef[]
   /** `search-data` accepts name / code filters (products take only CompanyNo). Default true. */
   searchFilters?: boolean
   label: string
@@ -170,7 +191,7 @@ export function withLookupFlags(
 
 /** Fields only load-data returns: editing must load the record first so saving keeps them. */
 export function needsDetailForEdit(def: MasterDefinition): boolean {
-  return Boolean(def.hasColor || def.flags?.length || def.lookup)
+  return Boolean(def.hasColor || def.flags?.length || def.lookup || def.otherLookups?.length)
 }
 
 export const NAME_MAX = 100
@@ -202,11 +223,19 @@ export function createMasterApi(def: MasterDefinition) {
     return Object.fromEntries(def.flags.map((f) => [f.key, raw[f.key] === true]))
   }
 
-  function lookupNoOf(raw: RawRecord): number | null | undefined {
-    if (!def.lookup) return undefined
-    const picked = raw[def.lookup.loadKey] as RawRecord | null | undefined
-    const no = Number(picked?.[def.lookup.noKey] ?? raw[def.lookup.saveKey])
+  function pickedNo(raw: RawRecord, lookup: MasterLookupDef): number | null {
+    const picked = raw[lookup.loadKey] as RawRecord | null | undefined
+    const no = Number(picked?.[lookup.noKey] ?? raw[lookup.saveKey])
     return Number.isInteger(no) && no > 0 ? no : null
+  }
+
+  function lookupNoOf(raw: RawRecord): number | null | undefined {
+    return def.lookup ? pickedNo(raw, def.lookup) : undefined
+  }
+
+  function otherLookupNosOf(raw: RawRecord): Record<string, number | null> | undefined {
+    if (!def.otherLookups?.length) return undefined
+    return Object.fromEntries(def.otherLookups.map((l) => [l.saveKey, pickedNo(raw, l)]))
   }
 
   function numbersOf(raw: RawRecord): Record<string, number | undefined> | undefined {
@@ -243,6 +272,7 @@ export function createMasterApi(def: MasterDefinition) {
       flags: flagsOf(raw),
       numbers: numbersOf(raw),
       lookupNo: lookupNoOf(raw),
+      otherLookupNos: otherLookupNosOf(raw),
       documentStatus: (raw.documentStatus as MasterDetail['documentStatus']) ?? null,
       companies: Array.isArray(raw.companies) ? (raw.companies as MasterCompanyLink[]) : [],
       createdBy: (raw.createdBy as MasterUserRef) ?? null,
@@ -271,14 +301,24 @@ export function createMasterApi(def: MasterDefinition) {
 
     /** The `lookup` options from `fill-values` ([] for masters without one). */
     async lookupOptions(companyNo: number): Promise<MasterLookupOption[]> {
-      const lookup = def.lookup
-      if (!lookup) return []
+      return def.lookup ? ((await this.lookupOptionLists(companyNo))[def.lookup.saveKey] ?? []) : []
+    },
+
+    /** The options of `lookup` and every `otherLookups` pick, by `saveKey`, from one `fill-values` call. */
+    async lookupOptionLists(companyNo: number): Promise<Record<string, MasterLookupOption[]>> {
+      const lookups = [def.lookup, ...(def.otherLookups ?? [])].filter((l): l is MasterLookupDef => Boolean(l))
+      if (!lookups.length) return {}
       assertPositive(companyNo, 'Company')
       const data = unwrap(await http.get<Envelope<RawRecord | null>>(withQuery(`${base}/fill-values`, { companyNo })))
-      const list = Array.isArray(data?.[lookup.listKey]) ? (data![lookup.listKey] as RawRecord[]) : []
-      return list
-        .map((row) => ({ no: Number(row[lookup.noKey]), name: text(row[lookup.nameKey]) ?? '' }))
-        .filter((option) => Number.isInteger(option.no) && option.no > 0)
+      return Object.fromEntries(
+        lookups.map((lookup) => {
+          const list = Array.isArray(data?.[lookup.listKey]) ? (data![lookup.listKey] as RawRecord[]) : []
+          const options = list
+            .map((row) => ({ no: Number(row[lookup.noKey]), name: text(row[lookup.nameKey]) ?? '' }))
+            .filter((option) => Number.isInteger(option.no) && option.no > 0)
+          return [lookup.saveKey, options]
+        }),
+      )
     },
 
     async load(id: number, companyNo: number): Promise<MasterDetail> {
@@ -315,6 +355,10 @@ export function createMasterApi(def: MasterDefinition) {
       }
       if (def.hasColor) body.colorCoding = input.colorCoding?.trim() || undefined
       if (def.lookup) body[def.lookup.saveKey] = input.lookupNo && input.lookupNo > 0 ? input.lookupNo : null
+      for (const lookup of def.otherLookups ?? []) {
+        const no = input.otherLookupNos?.[lookup.saveKey]
+        body[lookup.saveKey] = no && no > 0 ? no : null
+      }
       // Required booleans: always sent (false when not ticked). Pending ones only once the backend has them.
       for (const flag of def.flags ?? []) {
         if (flag.pending && PENDING_API_MODE !== 'server') continue
@@ -367,6 +411,10 @@ export const masterApis = {
       saveKey: 'leadStatusTypeNo',
       loadKey: 'leadStatusType',
     },
+    // The Lead Stage this status belongs to.
+    otherLookups: [
+      { label: 'Lead Stage', listKey: 'leadStages', noKey: 'leadStageNo', nameKey: 'leadStageName', saveKey: 'leadStageNo', loadKey: 'leadStage' },
+    ],
     flags: [
       { key: 'isRemarkRequired', label: 'Remark required', hint: 'A remark is required when a lead moves to this status' },
       // { key: 'isRemarkMandatory', label: 'Remark mandatory', hint: 'A remark is required when a lead moves to this status', pending: true },
@@ -386,6 +434,17 @@ export const masterApis = {
       saveKey: 'oppStatusTypeNo',
       loadKey: 'oppStatusType',
     },
+    // The Opportunity Stage this status belongs to.
+    otherLookups: [
+      {
+        label: 'Opportunity Stage',
+        listKey: 'opportunityStages',
+        noKey: 'opportunityStageNo',
+        nameKey: 'opportunityStageName',
+        saveKey: 'opportunityStageNo',
+        loadKey: 'opportunityStage',
+      },
+    ],
     flags: [
       { key: 'isRemarkRequired', label: 'Remark required', hint: 'A remark is required when an opportunity moves to this status' },
       // Set from the status type: a Won type requires the opportunity value.

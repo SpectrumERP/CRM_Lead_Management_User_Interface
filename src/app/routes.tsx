@@ -216,6 +216,7 @@ function EditLeadPage() {
         navigate(paths.lead(id))
         addToast('success', 'Lead Updated', 'Changes saved successfully.')
       }}
+      onConverted={(opportunityId) => navigate(paths.opportunity(opportunityId))}
     />
   )
 }

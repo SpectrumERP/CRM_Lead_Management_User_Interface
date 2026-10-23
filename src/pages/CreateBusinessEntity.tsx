@@ -445,7 +445,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
   const listErrors = Object.entries(errors).filter(([key]) => /^(locations|contacts|followUps)\./.test(key)).map(([, m]) => m)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-canvas form-labels-as-written">
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
       {bar}
       <div className="page-gutter min-h-0 flex-1 space-y-3 overflow-y-auto py-3">
         <SpectrumRequiredNotice what="Business entities" />

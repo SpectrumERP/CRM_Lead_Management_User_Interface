@@ -13,7 +13,7 @@ import EntityContactsFields, {
 import { stageWeight } from '../api/opportunityFormFillValues'
 import { OptionLookupField } from '../components/OptionLookupField'
 import StatusChangeField from '../components/StatusChangeField'
-import { changeOpportunityStatus, opportunityStatusOptions, parseOrderValue } from '../api/statusChange'
+import { changeOpportunityStatus, opportunityStatusOptions, opportunityStatusStageError, parseOrderValue } from '../api/statusChange'
 import CurrencyAmountField from '../components/CurrencyAmountField'
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice'
 import { bySequence, guessIsoCurrency } from '../api/fillValues'
@@ -167,6 +167,11 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
     if (!closingDate) next.closingDate = 'Expected closure date is required'
     if (!owner.trim()) next.owner = 'Opportunity owner is required'
     if (!status) next.status = 'Opportunity status is required'
+    // A Won / Lost status goes with the stage it is linked to (checked when the stage is changed here).
+    if (dealStage !== existing.dealStage) {
+      const stageError = opportunityStatusStageError(opportunityStatusOptions(oppFill).find((s) => s.name === status), dealStage)
+      if (stageError) next.stage = stageError
+    }
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -243,7 +248,7 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
   }
 
   return (
-    <div className="bg-canvas form-labels-as-written">
+    <div className="bg-canvas">
       <div className="page-gutter py-4 pb-4">
         <div className="mb-5">
           <button
@@ -332,10 +337,11 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
               <OptionLookupField
                 label="Opportunity Stage"
                 required
+                error={errors.stage}
                 placeholder="Select stage"
                 detailHeader="Win %"
                 value={dealStage}
-                onValueChange={(value) => setDealStage(value as DealStage)}
+                onValueChange={(value) => { setDealStage(value as DealStage); setErrors(({ stage: _cleared, ...rest }) => rest) }}
                 options={bySequence(oppFill?.opportunityStages ?? []).map((stage) => ({ value: stage.opportunityStageName, label: stage.opportunityStageName, code: stage.code, detail: `${stageWeight(stage)}%` }))}
               />
               {/* The status changes through the Change Status drawer (remark, Won order details, history), saved straight away. */}
@@ -350,8 +356,10 @@ export default function EditOpportunity({ existing, onBack, onSuccess }: EditOpp
                 orderDefaults={{ orderValue: Number(dealValue) || undefined, orderDate: closingDate }}
                 disabledReason={serverRef ? undefined : 'Only opportunities saved on the server can change status'}
                 onChange={async (change) => {
-                  await changeOpportunityStatus({ ...existing, status }, change)
+                  await changeOpportunityStatus({ ...existing, status, dealStage }, change)
                   setStatus(change.newStatus.name as OpportunityStatus)
+                  // A status linked to a stage moved the opportunity to that stage (saved with the status).
+                  if (change.newStatus.stageName) setDealStage(change.newStatus.stageName as DealStage)
                   // Won: the saved order value / date are now the opportunity value and expected closure date.
                   if (change.orderValue !== undefined) setDealValue(String(parseOrderValue(change.orderValue)))
                   if (change.orderDate) setClosingDate(change.orderDate)

@@ -122,7 +122,7 @@ describe('master apis', () => {
     // The status flags are required: sent as false when not ticked.
     expect(JSON.parse(String(call.init.body))).toEqual({
       opportunityStatusNo: null, opportunityStatusName: 'On Hold', sequence: 2, oppStatusTypeNo: null,
-      isRemarkRequired: false, isOpportunityValueRequired: false,
+      isRemarkRequired: false, isOpportunityValueRequired: false, opportunityStageNo: null,
     })
 
     fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: [] }))
@@ -164,18 +164,18 @@ describe('master apis', () => {
     expect(lastCall(fetchMock).url.pathname).toBe('/api/master/lead-statuses/save')
     // Required booleans: sent as false when not ticked.
     expect(JSON.parse(String(lastCall(fetchMock).init.body))).toEqual({
-      leadStatusNo: null, leadStatusName: 'Nurturing', leadStatusTypeNo: null, isRemarkRequired: false,
+      leadStatusNo: null, leadStatusName: 'Nurturing', leadStatusTypeNo: null, isRemarkRequired: false, leadStageNo: null,
     })
 
     fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: { leadStatusNo: 1 } }))
-    await masterApis.leadStatuses.save({ no: 1, name: 'Open', lookupNo: 2, flags: { isRemarkRequired: true } })
+    await masterApis.leadStatuses.save({ no: 1, name: 'Open', lookupNo: 2, flags: { isRemarkRequired: true }, otherLookupNos: { leadStageNo: 4 } })
     expect(JSON.parse(String(lastCall(fetchMock).init.body))).toEqual({
-      leadStatusNo: 1, leadStatusName: 'Open', leadStatusTypeNo: 2, isRemarkRequired: true,
+      leadStatusNo: 1, leadStatusName: 'Open', leadStatusTypeNo: 2, isRemarkRequired: true, leadStageNo: 4,
     })
 
-    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: { leadStatusNo: 5, code: 'LT0005', leadStatusName: 'Converted', leadStatusType: { leadStatusTypeNo: 3, leadStatusTypeName: 'Closed' }, isRemarkRequired: true } }))
+    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: { leadStatusNo: 5, code: 'LT0005', leadStatusName: 'Converted', leadStatusType: { leadStatusTypeNo: 3, leadStatusTypeName: 'Closed' }, isRemarkRequired: true, leadStage: { leadStageNo: 4, leadStageName: 'Qualified' } } }))
     await expect(masterApis.leadStatuses.load(5, 2)).resolves.toMatchObject({
-      name: 'Converted', lookupNo: 3, flags: { isRemarkRequired: true },
+      name: 'Converted', lookupNo: 3, flags: { isRemarkRequired: true }, otherLookupNos: { leadStageNo: 4 },
     })
 
     // Status Type options: the master's own fill-values.
@@ -183,6 +183,16 @@ describe('master apis', () => {
     await expect(masterApis.leadStatuses.lookupOptions(2)).resolves.toEqual([{ no: 1, name: 'Open' }, { no: 3, name: 'Closed' }])
     expect(lastCall(fetchMock).url.pathname).toBe('/api/master/lead-statuses/fill-values')
     expect(lastCall(fetchMock).url.searchParams.get('companyNo')).toBe('2')
+
+    // Status Type and Lead Stage options from one fill-values call.
+    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: {
+      leadStatusTypes: [{ leadStatusTypeNo: 1, leadStatusTypeName: 'Open' }],
+      leadStages: [{ leadStageNo: 4, code: 'LS4', leadStageName: 'Qualified' }],
+    } }))
+    await expect(masterApis.leadStatuses.lookupOptionLists(2)).resolves.toEqual({
+      leadStatusTypeNo: [{ no: 1, name: 'Open' }],
+      leadStageNo: [{ no: 4, name: 'Qualified' }],
+    })
   })
 
   it('opportunity stages: CRUD under /api/master with sequence, weightage and colour', async () => {
@@ -256,19 +266,24 @@ describe('master apis', () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: { leadStageNo: 3, code: 'LG0003', leadStageName: 'Qualified', sequence: 3, colorCoding: '#0EA5E9' } }))
     await expect(masterApis.leadStages.load(3, 2)).resolves.toMatchObject({ colorCoding: '#0EA5E9' })
 
-    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: { opportunityStatusNo: 1, opportunityStatusName: 'Open', sequence: 1, oppStatusType: { oppStatusTypeNo: 4, oppStatusTypeName: 'Won' }, isRemarkRequired: true, isOpportunityValueRequired: true } }))
+    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: { opportunityStatusNo: 1, opportunityStatusName: 'Open', sequence: 1, oppStatusType: { oppStatusTypeNo: 4, oppStatusTypeName: 'Won' }, isRemarkRequired: true, isOpportunityValueRequired: true, opportunityStage: { opportunityStageNo: 6, opportunityStageName: 'Negotiation' } } }))
     await expect(masterApis.opportunityStatuses.load(1, 2)).resolves.toMatchObject({
-      lookupNo: 4, flags: { isRemarkRequired: true, isOpportunityValueRequired: true },
+      lookupNo: 4, flags: { isRemarkRequired: true, isOpportunityValueRequired: true }, otherLookupNos: { opportunityStageNo: 6 },
     })
 
-    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: { oppStatusTypes: [{ oppStatusTypeNo: 4, oppStatusTypeName: 'Won' }] } }))
+    fetchMock.mockImplementation(async () => jsonResponse(200, { success: true, message: '', data: { oppStatusTypes: [{ oppStatusTypeNo: 4, oppStatusTypeName: 'Won' }], opportunityStages: [{ opportunityStageNo: 6, code: 'OS6', opportunityStageName: 'Negotiation' }] } }))
     await expect(masterApis.opportunityStatuses.lookupOptions(2)).resolves.toEqual([{ no: 4, name: 'Won' }])
     expect(lastCall(fetchMock).url.pathname).toBe('/api/master/opportunity-statuses/fill-values')
+    await expect(masterApis.opportunityStatuses.lookupOptionLists(2)).resolves.toMatchObject({ opportunityStageNo: [{ no: 6, name: 'Negotiation' }] })
 
-    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: '', data: { opportunityStatusNo: 1 } }))
-    await masterApis.opportunityStatuses.save({ no: 1, name: 'Open', sequence: 1, lookupNo: 4, flags: { isOpportunityValueRequired: true } })
+    fetchMock.mockImplementation(async () => jsonResponse(200, { success: true, message: '', data: { opportunityStatusNo: 1 } }))
+    await masterApis.opportunityStatuses.save({ no: 1, name: 'Open', sequence: 1, lookupNo: 4, flags: { isOpportunityValueRequired: true }, otherLookupNos: { opportunityStageNo: 6 } })
     expect(JSON.parse(String(lastCall(fetchMock).init.body))).toEqual({
       opportunityStatusNo: 1, opportunityStatusName: 'Open', sequence: 1, oppStatusTypeNo: 4, isRemarkRequired: false, isOpportunityValueRequired: true,
+      opportunityStageNo: 6,
     })
+    // No stage picked: sent as null.
+    await masterApis.opportunityStatuses.save({ no: 1, name: 'Open', sequence: 1, lookupNo: 4 })
+    expect(JSON.parse(String(lastCall(fetchMock).init.body)).opportunityStageNo).toBeNull()
   })
 })

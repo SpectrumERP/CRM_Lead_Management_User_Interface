@@ -32,6 +32,11 @@ export interface OpportunityStatusOption {
   isOpportunityValueRequired?: boolean
   /** The Won status: Order Value and Order Date are required (pending backend field). */
   isWon?: boolean
+  /** The opportunity stage this status belongs to (set on the Opportunity Status master); null when none. */
+  opportunityStageNo?: number | null
+  /** The status type, if the server sends it (not today: the status name stands in, see statusChange.ts). */
+  oppStatusTypeName?: string | null
+  oppStatusType?: { oppStatusTypeNo?: number; oppStatusTypeName?: string | null } | null
 }
 
 export interface OpportunityCurrencyOption {

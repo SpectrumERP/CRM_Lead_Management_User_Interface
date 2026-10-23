@@ -109,7 +109,7 @@ const SecondaryContactCell = memo(function SecondaryContactCell({
       email: catalog?.email || item.email,
       phone: catalog?.mobile || item.phones[0],
       company: catalog?.businessEntityName ?? lead.companyName,
-      designation: catalog?.designation,
+      designation: catalog?.designation || item.designation,
     }
   })
   return <SecondaryContactsMore items={items} />

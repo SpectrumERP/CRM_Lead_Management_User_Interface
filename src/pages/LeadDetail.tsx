@@ -2731,10 +2731,28 @@ export default function LeadDetail({
           currentStatusName={status}
           statuses={statusOptions}
           changedBy={createdByName}
+          // A Converted status converts the lead (same as Convert to Opportunity).
+          conversion={{
+            value: leadData.opportunityValue || undefined,
+            currencyNo: leadData.spectrum?.currencyNo,
+            closingDate: leadData.expectedClosureDate,
+            stageName: fill?.leadStages.find((st) => /converted\s+to\s+opportunity/i.test(st.leadStageName))?.leadStageName,
+          }}
           onClose={() => setShowStatusChange(false)}
           onSubmit={async (change) => {
+            if (change.conversion) {
+              const created = await convertLead(leadData.id, change.conversion)
+              if (!created) throw new Error("The lead could not be converted. Please try again.")
+              setStage("Converted to Opportunity")
+              setStatus(change.newStatus.name as LeadStatus)
+              onToast?.("success", "Converted to Opportunity", `${leadData.companyName} is now in the opportunity pipeline.`)
+              onViewOpportunity?.(created.id)
+              return
+            }
             await changeLeadStatus(leadData, change)
             setStatus(change.newStatus.name as LeadStatus)
+            // A status linked to a stage moved the lead to that stage too.
+            if (change.newStatus.stageName) setStage(change.newStatus.stageName as LeadStage)
             onToast?.("success", "Status Changed", `Lead status is now ${change.newStatus.name}.`)
           }}
         />

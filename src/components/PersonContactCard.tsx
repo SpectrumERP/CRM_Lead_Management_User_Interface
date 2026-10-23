@@ -85,12 +85,14 @@ export function resolveLeadPrimaryContact(lead: Lead, contacts: Contact[] = []):
     companyName: lead.companyName,
   })
 
+  // The lead's own primary contact entry (from the server: designation, email, phone).
+  const entry = lead.contacts?.find((c) => c.primary && c.name === lead.contactPerson)
   return {
     name: catalog?.name ?? lead.contactPerson,
-    email: catalog?.email ?? lead.email,
-    phone: catalog?.mobile ?? lead.phone,
+    email: catalog?.email || lead.email || entry?.email || '',
+    phone: catalog?.mobile || lead.phone || entry?.phones[0] || '',
     company: catalog?.businessEntityName ?? lead.companyName,
-    designation: catalog?.designation,
+    designation: catalog?.designation || entry?.designation,
     primary: catalog?.isPrimary ?? true,
   }
 }
