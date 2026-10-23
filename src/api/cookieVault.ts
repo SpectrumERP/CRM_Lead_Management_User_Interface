@@ -99,10 +99,16 @@ function writeRaw(name: string, value: string, maxAgeSeconds: number) {
   document.cookie = `${name}=${value}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Strict${sharedDomain}${secure}`
 }
 
+function expireRaw(name: string) {
+  writeRaw(name, '', 0)
+  // Also a host-only copy left from before the shared domain was configured, which would shadow it.
+  if (String(import.meta.env.VITE_COOKIE_DOMAIN ?? '').trim()) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Strict`
+}
+
 function removeChunks(name: string) {
   for (let i = 0; i < MAX_CHUNKS; i += 1) {
     if (readRaw(`${name}.${i}`) === null) break
-    writeRaw(`${name}.${i}`, '', 0)
+    expireRaw(`${name}.${i}`)
   }
 }
 
@@ -144,7 +150,8 @@ export const cookieVault = {
     try {
       return await decrypt<T>(encoded)
     } catch {
-      this.remove(name)
+      // A decrypt failure can mean this app was built with a different environment key. Do not delete
+      // the shared cookie: that would make another module interpret a local read failure as logout.
       return null
     }
   },
@@ -152,6 +159,6 @@ export const cookieVault = {
   remove(name: string) {
     if (!canUseCookies()) return
     removeChunks(name)
-    writeRaw(name, '', 0)
+    expireRaw(name)
   },
 }

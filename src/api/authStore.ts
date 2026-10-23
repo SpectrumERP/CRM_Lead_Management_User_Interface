@@ -1,5 +1,5 @@
 import { cookieVault } from './cookieVault'
-import { sessionContract } from './sessionContract'
+import { clearLogoutSignal, sessionContract } from './sessionContract'
 
 /** Shared with Spectrum ERP and Task Management for single sign-on. */
 const COOKIE_NAME = sessionContract.authCookie
@@ -55,6 +55,7 @@ function isExpired(data: AuthData) {
 }
 
 export async function saveAuth(data: AuthData): Promise<void> {
+  clearLogoutSignal()
   cached = data
   loaded = true
   const seconds = Math.min(FALLBACK_TTL_SECONDS, (data.expiresAt - Date.now()) / 1000)

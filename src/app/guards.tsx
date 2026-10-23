@@ -4,7 +4,7 @@ import { isAdmin } from '../auth/users'
 import { paths } from './paths'
 import { BootShell } from '../ui'
 
-/** Inside the Spectrum ERP shell (VITE_CRM_ROUTE_BASE) its /login signs in; run on its own, the CRM's login. */
+/** CRM sign-in is owned by the Spectrum ERP shell in every environment. */
 const IN_SPECTRUM = String(import.meta.env.VITE_CRM_ROUTE_BASE ?? '').trim() !== ''
 const LOGIN_PATH = IN_SPECTRUM ? '/login' : paths.login
 

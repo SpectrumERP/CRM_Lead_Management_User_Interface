@@ -8,18 +8,13 @@ export function usesRemoteApi() {
   return apiOrigin().length > 0
 }
 
-// const DEFAULT_SPECTRUM_URL = 'https://crm-uat.steelmont.co.in:9097'
-// const DEFAULT_SPECTRUM_URL = 'https://crm.steelmont.co.in:8085'
-// const DEFAULT_SPECTRUM_URL = 'http://3.108.117.198:9080'
-const DEFAULT_SPECTRUM_URL = 'http://192.168.0.21:7002'
-
-/** Spectrum backend used by `http` (real login + future APIs). Set VITE_SPECTRUM_API_URL to override; "off" disables it. */
+/** Same-origin Spectrum API path; the current environment's server routes it to its backend. */
 export function spectrumOrigin(): string {
   const raw = import.meta.env.VITE_SPECTRUM_API_URL
-  const value = typeof raw === 'string' && raw.length > 0 ? raw : DEFAULT_SPECTRUM_URL
+  const value = typeof raw === 'string' ? raw : ''
   return value === 'off' ? '' : value.replace(/\/+$/, '')
 }
 
 export function usesSpectrumApi() {
-  return spectrumOrigin().length > 0
+  return import.meta.env.MODE === 'spectrum' && import.meta.env.VITE_SPECTRUM_API_URL !== 'off'
 }

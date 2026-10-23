@@ -85,6 +85,19 @@ describe('session expiry', () => {
     expect(await loadAuth()).toBeNull()
   })
 
+  it('a 403 does not end an authenticated session', async () => {
+    stubCookies()
+    await signIn(Date.now() + 60_000)
+    const listener = vi.fn()
+    onSessionExpired(listener)
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: 'Forbidden' }), { status: 403 }))
+
+    await expect(http.get('/api/crm/leads/search-data')).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(await loadAuth()).not.toBeNull()
+  })
+
   it('ends the session when a remote origin clears the shared auth cookie', async () => {
     stubCookies()
     await signIn(Date.now() + 60_000)
@@ -92,6 +105,22 @@ describe('session expiry', () => {
     const listener = vi.fn()
     const unsubscribe = onSessionExpired(listener)
     document.cookie = 'fi-crm-auth=; Max-Age=0; Path=/'
+
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(listener).toHaveBeenCalledWith('other-tab')
+    expect(isSessionEnded()).toBe(true)
+    unsubscribe()
+    vi.useRealTimers()
+  })
+
+  it('ends the session when a remote origin publishes an explicit logout signal', async () => {
+    stubCookies()
+    await signIn(Date.now() + 60_000)
+    vi.useFakeTimers()
+    const listener = vi.fn()
+    const unsubscribe = onSessionExpired(listener)
+    document.cookie = 'spectrum-auth-event=logout:remote:1; Path=/; Max-Age=60'
 
     await vi.advanceTimersByTimeAsync(5_000)
 

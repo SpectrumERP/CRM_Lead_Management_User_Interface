@@ -1960,11 +1960,11 @@ const ALL_TABS = [
   "Emails",
   "Internal Notes / Observations",
   "Timeline",
-  // "Status History",
+  "Status History",
 ] as const
 type Tab = (typeof ALL_TABS)[number]
 /** Hidden for now; the tab's code stays so it can be switched back on by removing it here. */
-const HIDDEN_TABS: readonly Tab[] = ["Emails"]
+const HIDDEN_TABS: readonly Tab[] = ["Emails", "Status History"]
 const TABS = ALL_TABS.filter((tab) => !HIDDEN_TABS.includes(tab))
 const DEFAULT_TAB: Tab = TABS[0] ?? "Timeline"
 

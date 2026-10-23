@@ -34,8 +34,11 @@ import ActivityAttachments from '../components/ActivityAttachments'
 import { formatDate } from '../utils/dateFormat'
 
 /** Same tabs as the lead view (its Emails tab is hidden there too). */
-const DETAIL_TABS = ['Internal Notes / Observations', 'Timeline'] as const
-type DetailTab = (typeof DETAIL_TABS)[number]
+const ALL_DETAIL_TABS = ['Internal Notes / Observations', 'Timeline', 'Status History'] as const
+type DetailTab = (typeof ALL_DETAIL_TABS)[number]
+/** Hidden for now, as on the lead view; the tab's code stays so it can be switched back on here. */
+const HIDDEN_DETAIL_TABS: readonly DetailTab[] = ['Status History']
+const DETAIL_TABS = ALL_DETAIL_TABS.filter((tab) => !HIDDEN_DETAIL_TABS.includes(tab))
 
 interface OpportunityDetailProps {
   opportunityId: string

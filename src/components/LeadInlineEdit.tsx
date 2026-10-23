@@ -207,7 +207,8 @@ export function LeadIdentityEdit({
   const [descriptionDraft, setDescriptionDraft] = useState(leadDescriptionOf(lead))
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
   const [descriptionOverflows, setDescriptionOverflows] = useState(false)
-  const descriptionPreviewRef = useRef<HTMLElement | null>(null)
+  // Set on a <p> (read-only view) or a <span> (editable view); only the HTMLElement part is used.
+  const descriptionPreviewRef = useRef<HTMLParagraphElement & HTMLSpanElement>(null)
   const description = leadDescriptionOf(lead)
 
   useEffect(() => {
