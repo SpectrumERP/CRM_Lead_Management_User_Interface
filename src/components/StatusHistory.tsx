@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Spinner } from '../ui'
+import { SkeletonList } from '../ui'
 import { toApiError } from '../api/errors'
 import { PENDING_API_MODE, isPendingApiMock, usePendingData } from '../api/pendingApiStore'
 import { fetchStatusHistory, mergeStatusHistory, type StatusHistoryEntry, type StatusRecordType } from '../api/statusChange'
@@ -52,9 +52,7 @@ export default function StatusHistory({ record, recordNo, serverLogs, currency, 
   }
   if (!rows) {
     return (
-      <div className="flex justify-center py-6">
-        <Spinner label="Loading status history" />
-      </div>
+      <SkeletonList rows={3} lead="dot" lines={3} label="Loading status history" className="space-y-1 py-2" />
     )
   }
   if (!rows.length) {

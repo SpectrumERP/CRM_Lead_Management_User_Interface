@@ -7,7 +7,8 @@ import { clearBusinessEntityFillValuesCache } from '../../api/businessEntityFill
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Pagination from '../../components/Pagination';
 import type { ToastType } from '../../components/Toast';
-import { IconTooltip, Spinner } from '../../ui';
+import { IconTooltip, SkeletonLines } from '../../ui';
+import { SkeletonTableRows } from '../../components/CRMStates';
 import { C, EmptyRows, FilterBar, FormField, MasterTable, Modal, SectionHeader, StatusBadge, Td, Th, useColumnSort } from './atoms';
 import type { ApiMasterState } from './useApiMaster';
 import { saveConfirm, useConfirm } from '../../contexts/ConfirmContext'
@@ -312,7 +313,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
         </tr></thead>
         <tbody>
           {loading && rows.length === 0 ? (
-            <tr><td colSpan={99} className="py-16"><div className="flex justify-center"><Spinner label={`Loading ${title}`} /></div></td></tr>
+            <SkeletonTableRows cols={(hasSequence ? 1 : 0) + 2 + (hasDescription ? 1 : 0) + listedNumbers.length + listedFlags.length + 3} rows={8} />
           ) : filtered.length === 0 ? (
             error ? null : <EmptyRows onAdd={rights.canAdd ? openAdd : undefined} />
           ) : pageRows.map((item) => (
@@ -368,7 +369,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
       {(isNew || editing) && (
         <Modal title={isNew ? `Add ${noun}` : `Edit ${noun}`} onClose={closeModal} onSave={() => void save()} saving={saving || loadingDetail}>
           {loadingDetail ? (
-            <div className="flex justify-center py-2"><Spinner label={`Loading ${noun.toLowerCase()}`} /></div>
+            <SkeletonLines lines={2} className="space-y-2 py-1" label={`Loading ${noun.toLowerCase()}`} />
           ) : null}
           {editing?.code ? (
             <FormField label="Code">

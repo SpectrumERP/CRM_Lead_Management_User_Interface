@@ -22,7 +22,7 @@ import { useLeadFormFillValues } from '../components/useLeadFormFillValues';
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
 import { prefetchPage } from '../app/prefetch';
 import { SecondaryContactsMore } from '../components/SecondaryContactsMore';
-import { Button, IconTooltip, PageHeader, PageLoader, Select, SortChevrons } from '../ui';
+import { Button, IconTooltip, PageHeader, Select, SortChevrons } from '../ui';
 import { findContactForLead, LeadPrimaryContactCard } from '../components/PersonContactCard';
 import { matchesAny } from '../utils/text';
 import { stopBubbleProps } from '../utils/events';
@@ -438,7 +438,6 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
         {viewMode === 'list' ? (
           <div className="page-gutter flex h-full min-w-0 flex-col">
           <div className="table-scroll relative min-h-0 min-w-0 flex-1" aria-busy={listBusy}>
-            {pageLoading && <PageLoader label={PAGE_COPY.pageLoading} />}
             <table className="crm-table crm-table-leads">
               <thead>
                 <tr>
@@ -649,7 +648,6 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
           // Breathing room above the columns (toolbar line) and below them (horizontal scrollbar).
           <div className="page-gutter h-full min-w-0 overflow-hidden pt-3 pb-2">
           <div className="relative flex h-full min-h-0 min-w-0 gap-3 overflow-x-auto overflow-y-hidden pb-3" aria-busy={listBusy}>
-            {pageLoading && <PageLoader label={PAGE_COPY.pageLoading} />}
             {activeLeadStageNames.map((stage) => {
               const stageLeads = filtered.filter((l) => l.leadStage === stage);
               const stageVal = formatMoneyTotals(stageLeads.map((l) => ({ value: l.opportunityValue, currency: l.valueCurrency })));

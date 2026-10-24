@@ -17,7 +17,7 @@ import { EmptyIcons, EmptyState, NoResults, SkeletonTableRows } from '../compone
 import { useCrmActions } from '../contexts/CrmStoreContext'
 import { formatAuditStamp, formatLeadDate, formatMoneyTotals } from '../data/leads'
 import { formatDealValue, dealStageClass, type Opportunity } from '../data/opportunities'
-import { Button, IconTooltip, MultiSelect, PageHeader, PageLoader, SortChevrons, nextSort } from '../ui'
+import { Button, IconTooltip, MultiSelect, PageHeader, SortChevrons, nextSort } from '../ui'
 import { PersonContactCard } from '../components/PersonContactCard'
 import type { ToastType } from '../components/Toast'
 import { PAGE_COPY } from '../constants/messages'
@@ -219,7 +219,6 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <div className="page-gutter flex h-full min-w-0 flex-col">
           <div className="table-scroll relative min-h-0 min-w-0 flex-1" aria-busy={loading}>
-            {loading && <PageLoader label={PAGE_COPY.pageLoading} />}
             <table className="crm-table crm-table-opps">
               <thead>
                 <tr>

@@ -7,9 +7,8 @@ import {
 } from '../data/auditLog';
 import { useCrmSelector } from '../contexts/CrmStoreContext';
 import Pagination from '../components/Pagination';
-import { PageLoader, Select, SortChevrons, sortAlpha } from '../ui';
+import { Select, SkeletonGrid, SortChevrons, sortAlpha } from '../ui';
 import { usePageChangeLoader } from '../components/usePageChangeLoader';
-import { PAGE_COPY } from '../constants/messages';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -523,18 +522,9 @@ export default function AuditLog({
 
         {/* Loading */}
         {pageState === 'loading' && (
-          <div className="flex flex-col items-center justify-center py-24">
-            <div
-              className="w-10 h-10 rounded-full border-2 border-t-transparent mb-4"
-              style={{ borderColor: '#dce4f2', borderTopColor: '#2955a3', animation: 'spin 0.8s linear infinite' }}
-            />
-            <p className="text-sm font-medium" style={{ color: '#0c1a3a' }}>Loading audit records…</p>
-            <p className="text-xs mt-1" style={{ color: '#9aaccc' }}>Fetching change history from all modules</p>
-            <div className="w-full max-w-3xl mt-8 space-y-2.5">
-              {[1,2,3,4,5].map((i) => (
-                <div key={i} className="h-12 rounded-xl" style={{ background: 'linear-gradient(90deg,#f0f4fb 25%,#e8edf8 50%,#f0f4fb 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
-              ))}
-            </div>
+          // The audit table's shape: its head band, then rows of time, user, module, action, record and change.
+          <div className="overflow-hidden rounded-xl border border-line bg-surface">
+            <SkeletonGrid head rows={8} columns={[14, 14, 12, 10, 20, 24]} label="Loading audit records" />
           </div>
         )}
 
@@ -707,7 +697,6 @@ export default function AuditLog({
             </div>
 
             <div className="mt-4">
-              {pager.busy && <PageLoader label={PAGE_COPY.pageLoading} />}
               <Pagination
                 page={page}
                 pageSize={PAGE_SIZE}
@@ -729,10 +718,6 @@ export default function AuditLog({
         />
       )}
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-      `}</style>
     </div>
   );
 }

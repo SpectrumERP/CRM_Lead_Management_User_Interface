@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { searchAll, SearchGroup, SearchResult, getTotalResults } from '../data/search';
 import { shallowEqual, useCrmSelectorWhen } from '../contexts/CrmStoreContext';
-import { IconTooltip } from '../ui';
+import { IconTooltip, SkeletonList } from '../ui';
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
   lead: (
@@ -299,10 +299,8 @@ export default function GlobalSearchBar({ onViewLead, onViewContact, onViewEntit
 
           {/* Loading */}
           {showResults && loading && (
-            <div className="flex items-center gap-3 px-4 py-5">
-              <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#dce4f2', borderTopColor: '#2955a3' }} />
-              <span className="text-xs" style={{ color: '#7a8494' }}>Searching…</span>
-            </div>
+            // Result rows: a record's tile, its name and its kind.
+            <SkeletonList rows={4} lead="square" label="Searching" className="px-2 py-2" rowClassName="flex items-center gap-3 px-2 py-2" />
           )}
 
           {/* No results */}

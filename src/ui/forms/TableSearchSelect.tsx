@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { IconTooltip } from '../IconTooltip'
+import { SkeletonOptions } from '../Skeleton'
 import { controlClass } from './controlClass'
 import { useFixedMenu } from './useFixedMenu'
 import { initialFocusIndex, scrollSelectedIntoView } from './selectedOption'
@@ -340,7 +341,7 @@ export function TableSearchSelect<T>({
               </div>
               <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
                 {loading && filtered.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-ink-faint" role="status">Searching…</p>
+                  <SkeletonOptions />
                 ) : filtered.length === 0 ? (
                   <p className="py-4 text-center text-xs text-ink-faint">{emptyText}</p>
                 ) : (

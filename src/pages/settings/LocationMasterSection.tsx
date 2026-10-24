@@ -16,7 +16,8 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import Pagination from '../../components/Pagination';
 import type { ToastType } from '../../components/Toast';
 import { saveConfirm, useConfirm } from '../../contexts/ConfirmContext';
-import { Checkbox, IconTooltip, SearchSelectField, Spinner, TextField } from '../../ui';
+import { Checkbox, IconTooltip, SearchSelectField, SkeletonLines, TextField } from '../../ui';
+import { SkeletonTableRows } from '../../components/CRMStates';
 import { formatDate } from '../../utils/dateFormat';
 import { C, EmptyRows, GridSearch, MasterTable, Modal, SectionHeader, Td, Th, useColumnSort } from './atoms';
 import type { LocationMasterState } from './useLocationMaster';
@@ -280,7 +281,7 @@ export default function LocationMasterSection({ api, state, title, subtitle, nam
         </tr></thead>
         <tbody>
           {loading && rows.length === 0 ? (
-            <tr><td colSpan={99} className="py-16"><div className="flex justify-center"><Spinner label={`Loading ${title}`} /></div></td></tr>
+            <SkeletonTableRows cols={kind === 'port' ? 8 : kind === 'state' ? 6 : 6} rows={8} />
           ) : pageRows.length === 0 ? (
             error ? null : <EmptyRows onAdd={rights.canAdd && !query ? openAdd : undefined} />
           ) : pageRows.map((row) => (
@@ -320,7 +321,7 @@ export default function LocationMasterSection({ api, state, title, subtitle, nam
 
       {(isNew || editing) && (
         <Modal title={isNew ? `Add ${noun}` : `Edit ${noun}`} onClose={closeModal} onSave={() => void save()} saving={saving || loadingDetail}>
-          {loadingDetail ? <div className="flex justify-center py-2"><Spinner label={`Loading ${noun.toLowerCase()}`} /></div> : null}
+          {loadingDetail ? <SkeletonLines lines={2} className="space-y-2 py-1" label={`Loading ${noun.toLowerCase()}`} /> : null}
           {editing?.code ? <TextField label="Code" value={editing.code} readOnly disabled /> : null}
           <TextField label={`${noun} Name`} required error={errors.name} maxLength={LOCATION_MASTER_LIMITS.name} autoFocus
             placeholder={namePlaceholder} value={form.name} onValueChange={(name) => patch({ name }, ['name'])} />

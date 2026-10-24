@@ -12,7 +12,7 @@ import { opportunityNoFromId, refreshServerOpportunity } from '../api/opportunit
 import { bySequence } from '../api/fillValues'
 import { useOpportunityFillValues } from '../components/useOpportunityFillValues'
 import { stageBadgeStyle, useOpportunityStageColors, withAlpha } from '../components/useOpportunityStageColors'
-import { Button, Card, ChoiceGroup, CountBadge, IconTooltip, Spinner } from '../ui'
+import { Button, Card, ChoiceGroup, CountBadge, IconTooltip, SkeletonPage } from '../ui'
 import type { ToastType } from '../components/Toast'
 import ActivityDrawer from '../components/ActivityDrawer'
 import { PagedTimeline } from '../components/RecordTimeline'
@@ -363,9 +363,7 @@ export default function OpportunityDetail({
 
   if (!opportunity && serverRefresh === 'loading') {
     return (
-      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-canvas">
-        <Spinner label="Loading opportunity" />
-      </div>
+      <SkeletonPage kind="detail" label="Loading opportunity" />
     )
   }
 

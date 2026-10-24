@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Spinner } from './Spinner'
+import { Skeleton, SkeletonStatus } from './Skeleton'
 
 export interface ImagePreviewProps {
   /** Image URL; null while it loads. */
@@ -31,7 +31,10 @@ export function ImagePreview({ src, alt, onClose }: ImagePreviewProps) {
       {src ? (
         <img src={src} alt={alt} className="max-h-full max-w-full rounded-lg object-contain shadow-overlay" />
       ) : (
-        <div className="rounded-xl bg-surface/90 px-5 py-4"><Spinner label={`Loading ${alt}`} /></div>
+        // The picture's place, so it opens where the image will be.
+        <SkeletonStatus label={`Loading ${alt}`}>
+          <Skeleton className="h-[60vh] w-[min(80vw,48rem)] rounded-lg" />
+        </SkeletonStatus>
       )}
       <button type="button" className="absolute right-4 top-4 rounded-full bg-surface/90 px-3 py-1 text-xs font-bold text-ink" onClick={(e) => { e.stopPropagation(); onClose() }}>
         Close

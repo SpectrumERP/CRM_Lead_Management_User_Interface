@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
 /**
- * Brief branded loader when a client-side page/filter change swaps the rows (same timing as Leads).
- * `run(fn)` shows the loader, applies the change, and hides it after `ms`.
+ * A short busy window after a client-side page/filter change (same timing as Leads): `run(fn)` applies the change
+ * and marks the pager busy for `ms`, so a burst of clicks lands once. The new rows show at once (no cover over them).
  */
 export function usePageChangeLoader(ms = 380) {
   const [busy, setBusy] = useState(false)

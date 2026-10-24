@@ -1,4 +1,5 @@
 import { PAGE_COPY } from '../constants/messages'
+import { Skeleton } from '../ui'
 
 // ── Simulated load hook ──────────────────────────────────────────────────────
 export function useSimulatedLoad(_delayMs = 650) {
@@ -21,8 +22,8 @@ export function SkeletonTableRows({
         <tr key={ri} style={{ pointerEvents: "none" }}>
           {Array.from({ length: cols }).map((_, ci) => (
             <td key={ci} style={{ padding: "12px" }}>
-              <div
-                className="skeleton"
+              <Skeleton
+                className=""
                 style={{
                   height: 10,
                   width: `${WIDTHS[(ri * 7 + ci) % WIDTHS.length]}%`,
@@ -43,18 +44,17 @@ export function SkeletonStatCards({ count = 6 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl p-4"
-          style={{ background: "#fff", border: "1px solid #dce4f2" }}
+          className="rounded-xl border border-line bg-surface p-4"
         >
-          <div
-            className="skeleton"
+          <Skeleton
+            className=""
             style={{ height: 9, width: "52%", marginBottom: 10 }}
           />
-          <div
-            className="skeleton"
+          <Skeleton
+            className=""
             style={{ height: 26, width: "35%", marginBottom: 8 }}
           />
-          <div className="skeleton" style={{ height: 9, width: "45%" }} />
+          <Skeleton className="" style={{ height: 9, width: "45%" }} />
         </div>
       ))}
     </>
@@ -67,16 +67,16 @@ export function SkeletonPipelineRows({ count = 6 }: { count?: number }) {
     <div className="space-y-2.5">
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="flex items-center gap-3">
-          <div
-            className="skeleton flex-shrink-0"
+          <Skeleton
+            className="flex-shrink-0"
             style={{ height: 10, width: 130 }}
           />
-          <div
-            className="skeleton flex-1"
+          <Skeleton
+            className="flex-1"
             style={{ height: 24, borderRadius: 8 }}
           />
-          <div
-            className="skeleton flex-shrink-0"
+          <Skeleton
+            className="flex-shrink-0"
             style={{ height: 10, width: 70 }}
           />
         </div>
@@ -91,17 +91,17 @@ export function SkeletonActivityList({ count = 5 }: { count?: number }) {
     <div className="space-y-2.5">
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="flex gap-2.5">
-          <div
-            className="skeleton flex-shrink-0"
+          <Skeleton
+            className="flex-shrink-0"
             style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 4 }}
           />
           <div className="space-y-1.5 flex-1">
-            <div
-              className="skeleton"
+            <Skeleton
+              className=""
               style={{ height: 10, width: `${60 + ((i * 13) % 30)}%` }}
             />
-            <div className="skeleton" style={{ height: 9, width: "50%" }} />
-            <div className="skeleton" style={{ height: 9, width: "40%" }} />
+            <Skeleton className="" style={{ height: 9, width: "50%" }} />
+            <Skeleton className="" style={{ height: 9, width: "40%" }} />
           </div>
         </div>
       ))}
@@ -113,27 +113,26 @@ export function SkeletonActivityList({ count = 5 }: { count?: number }) {
 export function SkeletonKanbanCard() {
   return (
     <div
-      className="rounded-xl p-3"
-      style={{ background: "#fff", border: "1px solid #dce4f2" }}
+      className="rounded-xl border border-line bg-surface p-3"
     >
       <div className="flex items-start justify-between mb-2.5">
-        <div className="skeleton" style={{ height: 11, width: "60%" }} />
-        <div
-          className="skeleton"
+        <Skeleton className="" style={{ height: 11, width: "60%" }} />
+        <Skeleton
+          className=""
           style={{ height: 16, width: 44, borderRadius: 99 }}
         />
       </div>
-      <div
-        className="skeleton"
+      <Skeleton
+        className=""
         style={{ height: 9, width: "45%", marginBottom: 6 }}
       />
-      <div
-        className="skeleton"
+      <Skeleton
+        className=""
         style={{ height: 9, width: "70%", marginBottom: 10 }}
       />
       <div className="flex justify-between">
-        <div className="skeleton" style={{ height: 11, width: "40%" }} />
-        <div className="skeleton" style={{ height: 9, width: "20%" }} />
+        <Skeleton className="" style={{ height: 11, width: "40%" }} />
+        <Skeleton className="" style={{ height: 9, width: "20%" }} />
       </div>
     </div>
   )
@@ -469,20 +468,18 @@ export function SkeletonOverviewCards({ count = 6 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl overflow-hidden"
-          style={{ background: "#fff", border: "1px solid #dce4f2" }}
+          className="overflow-hidden rounded-xl border border-line bg-surface"
         >
           <div
-            className="px-5 py-3.5"
-            style={{ borderBottom: "1px solid #f0f4fb" }}
+            className="border-b border-line-subtle px-5 py-3.5"
           >
-            <div className="skeleton" style={{ height: 12, width: "42%" }} />
+            <Skeleton className="" style={{ height: 12, width: "42%" }} />
           </div>
           <div className="p-5 space-y-3">
-            <div className="skeleton" style={{ height: 10, width: "55%" }} />
-            <div className="skeleton" style={{ height: 10, width: "72%" }} />
-            <div className="skeleton" style={{ height: 10, width: "48%" }} />
-            <div className="skeleton" style={{ height: 10, width: "64%" }} />
+            <Skeleton className="" style={{ height: 10, width: "55%" }} />
+            <Skeleton className="" style={{ height: 10, width: "72%" }} />
+            <Skeleton className="" style={{ height: 10, width: "48%" }} />
+            <Skeleton className="" style={{ height: 10, width: "64%" }} />
           </div>
         </div>
       ))}

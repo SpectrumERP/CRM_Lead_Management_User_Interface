@@ -7,7 +7,7 @@ import { ColumnVisibilityMenu, useColumnVisibility, type GridColumn } from '../.
 import { SkeletonTableRows } from '../../components/CRMStates'
 import { RecordRowActions } from '../../components/RecordRowActions'
 import { useOptionalToast } from '../../contexts/ToastContext'
-import { IconTooltip, SortChevrons, type SortDir } from '../../ui'
+import { IconTooltip, Skeleton, SortChevrons, type SortDir } from '../../ui'
 import { stopBubbleProps } from '../../utils/events'
 import { formatDateTime } from '../../utils/dateFormat'
 import {
@@ -557,7 +557,9 @@ function Thumbnail({ docNo, name, onPreview }: { docNo: number; name: string; on
   return (
     <div ref={ref} className="group/thumb absolute inset-0 flex items-center justify-center overflow-hidden bg-surface-hover">
       {loading ? (
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-label="Loading image" />
+        <span role="status" aria-label="Loading image" className="absolute inset-0">
+          <Skeleton className="h-full w-full rounded-none" />
+        </span>
       ) : src ? (
         <>
           <img src={src} alt={name} className="h-full w-full object-cover" />

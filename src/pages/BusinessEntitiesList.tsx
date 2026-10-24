@@ -12,7 +12,7 @@ import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
 import type { ToastType } from '../components/Toast';
 import { PAGE_COPY } from '../constants/messages';
 import { useFormRights } from '../contexts/FormRightsContext';
-import { Button, IconTooltip, ImagePreview, PageHeader, PageLoader, Spinner, nextSort, type SortDir } from '../ui';
+import { Button, IconTooltip, ImagePreview, PageHeader, SkeletonCards, SkeletonGrid, SkeletonPage, nextSort, type SortDir } from '../ui';
 import { downloadCsv } from '../utils/csv';
 import { AttachmentGroups, ContactAlbum, ContactTable, EntityAlbum, EntityTable } from './businessEntities/ListViews';
 import {
@@ -215,11 +215,15 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
   );
 
   if (!rights.ready) {
-    return <div className="flex flex-1 items-center justify-center py-16"><Spinner label="Loading" /></div>;
+    return <SkeletonPage kind="list" label="Loading business entities" />;
   }
 
   const body = !company.ready ? (
-    <div className="flex flex-1 items-center justify-center py-16"><Spinner label="Loading" /></div>
+    <div className="page-gutter min-h-0 flex-1 overflow-hidden py-3">
+      <div className="overflow-hidden rounded-xl border border-line bg-surface">
+        <SkeletonGrid head rows={8} columns={[22, 26, 18, 16]} label="Loading business entities" />
+      </div>
+    </div>
   ) : !company.enabled ? null : feed.error && feed.rows.length === 0 ? (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-center">
       <p className="text-sm font-semibold text-ink">Failed to load business entities</p>
@@ -238,10 +242,9 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
             className={`relative min-h-0 min-w-0 flex-1 ${isTableView ? 'table-scroll' : 'overflow-auto'}`}
             aria-busy={listBusy || Boolean(feed.loadingMore)}
           >
-            {pageLoading ? <PageLoader label={PAGE_COPY.pageLoading} /> : null}
-            {feed.loadingMore === 'prev' ? <div className="flex justify-center py-2"><Spinner label="Loading earlier" /></div> : null}
+            {feed.loadingMore === 'prev' ? <SkeletonGrid rows={2} columns={[22, 26, 18, 16]} label="Loading earlier" /> : null}
             {feed.loading && feed.rows.length === 0 && !isTableView ? (
-              <div className="flex min-h-[200px] items-center justify-center"><Spinner label="Loading business entities" /></div>
+              <div className="p-3"><SkeletonCards count={9} label="Loading business entities" /></div>
             ) : view === 'list' ? (
               <EntityTable
                 rows={pageRows as EntityListRow[]}
@@ -267,7 +270,7 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
                 ? emptyNode
                 : <AttachmentGroups rows={pageRows as AttachmentListRow[]} onEdit={handlers.onEdit} onPreview={setPreview} />
             )}
-            {feed.loadingMore === 'next' ? <div className="flex justify-center py-3"><Spinner label="Loading more" /></div> : null}
+            {feed.loadingMore === 'next' ? <SkeletonGrid rows={2} columns={[22, 26, 18, 16]} label="Loading more" /> : null}
             {feed.error ? (
               <div className="flex items-center justify-center gap-2 py-3 text-xs text-accent" role="alert">
                 <span>Failed to load more business entities: {feed.error}</span>

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { FullPageSpinner } from '../ui'
+import { BootLogin } from '../ui'
 
 /** CRM sign-in is owned by Spectrum ERP in every environment. */
 export default function Login() {
@@ -10,5 +10,5 @@ export default function Login() {
     window.location.replace(loginUrl)
   }, [loginUrl])
 
-  return <FullPageSpinner label="Opening Spectrum ERP sign-in" />
+  return <BootLogin label="Opening Spectrum ERP sign-in" />
 }

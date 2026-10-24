@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import ActivityAttachments from "./ActivityAttachments"
-import { Button, Card, ChoiceGroup, Spinner } from "../ui"
+import { Button, Card, ChoiceGroup, SkeletonList } from "../ui"
 import { PersonContactCard } from "./PersonContactCard"
 import { stopBubbleProps } from "../utils/events"
 import type { Contact } from "../data/contacts"
@@ -459,7 +459,7 @@ export function LeadActivitiesPanel({ lead, onToast }: LeadActivitiesPanelProps)
       </div>
       <div className="p-4">
         {loading ? (
-          <div className="flex justify-center py-6"><Spinner label="Loading activities" /></div>
+          <SkeletonList rows={4} lead="circle" lines={3} label="Loading activities" className="space-y-2 py-1" rowClassName="flex items-start gap-3 rounded-lg border border-line px-3 py-3" />
         ) : (
           <ActivitiesTab
             activities={visible}

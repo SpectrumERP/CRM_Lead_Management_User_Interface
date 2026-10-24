@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, type ReactNode } from "react"
-import { Button, Card, ChoiceGroup, CountBadge, FormGrid, IconTooltip, TextAreaField, TextField } from "../ui"
+import { Button, Card, ChoiceGroup, CountBadge, FormGrid, IconTooltip, Skeleton, SkeletonStatus, TextAreaField, TextField } from "../ui"
 import { PersonContactCard, findContactForLead } from "../components/PersonContactCard"
 import OutcomeDialog from "../components/OutcomeDialog"
 import FormDrawer from "../components/FormDrawer"
@@ -2401,7 +2401,11 @@ export default function LeadDetail({
                         readOnly={locked}
                       />
                     ) : (
-                      <h1 className="font-display text-xl font-bold text-ink">Loading lead…</h1>
+                      // The lead's name and its code line, while the lead loads.
+                      <SkeletonStatus label="Loading lead" className="space-y-2 pt-1">
+                        <Skeleton className="h-5 w-56 max-w-full" />
+                        <Skeleton className="h-3 w-40 max-w-full" />
+                      </SkeletonStatus>
                     )}
                 </div>
               </div>

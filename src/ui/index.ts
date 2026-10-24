@@ -1,15 +1,31 @@
 /** Isolated UI primitives. Compose these from pages/components — do not add CRM/API logic here. */
 export { Button, type ButtonProps, type ButtonVariant } from './Button'
+export { Spinner, type SpinnerProps } from './Spinner'
 export {
-  Spinner,
-  PageLoader,
-  FullPageSpinner,
+  Skeleton,
+  SkeletonStatus,
+  SkeletonLines,
+  SkeletonList,
+  SkeletonOptions,
+  SkeletonFields,
+  SkeletonGrid,
+  SkeletonCards,
+  SkeletonPage,
   BootShell,
+  BootLogin,
+  useSkeletonPhase,
+  type SkeletonProps,
+  type SkeletonStatusProps,
+  type SkeletonLinesProps,
+  type SkeletonListProps,
+  type SkeletonOptionsProps,
+  type SkeletonFieldsProps,
+  type SkeletonGridProps,
+  type SkeletonCardsProps,
+  type SkeletonPageKind,
+  type SkeletonPageProps,
   type BootShellProps,
-  type SpinnerProps,
-  type PageLoaderProps,
-  type FullPageSpinnerProps,
-} from './Spinner'
+} from './Skeleton'
 export { Card, type CardProps } from './Card'
 export { PageHeader, type PageHeaderProps } from './PageHeader'
 export { StatPill, StatPillRow, type StatPillProps, type StatPillRowProps, type StatTone } from './StatPill'

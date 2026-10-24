@@ -21,7 +21,7 @@ import {
 } from '../api/uploadFiles'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useOptionalToast } from '../contexts/ToastContext'
-import { Button, IconTooltip, ImagePreview, Spinner } from '../ui'
+import { Button, IconTooltip, ImagePreview, SkeletonList, Spinner } from '../ui'
 
 type QueueStatus = 'pending' | 'uploading' | 'verifying' | 'failed'
 
@@ -344,7 +344,7 @@ export default function AttachmentsField({
       ) : null}
 
       {loadingList ? (
-        <div className="flex justify-center py-3"><Spinner label="Loading attachments" /></div>
+        <SkeletonList rows={2} lead="square" label="Loading attachments" className="space-y-1 py-1" />
       ) : null}
 
       {(queue.length > 0 || value.length > 0) && (

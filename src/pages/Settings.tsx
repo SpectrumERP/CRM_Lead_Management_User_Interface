@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ToastType } from '../components/Toast';
 import SpectrumRequiredNotice from '../components/SpectrumRequiredNotice';
-import { Select, CountBadge, IconTooltip, PageHeader, Spinner } from '../ui';
+import { Select, CountBadge, IconTooltip, PageHeader, SkeletonGrid } from '../ui';
 import { masterApis } from '../api/masters';
 import { FORM_NO, type FormRights } from '../api/formRights';
 import { locationMasterApis } from '../api/locationMasters';
@@ -238,7 +238,11 @@ export default function Settings({ onToast }: Props) {
       {/* Page header on top; a master grid fills the rest (it scrolls inside, pager at the bottom). */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {!company.ready ? (
-          <div className="flex justify-center py-16"><Spinner label="Loading master data" /></div>
+          <div className="page-gutter min-h-0 flex-1 overflow-hidden py-3">
+            <div className="overflow-hidden rounded-xl border border-line bg-surface">
+              <SkeletonGrid head rows={8} columns={[12, 28, 22, 14, 10]} label="Loading master data" />
+            </div>
+          </div>
         ) : !apiCompany ? (
           <div className="page-gutter"><SpectrumRequiredNotice what="Master data" /></div>
         ) : (

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { searchAll, SearchResult, SearchResultType, getTotalResults } from '../data/search';
 import { shallowEqual, useCrmSelector } from '../contexts/CrmStoreContext';
-import { compareAlpha, CountBadge, Select } from '../ui';
+import { compareAlpha, CountBadge, Select, SkeletonList } from '../ui';
 
 type TabType = 'all' | SearchResultType;
 
@@ -410,30 +410,15 @@ export default function SearchResults({
       <div className="page-gutter flex-1 py-6">
         {/* Loading state */}
         {loading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div
-              className="w-10 h-10 rounded-full border-2 border-t-transparent mb-4"
-              style={{
-                borderColor: '#dce4f2',
-                borderTopColor: '#2955a3',
-                animation: 'spin 0.8s linear infinite',
-              }}
-            />
-            <p className="text-sm font-medium" style={{ color: '#0c1a3a' }}>Searching across all records…</p>
-            <p className="text-xs mt-1" style={{ color: '#9aaccc' }}>
-              Leads · Business Entities · Contacts · Activities · Meetings · Documents
-            </p>
-            {/* Skeleton rows */}
-            <div className="w-full max-w-2xl mt-8 space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-16 rounded-xl"
-                  style={{ background: 'linear-gradient(90deg, #f0f4fb 25%, #e8edf8 50%, #f0f4fb 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }}
-                />
-              ))}
-            </div>
-          </div>
+          // Result cards: a record's tile, its name, kind and details.
+          <SkeletonList
+            rows={5}
+            lead="square"
+            lines={3}
+            label="Searching across all records"
+            className="space-y-3"
+            rowClassName="flex items-start gap-3 rounded-xl border border-line bg-surface p-4"
+          />
         )}
 
         {/* Error state */}
@@ -570,10 +555,6 @@ export default function SearchResults({
         )}
       </div>
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-      `}</style>
     </div>
   );
 }

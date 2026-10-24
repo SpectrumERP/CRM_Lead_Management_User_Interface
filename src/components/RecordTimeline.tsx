@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react"
-import { ChoiceGroup, Select, Spinner } from "../ui"
+import { ChoiceGroup, Select, Skeleton, SkeletonList } from "../ui"
 import { fetchTimelinePage, type TimelineRecord } from "../api/timeline"
 import { toApiError } from "../api/errors"
 import { PersonContactCard } from "./PersonContactCard"
@@ -381,7 +381,7 @@ export function PagedTimeline({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-ink-muted">
           {pageNo === 0 && loading
-            ? "Loading timeline…"
+            ? <Skeleton className="inline-block h-2.5 w-24 align-middle" />
             : `${shown.length}${totalRecords - hidden > shown.length ? ` of ${totalRecords - hidden}` : ""} entr${(totalRecords - hidden || shown.length) === 1 ? "y" : "ies"}`}
         </p>
         {types.size > 1 || typeNo !== undefined ? (
@@ -418,9 +418,8 @@ export function PagedTimeline({
       ) : null}
 
       {loading ? (
-        <div className="flex justify-center py-3">
-          <Spinner label="Loading timeline" />
-        </div>
+        // The next entries' place, under the ones already shown.
+        <SkeletonList rows={pageNo > 0 ? 2 : 4} lead="dot" lines={3} label="Loading timeline" className="space-y-1 py-2" />
       ) : null}
 
       {/* Scroll sentinel: reaching it loads the next page. */}

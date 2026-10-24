@@ -23,7 +23,7 @@ import type { Activity } from '../data/activities'
 import { currentMonthRange, type LeadPipelineRow, type MonthSales, type OpportunityPipelineRow } from '../data/dashboard'
 import { useStagnantDays } from '../data/dashboardSettings'
 import { formatMoneyTotals } from '../data/leads'
-import { PageHeader } from '../ui'
+import { PageHeader, Skeleton } from '../ui'
 import { formatDate, toIsoDate } from '../utils/dateFormat'
 import { LeadsAttentionTable, OpportunitiesAttentionTable } from './dashboard/Attention'
 import { ClosureThisMonthTable, type ClosurePendingActivity } from './dashboard/ClosureThisMonth'
@@ -290,7 +290,7 @@ export default function Dashboard({ onOpenLead, onOpenOpportunity, onLeadStage, 
           >
             <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-ink-muted">{s.label}</p>
             {s.loading ? (
-              <div className="skeleton mt-1.5 mb-1" style={{ height: 18, width: '55%' }} />
+              <Skeleton className="mt-1.5 mb-1" style={{ height: 18, width: '55%' }} />
             ) : (
               <div className="flex min-w-0 items-baseline gap-2">
                 <span className={`font-display text-xl font-bold leading-7 tabular-nums ${s.alert ? 'text-accent' : 'text-ink'}`}>

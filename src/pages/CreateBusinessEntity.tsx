@@ -37,7 +37,7 @@ import type { ToastType } from '../components/Toast'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useFormRights } from '../contexts/FormRightsContext'
 import { useOptionalToast } from '../contexts/ToastContext'
-import { Button, IconTooltip, SearchSelectField, Spinner, TextField } from '../ui'
+import { Button, IconTooltip, SearchSelectField, Skeleton, SkeletonFields, SkeletonStatus, Spinner, TextField } from '../ui'
 import { formatDateTime } from '../utils/dateFormat'
 import { locationTimeZoneLabel } from '../utils/timeZones/locationTimeZone'
 import { mergeScannedCard, resolveScannedPlace } from './businessEntities/applyScannedCard'
@@ -457,7 +457,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
         ) : null}
 
         {!company.ready || loadingRecord ? (
-          <div className="flex min-h-[220px] items-center justify-center py-16"><Spinner label="Loading record" /></div>
+          <div className="rounded-lg border border-line bg-surface p-5"><SkeletonFields count={9} columns={3} label="Loading record" /></div>
         ) : loadError ? (
           <div className="rounded-lg border border-line bg-surface px-6 py-10 text-center">
             <p className="text-sm font-bold text-ink">Failed to load record</p>
@@ -734,7 +734,21 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
         />
       ) : null}
       {scan && headOfficeNo ? (
-        <Suspense fallback={<div className="ui-scrim fixed inset-0 z-[70] flex items-center justify-center"><Spinner label="Loading camera" /></div>}>
+        <Suspense
+          fallback={
+            // The scanner dialog's shape (its picture, then its actions) while its code loads.
+            <div className="ui-scrim fixed inset-0 z-[70] flex items-center justify-center p-4">
+              <SkeletonStatus label="Loading camera" className="w-full max-w-lg space-y-4 rounded-xl bg-surface p-5">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="aspect-[4/3] w-full rounded-lg" />
+                <div className="flex justify-end gap-2">
+                  <Skeleton className="h-9 w-24 rounded-[var(--radius-control)]" />
+                  <Skeleton className="h-9 w-28 rounded-[var(--radius-control)]" />
+                </div>
+              </SkeletonStatus>
+            </div>
+          }
+        >
           <BusinessCardScanner
             file={scan.file}
             uploadFile={scan.uploadFile}

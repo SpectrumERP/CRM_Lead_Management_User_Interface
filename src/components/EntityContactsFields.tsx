@@ -13,7 +13,7 @@ import { useSpectrumCompany } from '../auth/useSpectrumCompany'
 import { useFormRights } from '../contexts/FormRightsContext'
 import { useOptionalToast } from '../contexts/ToastContext'
 import type { LeadContactEntry } from '../data/leads'
-import { FormGrid, Spinner, TableSearchSelect, TableSearchSelectField, Tag, Field, type TableSearchColumn } from '../ui'
+import { FormGrid, SkeletonFields, TableSearchSelect, TableSearchSelectField, Tag, Field, type TableSearchColumn } from '../ui'
 import OverlayShell from './OverlayShell'
 import { loadCreatedEntity, spectrumEntityId, useBusinessEntityOptions, type EntityOption } from './useBusinessEntityOptions'
 import { useContactPersonOptions } from './useContactPersonOptions'
@@ -423,7 +423,7 @@ export default function EntityContactsFields({ value, onChange, errors = {}, ent
         <OverlayShell title="New Business Entity" subtitle="Create it here and it is selected on this form" widthClass="w-full max-w-6xl"
           onClose={() => setCreating(false)}>
           {(requestClose) => (
-            <Suspense fallback={<div className="flex justify-center py-16"><Spinner label="Loading form" /></div>}>
+            <Suspense fallback={<div className="p-5"><SkeletonFields count={9} columns={3} label="Loading form" /></div>}>
               <CreateBusinessEntity
                 embedded
                 onBack={requestClose}

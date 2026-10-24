@@ -1,7 +1,7 @@
 import { GridSearch } from '../../components/InlineFilterRow'
 import { useMemo, useState, type ReactNode } from 'react'
 import Pagination from '../../components/Pagination'
-import { PageLoader, SortChevrons } from '../../ui'
+import { SortChevrons } from '../../ui'
 import { usePageChangeLoader } from '../../components/usePageChangeLoader'
 import { DASHBOARD_PAGE_SIZE } from '../../data/dashboard'
 import { matchesAny } from '../../utils/text'
@@ -188,7 +188,6 @@ export function DashboardTable<T>({
           </tbody>
         </table>
       </div>
-      {pager.busy && <PageLoader label="Loading" />}
       {/* The list pages' pager (business entities, leads): "Showing 1–10 of 14" left, page buttons right,
           on a line of its own under the table. */}
       {(showPager && visible.length > 0) || visible.length > pageSize ? (
