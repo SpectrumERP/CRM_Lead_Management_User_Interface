@@ -36,27 +36,12 @@ const glyph = {
 }
 
 /**
- * Inside the Spectrum ERP shell (VITE_CRM_ROUTE_BASE) every module shares the shell's router: Dashboard is
- * the shell's home, CRM opens on its Sales Dashboard, and Task is a route there too, not a page load.
+ * Inside the Spectrum ERP shell (VITE_CRM_ROUTE_BASE) every module shares the shell's router: CRM opens
+ * on its Sales Dashboard, and Task is a route there too, not a page load.
  */
 const IN_SPECTRUM = Boolean(import.meta.env.VITE_CRM_ROUTE_BASE)
 
 const MODULES: ErpModule[] = [
-  {
-    id: 'dashboard',
-    label: 'Dashboard',
-    description: 'Overview and KPIs',
-    color: '#1E56A0',
-    to: IN_SPECTRUM ? '/' : paths.dashboard,
-    icon: (
-      <svg {...glyph}>
-        <rect x="3" y="3" width="7" height="9" rx="1.5" />
-        <rect x="14" y="3" width="7" height="5" rx="1.5" />
-        <rect x="14" y="12" width="7" height="9" rx="1.5" />
-        <rect x="3" y="16" width="7" height="5" rx="1.5" />
-      </svg>
-    ),
-  },
   {
     id: 'crm',
     label: 'CRM',
@@ -116,13 +101,8 @@ function WaffleIcon() {
  * `tone="dark"`: on the blue left panel, before the logo (as in the Spectrum ERP shell). The panel is
  * portalled to <body> at the button's position, since the sidebar clips its overflow.
  */
-export default function ModuleLauncher({
-  activeModule,
-  tone = 'light',
-}: {
-  activeModule: 'dashboard' | 'crm'
-  tone?: 'light' | 'dark'
-}) {
+export default function ModuleLauncher({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
+  const activeModule = 'crm'
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')

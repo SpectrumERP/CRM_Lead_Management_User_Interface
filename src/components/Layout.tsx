@@ -334,7 +334,7 @@ function AppSidebar({
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
         onClose={onClose}
-        launcher={showLauncher && !IN_SPECTRUM ? <ModuleLauncher tone="dark" activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} /> : undefined}
+        launcher={showLauncher && !IN_SPECTRUM ? <ModuleLauncher tone="dark" /> : undefined}
       />
 
       <nav ref={navRef} className={`sidebar-scroll min-h-0 flex-1 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2.5'}`} aria-label="Main">
@@ -750,7 +750,7 @@ export default function Layout({ children, detailName }: LayoutProps) {
                   (sidebarCollapsed || focusMode) && !(focusMode && focusSidebarOpen) ? 'pl-3 lg:pl-0 lg:pr-3' : 'pl-3 lg:hidden'
                 }`}
               >
-                <ModuleLauncher activeModule={activePage === 'dashboard' ? 'dashboard' : 'crm'} />
+                <ModuleLauncher />
               </div>
             )}
             {sidebarCollapsed || focusMode ? (
