@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { toApiError } from '../../api/errors';
+import { PersonHoverCard } from '../../components/PersonHoverCard';
 import {
   clearBusinessEntityFillValuesCache,
   getBusinessEntityFillValues,
@@ -298,7 +299,7 @@ export default function LocationMasterSection({ api, state, title, subtitle, nam
               <Td><span className="text-xs" style={{ color: C.sub }}>{countryOf(row)}</span></Td>
               <Td>
                 <span className="text-xs" style={{ color: '#94a3b8' }}>
-                  {formatDate(row.createdDate, '')}{row.createdBy ? ` · ${row.createdBy}` : ''}
+                  {formatDate(row.createdDate, '')}{row.createdBy ? <> · <PersonHoverCard name={row.createdBy} /></> : null}
                 </span>
               </Td>
               <Td right narrow>

@@ -1,4 +1,5 @@
 /** The five Business Entities list views, laid out as in Task Management. */
+import { PersonHoverCard } from '../../components/PersonHoverCard'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { fetchAttachmentImages, openAttachment } from '../../api/attachments'
 import { toApiError } from '../../api/errors'
@@ -341,7 +342,7 @@ export function EntityAlbum({ rows, onEdit, onDelete }: { rows: EntityListRow[] 
                   <span className="flex min-w-0 items-center gap-1">
                     <Icon d={ICON.user} size={10} className="shrink-0" />
                     <span className="shrink-0">Created By:</span>
-                    <Truncated text={row.createdBy || 'System'} className="font-semibold text-ink-soft" />
+                    {row.createdBy ? <PersonHoverCard name={row.createdBy} className="font-semibold text-ink-soft" /> : <Truncated text="System" className="font-semibold text-ink-soft" />}
                   </span>
                   <span className="shrink-0 text-[9px] font-semibold">{row.createdDate ? formatDateTime(row.createdDate, '') : ''}</span>
                 </div>

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { PersonHoverCard } from '../components/PersonHoverCard'
 import { ATTACHMENT_FORM_NO, fetchAttachmentBlob, listAttachments, uploadAttachment, type Attachment } from '../api/attachments'
 import {
   BUSINESS_ENTITY_LIMITS,
@@ -503,7 +504,7 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
               {isEdit && meta ? (
                 <div className="mb-3.5 flex flex-wrap items-baseline gap-x-6 gap-y-1.5 border-b border-line pb-3 text-xs">
                   <span className="flex items-baseline gap-1.5"><span className="text-ink-faint">Code</span><span className="font-mono font-semibold text-ink">{meta.code || '—'}</span></span>
-                  {meta.createdBy ? <span className="flex items-baseline gap-1.5"><span className="text-ink-faint">Created by</span><span className="font-semibold text-ink">{meta.createdBy}</span></span> : null}
+                  {meta.createdBy ? <span className="flex items-baseline gap-1.5"><span className="text-ink-faint">Created by</span><PersonHoverCard name={meta.createdBy} className="font-semibold text-ink" /></span> : null}
                   {meta.createdDate ? <span className="flex items-baseline gap-1.5"><span className="text-ink-faint">Created on</span><span className="font-semibold text-ink">{formatDateTime(meta.createdDate)}</span></span> : null}
                 </div>
               ) : null}

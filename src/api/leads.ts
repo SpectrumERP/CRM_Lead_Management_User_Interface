@@ -94,6 +94,8 @@ export interface ServerUserRef {
   loginId?: string | null
   printingName?: string | null
   email?: string | null
+  /** Sent on owners (`leadOwner`, `opportunityOwner`); shown on the profile card. */
+  mobileNo?: string | null
 }
 
 /** Contact person reference (`CrmContactPersonRefModel`). */
@@ -103,6 +105,7 @@ export interface ContactPersonRef {
   designation?: string | null
   email?: string | null
   phoneNo?: string | null
+  mobileNo?: string | null
 }
 
 /** Product reference nested in detail rows. */

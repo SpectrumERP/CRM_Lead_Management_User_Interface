@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import ActivityAttachments from "./ActivityAttachments"
 import { Button, Card, ChoiceGroup, Spinner } from "../ui"
 import { PersonContactCard } from "./PersonContactCard"
+import { PersonHoverCard } from "./PersonHoverCard"
 import { stopBubbleProps } from "../utils/events"
 import type { Contact } from "../data/contacts"
 import type { Lead } from "../data/leads"
@@ -164,7 +165,7 @@ export function ActivityCard({
             <span className="truncate">{when}</span>
             <span className="text-ink-faint" aria-hidden="true">·</span>
             <span className="inline-flex min-w-0 items-center gap-1" {...stopBubbleProps}>
-              <PersonContactCard name={activity.assignedTo} />
+              <PersonHoverCard name={activity.assignedTo} className="font-semibold text-ink-soft" />
             </span>
             {activity.reminder !== "None" ? (
               <>

@@ -24,6 +24,7 @@ import { prefetchPage } from '../app/prefetch';
 import { SecondaryContactsMore } from '../components/SecondaryContactsMore';
 import { Button, IconTooltip, PageHeader, PageLoader, Select, SortChevrons } from '../ui';
 import { findContactForLead, LeadPrimaryContactCard } from '../components/PersonContactCard';
+import { PersonHoverCard } from '../components/PersonHoverCard';
 import { matchesAny } from '../utils/text';
 import { stopBubbleProps } from '../utils/events';
 import { PAGE_COPY } from '../constants/messages';
@@ -144,7 +145,9 @@ const KanbanCard = memo(function KanbanCard({
       </IconTooltip>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-bold text-accent">{formatLeadValue(lead)}</span>
-        <span className="truncate text-xs text-ink-faint">{lead.assignedSalesperson.split(' ')[0]}</span>
+        <PersonHoverCard name={lead.assignedSalesperson} loginNo={lead.spectrum?.ownerLoginNo} className="text-xs text-ink-faint">
+          <span className="truncate">{lead.assignedSalesperson.split(' ')[0]}</span>
+        </PersonHoverCard>
       </div>
     </div>
   )
@@ -585,9 +588,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                           >
                             {lead.assignedSalesperson.charAt(0)}
                           </div>
-                          <IconTooltip label={lead.assignedSalesperson} overflowOnly className="min-w-0 max-w-24">
-                            <span className="block truncate text-xs" style={{ color: '#4a5d82' }}>{lead.assignedSalesperson}</span>
-                          </IconTooltip>
+                          <PersonHoverCard name={lead.assignedSalesperson} loginNo={lead.spectrum?.ownerLoginNo} className="max-w-24 text-xs text-ink-soft" />
                         </div>
                       </td>
                     )}
@@ -602,7 +603,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                     )}
                     {/* Server leads: who / when from search-data. In-app leads only know their dates. */}
                     {show('createdBy') && (
-                      <td className="whitespace-nowrap text-xs text-ink-soft">{lead.audit?.createdBy || ''}</td>
+                      <td className="whitespace-nowrap text-xs text-ink-soft"><PersonHoverCard name={lead.audit?.createdBy} /></td>
                     )}
                     {show('createdOn') && (
                       <td className="whitespace-nowrap text-xs" style={{ color: '#94a3b8' }}>
@@ -610,7 +611,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                       </td>
                     )}
                     {show('modifiedBy') && (
-                      <td className="whitespace-nowrap text-xs text-ink-soft">{lead.audit?.modifiedBy || ''}</td>
+                      <td className="whitespace-nowrap text-xs text-ink-soft"><PersonHoverCard name={lead.audit?.modifiedBy} /></td>
                     )}
                     {show('modifiedOn') && (
                       <td className="whitespace-nowrap text-xs" style={{ color: '#94a3b8' }}>

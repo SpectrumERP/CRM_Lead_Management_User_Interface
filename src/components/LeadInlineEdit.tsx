@@ -9,6 +9,7 @@ import {
   TextInput,
 } from '../ui'
 import { PersonContactCard } from './PersonContactCard'
+import { PersonHoverCard } from './PersonHoverCard'
 import { useCrmActions } from '../contexts/CrmStoreContext'
 import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
 import type { ToastType } from './Toast'
@@ -777,7 +778,7 @@ export function LeadSummaryEdit({
               </div>
             }
           >
-            {lead.assignedSalesperson || '—'}
+            {lead.assignedSalesperson ? <PersonHoverCard name={lead.assignedSalesperson} loginNo={lead.spectrum?.ownerLoginNo} /> : '—'}
           </Cell>
           <Cell
             label="Estimated Lead Value"

@@ -68,6 +68,54 @@ describe('session expiry', () => {
     expect(await loadAuth()).toBeNull()
   })
 
+  it('a 401 hidden by CORS (network failure) ends the session when the server answers an anonymous call', async () => {
+    await signIn(Date.now() + 60_000)
+    const listener = vi.fn()
+    onSessionExpired(listener)
+    // The call and the token check are blocked; the anonymous login check gets its 400.
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith('/api/Auth/login')) return new Response('{}', { status: 400 })
+      throw new TypeError('Failed to fetch')
+    })
+    await expect(http.get('/api/crm/leads/search-data')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' })
+    expect(listener).toHaveBeenCalledWith('rejected')
+    expect(await loadAuth()).toBeNull()
+  })
+
+  it('a network failure stays a network failure when the token is still accepted', async () => {
+    await signIn(Date.now() + 60_000)
+    const listener = vi.fn()
+    onSessionExpired(listener)
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes('/api/security/users')) return new Response('{}', { status: 400 })
+      throw new TypeError('Failed to fetch')
+    })
+    await expect(http.get('/api/crm/leads/search-data')).rejects.toMatchObject({ code: 'NETWORK' })
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('a network failure stays a network failure when the server is unreachable', async () => {
+    await signIn(Date.now() + 60_000)
+    const listener = vi.fn()
+    onSessionExpired(listener)
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    await expect(http.get('/api/crm/leads/search-data')).rejects.toMatchObject({ code: 'NETWORK' })
+    expect(listener).not.toHaveBeenCalled()
+    expect(await loadAuth()).not.toBeNull()
+  })
+
+  it('calls failing together share one token check', async () => {
+    await signIn(Date.now() + 60_000)
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith('/api/Auth/login')) return new Response('{}', { status: 400 })
+      throw new TypeError('Failed to fetch')
+    })
+    await Promise.allSettled([http.get('/api/a'), http.get('/api/b'), http.get('/api/c')])
+    const urls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(urls.filter((url) => url.includes('/api/security/users'))).toHaveLength(1)
+    expect(urls.filter((url) => url.endsWith('/api/Auth/login'))).toHaveLength(1)
+  })
+
   it('a valid token is sent as a bearer token and nothing ends', async () => {
     await signIn(Date.now() + 60_000)
     const listener = vi.fn()

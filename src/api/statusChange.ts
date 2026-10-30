@@ -23,6 +23,7 @@ import { fail } from './errors'
 import { assertSuccess, type SpectrumResponse } from './fillValues'
 import { http } from './http'
 import type { ServerUserRef, SpectrumPage } from './leads'
+import { rememberPerson } from './people'
 import { refreshServerLead, updateServerLead } from './leadSync'
 import { refreshServerOpportunity, updateServerOpportunity } from './opportunitySync'
 import {
@@ -418,7 +419,7 @@ function fromServerRow(record: StatusRecordType, row: ServerStatusHistoryRow): S
     remark: row.remark ?? undefined,
     orderValue: row.orderValue ?? undefined,
     orderDate: row.orderDate?.slice(0, 10) ?? undefined,
-    changedBy: { loginNo: row.changedBy?.loginNo, name: row.changedBy?.printingName?.trim() || row.changedBy?.loginId || '' },
+    changedBy: { loginNo: row.changedBy?.loginNo, name: rememberPerson(row.changedBy) || row.changedBy?.loginId || '' },
     changedDate: row.changedDate ?? '',
   }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Select, TextArea, TextInput } from '../ui'
 import { PersonContactCard } from './PersonContactCard'
+import { PersonHoverCard } from './PersonHoverCard'
 import { SecondaryContactsMore } from './SecondaryContactsMore'
 import { useCrmActions } from '../contexts/CrmStoreContext'
 import { saveConfirm, useConfirm } from '../contexts/ConfirmContext'
@@ -538,7 +539,7 @@ export function OpportunitySummaryEdit({
             </div>
           }
         >
-          <PersonContactCard name={opportunity.owner} company={opportunity.companyName} />
+          <PersonHoverCard name={opportunity.owner} loginNo={opportunity.spectrum?.ownerLoginNo} />
         </Cell>
         <Cell
           label="Expected Closure Date"
@@ -570,7 +571,7 @@ export function OpportunitySummaryEdit({
         </Cell>
         <Cell label="Created By" locked editing={editing}>
           {opportunity.createdBy ? (
-            <PersonContactCard name={opportunity.createdBy} company={opportunity.companyName} />
+            <PersonHoverCard name={opportunity.createdBy} />
           ) : (
             '—'
           )}
@@ -594,7 +595,7 @@ export function OpportunitySummaryEdit({
             </Cell>
             <Cell label="Converted By" locked editing={editing}>
               {opportunity.convertedBy ? (
-                <PersonContactCard name={opportunity.convertedBy} company={opportunity.companyName} />
+                <PersonHoverCard name={opportunity.convertedBy} />
               ) : (
                 '—'
               )}

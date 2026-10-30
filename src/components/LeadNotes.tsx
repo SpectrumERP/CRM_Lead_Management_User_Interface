@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { PersonHoverCard } from "./PersonHoverCard"
 import type { Attachment } from "../api/attachments"
 import { Button, FormGrid, TextAreaField, TextField } from "../ui"
 import { initialsAvatar } from "../data/contacts"
@@ -56,7 +57,7 @@ export function NoteCard({
     </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <p className="min-w-0 truncate text-[11px] font-bold leading-snug text-ink">{note.by}</p>
+            <p className="flex min-w-0 text-[11px] font-bold leading-snug text-ink"><PersonHoverCard name={note.by} /></p>
             <span className="shrink-0 text-[10px] leading-snug text-ink-faint">{when}</span>
           </div>
           {!expanded && preview ? (

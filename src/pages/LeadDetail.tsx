@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect, type ReactNode } from "react"
 import { Button, Card, ChoiceGroup, CountBadge, FormGrid, IconTooltip, TextAreaField, TextField } from "../ui"
 import { PersonContactCard, findContactForLead } from "../components/PersonContactCard"
+import { PersonHoverCard } from "../components/PersonHoverCard"
 import OutcomeDialog from "../components/OutcomeDialog"
 import FormDrawer from "../components/FormDrawer"
 import { useAuth } from "../auth/AuthContext"
@@ -743,6 +744,7 @@ function InfoField({
   mono,
   onClick,
   href,
+  person,
 }: {
   label: string
   value?: string | null
@@ -750,6 +752,8 @@ function InfoField({
   mono?: boolean
   onClick?: () => void
   href?: string
+  /** The value is a user's name: it opens their profile card. */
+  person?: { loginNo?: number }
 }) {
   const display = value?.trim() ? value : "—"
   const interactive = Boolean(onClick || href)
@@ -760,7 +764,7 @@ function InfoField({
         mono ? "font-mono" : ""
       } ${interactive ? "hover:underline" : ""}`}
     >
-      {display}
+      {person && value?.trim() ? <PersonHoverCard name={value} loginNo={person.loginNo} /> : display}
     </span>
   )
   return (
@@ -811,6 +815,7 @@ function HeaderFact({
   tone,
   avatar,
   onEdit,
+  person,
 }: {
   label: string
   value: string
@@ -818,6 +823,8 @@ function HeaderFact({
   tone: string
   avatar?: boolean
   onEdit?: () => void
+  /** The value is a user's name: it opens their profile card (the rest of the fact still edits). */
+  person?: { loginNo?: number }
 }) {
   const className = `group flex min-w-0 w-full items-center gap-3 px-4 py-3 text-left ${
     onEdit
@@ -838,7 +845,9 @@ function HeaderFact({
       {mark}
       <span className="min-w-0 flex-1">
         <span className="form-label !mb-0 block">{label}</span>
-        <span className="block truncate text-sm font-bold leading-tight text-ink">{value}</span>
+        <span className="block truncate text-sm font-bold leading-tight text-ink">
+          {person && value.trim() && value !== "—" ? <PersonHoverCard name={value} loginNo={person.loginNo} /> : value}
+        </span>
         <span className="block truncate text-[11px] text-ink-faint">{hint}</span>
       </span>
       {onEdit ? (
@@ -977,6 +986,7 @@ function OverviewTab({
             <InfoField
               label="Assigned Salesperson"
               value={lead.assignedSalesperson}
+              person={{ loginNo: lead.spectrum?.ownerLoginNo }}
             />
           </div>
           </div>
@@ -1257,7 +1267,7 @@ function OverviewTab({
                     <p className="text-xs leading-relaxed text-ink-faint">
                       {formatDateTime(a.scheduleDate, a.scheduleTime)}
                     </p>
-                    <p className="text-xs text-ink-muted">{a.assignedTo}</p>
+                    <p className="text-xs text-ink-muted"><PersonHoverCard name={a.assignedTo} /></p>
                   </button>
           ))}
         </div>
@@ -1869,7 +1879,7 @@ function EmailCard({
         <div className="accordion-panel-inner">
           <div className="accordion-panel-body border-t border-line-subtle px-2.5 pb-2 pl-10 pt-1.5">
             <p className="text-[11px] leading-relaxed text-ink-soft">{mail.body || "No email body."}</p>
-            <p className="mt-1 text-[10px] text-ink-faint">Logged by {mail.by}</p>
+            <p className="mt-1 flex min-w-0 gap-1 text-[10px] text-ink-faint">Logged by <PersonHoverCard name={mail.by} /></p>
           </div>
         </div>
       </div>
@@ -2441,6 +2451,7 @@ export default function LeadDetail({
                   hint="Who owns follow-up on this lead"
                   tone="bg-surface text-ink border-line"
                   avatar
+                  person={{ loginNo: leadData?.spectrum?.ownerLoginNo }}
                   onEdit={locked ? undefined : () => setEditingField("owner")}
                 />
               </div>

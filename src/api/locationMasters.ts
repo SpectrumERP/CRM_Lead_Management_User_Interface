@@ -13,6 +13,7 @@ import { fail } from './errors'
 import { assertCompanyNo, assertSuccess, type SpectrumResponse } from './fillValues'
 import { toNo } from './geo'
 import { http } from './http'
+import { rememberPerson } from './people'
 import { withQuery } from './query'
 
 export type LocationMasterKind = 'state' | 'city' | 'port'
@@ -78,6 +79,7 @@ function text(value: unknown): string {
 function person(value: unknown): string | null {
   if (typeof value === 'string') return value || null
   const user = obj(value)
+  rememberPerson(user)
   return text(user.printingName) || text(user.displayName) || text(user.loginId) || null
 }
 

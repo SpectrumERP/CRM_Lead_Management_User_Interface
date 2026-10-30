@@ -5,12 +5,21 @@ export const API_BASE = '/api/v1'
 export const spectrumEndpoints = {
   auth: {
     login: '/api/Auth/login',
+    /** Needs a signed-in user; the empty keyword fails validation (400) at once. Used to test the token (see http.ts). */
+    tokenCheck: '/api/security/users?keywordSearch=',
   },
   /** Base for Save / Load Data / Search / Delete master routes (see masters.ts). */
   masters: '/api/master',
   users: {
     /** User search for owner / assignee pickers (see users.ts). */
     search: '/api/security/users',
+    /** One user's record, for the profile card (see people.ts). */
+    loadData: (loginNo: number) => `/api/security/users/load-data/${loginNo}`,
+  },
+  /** Payroll employee linked to a user, for the profile card (see people.ts). */
+  employees: {
+    loadData: (empNo: number) => `/api/payroll/employees/load-data/${empNo}`,
+    photo: (empNo: number) => `/api/payroll/employees/photo/${empNo}`,
   },
   /** Shared document store used by every form (see attachments.ts). */
   attachments: {

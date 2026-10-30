@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { ChoiceGroup, Select, Spinner } from "../ui"
 import { fetchTimelinePage, type TimelineRecord } from "../api/timeline"
 import { toApiError } from "../api/errors"
-import { PersonContactCard } from "./PersonContactCard"
+import { PersonHoverCard } from "./PersonHoverCard"
 import { EmptyState, EmptyIcons } from "./CRMStates"
 import type { Contact } from "../data/contacts"
 import type { LeadTimelineEntry } from "../data/leads"
@@ -211,7 +211,7 @@ export function TimelineRows({ timeline, contacts = [] }: { timeline: readonly T
               <p className="mt-0.5 truncate text-[11px] leading-snug text-ink-soft">{t.detail}</p>
               <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-ink-faint">
                 <span className="shrink-0">By</span>
-                <PersonContactCard name={t.by} contacts={contacts} />
+                <PersonHoverCard name={t.by} className="font-semibold text-ink-soft" />
               </div>
             </div>
           </li>

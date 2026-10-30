@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PersonHoverCard } from './PersonHoverCard'
 import { Spinner } from '../ui'
 import { toApiError } from '../api/errors'
 import { PENDING_API_MODE, isPendingApiMock, usePendingData } from '../api/pendingApiStore'
@@ -89,7 +90,7 @@ export default function StatusHistory({ record, recordNo, serverLogs, currency, 
               <tr key={`${row.statusChangeHistoryNo}-${row.changedDate}`} className="border-b border-line-subtle last:border-b-0 align-top">
                 <td className="whitespace-nowrap px-3 py-2 text-ink-soft">{formatDateTime(row.changedDate)}</td>
                 <td className="px-3 py-2 text-ink">
-                  {row.changedBy.name || '—'}
+                  {row.changedBy.name ? <PersonHoverCard name={row.changedBy.name} loginNo={row.changedBy.loginNo || undefined} /> : '—'}
                   {row.changedBy.loginNo ? <span className="ml-1 text-[10px] text-ink-faint">#{row.changedBy.loginNo}</span> : null}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">

@@ -1,4 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react'
+import { PersonHoverCard } from '../components/PersonHoverCard'
 import { spectrumEntityId, useBusinessEntityOptions, type EntityOption } from '../components/useBusinessEntityOptions'
 import EntityContactsFields, {
   contactDetailNos,
@@ -1035,7 +1036,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                     </div>
                     <div className="p-2 pt-1">
                     <p className="truncate text-xs text-ink-faint">{item.typeName} · Due {formatDate(item.dueDate)} · {item.status}</p>
-                    <p className="truncate text-xs text-ink-soft">{item.assignedTo}</p>
+                    <p className="flex min-w-0 text-xs text-ink-soft"><PersonHoverCard name={item.assignedTo} /></p>
                     {item.notesOutcome ? <p className="mt-1 line-clamp-2 text-xs text-ink-soft">{item.notesOutcome}</p> : null}
                     {item.attachments.length ? (
                       <p className="mt-1 truncate text-xs text-primary">
@@ -1095,7 +1096,7 @@ export default function CreateLead({ existing, onBack, onSuccess, embedded, pref
                   {addedNotes.map((item) => (
                     <Card key={item.key} className="min-w-0 !shadow-none">
                       <div className="flex items-start bg-gray-200 p-2 pb-0.5 rounded-t-xl gap-1">
-                        <p className="min-w-0 flex-1 truncate text-xs font-semibold text-ink">{item.by}</p>
+                        <p className="flex min-w-0 flex-1 text-xs font-semibold text-ink"><PersonHoverCard name={item.by} /></p>
                         <Button
                           variant="icon"
                           className="!h-6 !w-6 shrink-0"

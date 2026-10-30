@@ -11,6 +11,7 @@ import { spectrumEndpoints } from './endpoints'
 import { assertSuccess } from './fillValues'
 import { http } from './http'
 import type { ServerTimelineRow, SpectrumPage } from './leads'
+import { rememberPerson } from './people'
 import { withQuery } from './query'
 
 export type TimelineRecord = 'lead' | 'opportunity'
@@ -42,7 +43,7 @@ export function timelineFromRows(rows: readonly ServerTimelineRow[] | null | und
     type: row.timelineType ?? '',
     typeNo: row.timelineTypeNo ?? undefined,
     at: row.actionDate ?? '',
-    by: row.createdBy?.printingName?.trim() || row.createdBy?.loginId || '',
+    by: rememberPerson(row.createdBy),
   }))
 }
 

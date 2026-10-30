@@ -9,6 +9,7 @@ import { getAuthToken } from './authStore'
 import { getSessionSync } from './session'
 import { isSessionEnded, notifySessionExpired } from './sessionExpiry'
 import { spectrumOrigin } from './config'
+import { spectrumEndpoints } from './endpoints'
 import { asTransportError, errorFromResponse, isApiError, serverErrorMessage, unauthenticated, type ApiError } from './errors'
 
 export type HttpVerb = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -208,6 +209,45 @@ http.interceptors.request.use(async (config) => {
     return config
   }
   return { ...config, headers: { ...config.headers, Authorization: `Bearer ${token}` } }
+})
+
+const PROBE_TIMEOUT_MS = 10_000
+
+/** True when the server's answer reached the page (any status); false when the browser blocked or lost it. */
+async function answers(url: string, init: RequestInit): Promise<boolean> {
+  try {
+    await fetch(`${spectrumOrigin()}${url}`, { ...init, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** One check at a time: every call that fails together (a dashboard loads several) waits on the same answer. */
+let tokenCheck: Promise<boolean> | null = null
+
+/**
+ * The server's 401 carries no CORS headers, so the browser hides it and the call fails as NETWORK.
+ * Told apart by asking again: the token is rejected when a call with it is blocked while an
+ * anonymous one (an empty login, refused by validation with CORS headers) gets an answer.
+ */
+function tokenRejected(authorization: string): Promise<boolean> {
+  tokenCheck ??= (async () => {
+    const headers = { Accept: 'application/json' }
+    if (await answers(spectrumEndpoints.auth.tokenCheck, { headers: { ...headers, Authorization: authorization } })) return false
+    return answers(spectrumEndpoints.auth.login, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: '{}' })
+  })().finally(() => {
+    tokenCheck = null
+  })
+  return tokenCheck
+}
+
+/** Default: a "network" failure of a signed-in call may be a hidden 401 — if the token was rejected, fail as UNAUTHENTICATED. */
+http.interceptors.response.use(undefined, async (error, config) => {
+  const authorization = config.headers.Authorization
+  if (error.code !== 'NETWORK' || !authorization || isSessionEnded() || globalThis.navigator?.onLine === false) throw error
+  if (await tokenRejected(authorization)) unauthenticated()
+  throw error
 })
 
 /** Default: a 401 means the server no longer accepts the token — end the session (alert + sign-out). */

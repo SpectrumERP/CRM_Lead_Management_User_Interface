@@ -41,6 +41,7 @@ import { forgetNoteAttachments, noteAttachmentBody } from './noteAttachments'
 import { isPendingApiMock } from './pendingApiStore'
 import { resolveSpectrumCompany } from './spectrumCompany'
 import { searchUsers, userDisplayName } from './users'
+import { rememberPerson } from './people'
 
 // ─── Ids ──────────────────────────────────────────────────────────────────────
 
@@ -65,8 +66,11 @@ export function isServerChildId(id: string) {
 
 // ─── Mapping ──────────────────────────────────────────────────────────────────
 
+/** Display name of an API user; the user's login no / email / mobile no are kept for the profile card. */
 export function personName(user?: ServerUserRef | null) {
-  return user ? userDisplayName({ printingName: user.printingName ?? '', loginId: user.loginId ?? '' }) : ''
+  if (!user) return ''
+  rememberPerson(user)
+  return userDisplayName({ printingName: user.printingName ?? '', loginId: user.loginId ?? '' })
 }
 
 export function dateOnly(iso?: string | null) {
@@ -120,7 +124,7 @@ export function contactEntriesFromRows(
       const no = contactRowNo(row)
       const person = row.businessEntityContactPerson
       const before = no ? known?.find((e) => e.businessEntityContactPersonDetailNo === no) : undefined
-      const phone = person?.phoneNo?.trim()
+      const phone = person?.phoneNo?.trim() || person?.mobileNo?.trim()
       const designation = person?.designation?.trim() || before?.designation
       return {
         name: contactRowName(row),

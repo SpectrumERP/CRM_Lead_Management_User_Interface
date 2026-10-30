@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { ApiUserName } from '../../components/PersonHoverCard'
 import { useBusinessEntityTypes } from '../../components/useBusinessEntityTypes'
 import { stageBadgeStyle } from '../../components/useOpportunityStageColors'
 import type { DashboardLeadAttention, DashboardNextActivity, DashboardOpportunityAttention } from '../../api/dashboard'
@@ -116,7 +117,7 @@ export function LeadsAttentionTable({ rows, stagnantDays, todayIso, onOpenLead }
       {
         key: 'owner',
         label: 'Lead Owner',
-        render: (r) => r.leadOwner?.printingName || '',
+        render: (r) => <ApiUserName user={r.leadOwner} />,
         sortValue: (r) => r.leadOwner?.printingName,
         searchText: (r) => r.leadOwner?.printingName,
       },

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PersonHoverCard } from '../components/PersonHoverCard'
 import {
   Activity, ActivityType, ActivityStatus,
   ACTIVITY_STATUSES,
@@ -273,7 +274,7 @@ export default function ActivitiesPage({ onViewLead, onToast }: ActivitiesPagePr
                           <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 h-6 w-6 bg-primary text-[8px] text-surface">
                             {activity.assignedTo.split(' ').map((n) => n[0]).join('')}
                           </div>
-                          <span className="text-xs text-ink">{activity.assignedTo}</span>
+                          <PersonHoverCard name={activity.assignedTo} className="text-xs text-ink" />
                         </div>
                       </td>
                       <td className="text-xs tabular-nums text-ink">

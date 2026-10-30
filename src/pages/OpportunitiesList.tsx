@@ -19,6 +19,7 @@ import { formatAuditStamp, formatLeadDate, formatMoneyTotals } from '../data/lea
 import { formatDealValue, dealStageClass, type Opportunity } from '../data/opportunities'
 import { Button, IconTooltip, MultiSelect, PageHeader, PageLoader, SortChevrons, nextSort } from '../ui'
 import { PersonContactCard } from '../components/PersonContactCard'
+import { PersonHoverCard } from '../components/PersonHoverCard'
 import type { ToastType } from '../components/Toast'
 import { PAGE_COPY } from '../constants/messages'
 import { ColumnVisibilityMenu, useColumnVisibility, type GridColumn } from '../components/ColumnVisibility'
@@ -509,7 +510,7 @@ function OpportunityRow({
       )}
       {show('owner') && (
         <td>
-          <span className="text-xs text-ink-soft">{item.owner}</span>
+          <PersonHoverCard name={item.owner} loginNo={item.spectrum?.ownerLoginNo} className="text-xs text-ink-soft" />
         </td>
       )}
       {/* search-data `lastActivityDate` */}
@@ -523,7 +524,7 @@ function OpportunityRow({
       {/* Server opportunities: who / when from search-data. In-app ones only know their dates. */}
       {show('createdBy') && (
         <td>
-          <span className="whitespace-nowrap text-xs text-ink-soft">{item.audit?.createdBy || item.createdBy || ''}</span>
+          <PersonHoverCard name={item.audit?.createdBy || item.createdBy} className="whitespace-nowrap text-xs text-ink-soft" />
         </td>
       )}
       {show('createdOn') && (
@@ -535,7 +536,7 @@ function OpportunityRow({
       )}
       {show('modifiedBy') && (
         <td>
-          <span className="whitespace-nowrap text-xs text-ink-soft">{item.audit?.modifiedBy || ''}</span>
+          <PersonHoverCard name={item.audit?.modifiedBy} className="whitespace-nowrap text-xs text-ink-soft" />
         </td>
       )}
       {show('modifiedOn') && (

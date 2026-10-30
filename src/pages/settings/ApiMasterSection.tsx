@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { toApiError } from '../../api/errors';
+import { PersonHoverCard } from '../../components/PersonHoverCard';
 import { NAME_MAX, needsDetailForEdit, withLookupFlags, type MasterApi, type MasterLookupDef, type MasterLookupOption, type MasterRow } from '../../api/masters';
 import { clearLeadFillValuesCache } from '../../api/leadFormFillValues';
 import { clearOpportunityFillValuesCache } from '../../api/opportunityFormFillValues';
@@ -382,7 +383,7 @@ export default function ApiMasterSection({ api, state, title, subtitle, noun, na
               <Td>
                 <span className="text-xs" style={{ color: '#94a3b8' }}>
                   {formatDate(item.modifiedDate ?? item.createdDate, '')}
-                  {item.modifiedBy || item.createdBy ? ` · ${item.modifiedBy ?? item.createdBy}` : ''}
+                  {item.modifiedBy || item.createdBy ? <> · <PersonHoverCard name={item.modifiedBy || item.createdBy} /></> : null}
                 </span>
               </Td>
               <Td right narrow>

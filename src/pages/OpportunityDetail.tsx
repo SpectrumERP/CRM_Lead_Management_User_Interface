@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { PersonHoverCard } from '../components/PersonHoverCard'
 import {
   dealStageClass,
   formatOpportunityStage,
@@ -567,7 +568,7 @@ export default function OpportunityDetail({
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-ink">{item.subject}</p>
                       <p className="mt-0.5 text-[11px] text-ink-faint">
-                        {item.type} · {formatDateTime(item.scheduleDate, item.scheduleTime)} · {item.assignedTo}
+                        {item.type} · {formatDateTime(item.scheduleDate, item.scheduleTime)} · <PersonHoverCard name={item.assignedTo} />
                       </p>
                       <ActivityAttachments activity={item} className="mt-1.5" />
                     </div>

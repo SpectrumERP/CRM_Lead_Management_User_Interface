@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { ApiUserName } from '../../components/PersonHoverCard'
 import { isoDay, type DashboardOpenActivity } from '../../api/dashboard'
 import { formatDate } from '../../utils/dateFormat'
 import { DashboardTable, type DashboardColumn } from './DashboardTable'
@@ -72,7 +73,7 @@ export function OpenActivitiesTable({ activities, todayIso, onOpenActivity, onOp
       {
         key: 'assigned',
         label: 'Assigned To',
-        render: (a) => a.assignTo?.printingName || '',
+        render: (a) => <ApiUserName user={a.assignTo} />,
         sortValue: (a) => a.assignTo?.printingName,
         searchText: (a) => a.assignTo?.printingName,
       },

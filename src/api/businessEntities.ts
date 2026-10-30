@@ -19,6 +19,7 @@ import type { Attachment } from './attachments'
 import { attachmentLinks } from './attachments'
 import type { BusinessEntityFillValues } from './businessEntityFillValues'
 import { spectrumEndpoints } from './endpoints'
+import { rememberPerson } from './people'
 import { fail } from './errors'
 import { assertCompanyNo, assertSuccess, type SpectrumResponse } from './fillValues'
 import { toNo } from './geo'
@@ -384,6 +385,7 @@ function isPrimaryFlag(value: unknown) {
 function personName(value: unknown): string | null {
   if (typeof value === 'string') return value || null
   const user = obj(value)
+  rememberPerson(user)
   return text(user.displayName) || text(user.printingName) || text(user.userName) || text(user.loginId) || text(user.name) || null
 }
 

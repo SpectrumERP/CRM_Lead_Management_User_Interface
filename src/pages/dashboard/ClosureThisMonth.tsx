@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { ApiUserName, PersonHoverCard } from '../../components/PersonHoverCard'
 import {
   toMoney,
   type DashboardExpectedClosure,
@@ -226,7 +227,7 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
               {note.fromActivity ? null : (
                 <span className="block text-[11px] text-ink-muted">
                   {formatDate(note.date, '')}
-                  {note.by ? ` · ${note.by}` : ''}
+                  {note.by ? <> · <PersonHoverCard name={note.by} /></> : null}
                 </span>
               )}
             </span>
@@ -325,7 +326,7 @@ export function ClosureThisMonthTable({ rows, totals, activities, todayIso, onOp
                         {activityLabel(a)}
                       </td>
                       <td className="px-3 py-2.5 text-ink-muted">{a.activityType?.activityTypeName || ''}</td>
-                      <td className="px-3 py-2.5 text-ink-muted">{a.assignTo?.printingName || a.assignTo?.loginId || ''}</td>
+                      <td className="px-3 py-2.5 text-ink-muted"><ApiUserName user={a.assignTo} /></td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-xs">
                         <DueDate date={a.dueDate} todayIso={todayIso} overdue={a.isOverdue} />
                       </td>

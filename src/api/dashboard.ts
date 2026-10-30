@@ -23,6 +23,7 @@ export interface DashboardUser {
   loginId?: string | null
   printingName?: string | null
   email?: string | null
+  mobileNo?: string | null
 }
 
 export interface DashboardCurrency {

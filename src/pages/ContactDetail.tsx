@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PersonHoverCard } from '../components/PersonHoverCard'
 import { Contact, contactStatusMeta, initialsAvatar, avatarGradient } from '../data/contacts';
 import { Activity, activityTypeMeta, activityStatusMeta, formatDateTime } from '../data/activities';
 import { Meeting, meetingModeMeta, meetingStatusMeta, formatMeetingDateTime } from '../data/meetings';
@@ -400,7 +401,7 @@ function ActivitiesTab({ activities, onAdd }: { activities: Activity[]; onAdd: (
                       </span>
                     </td>
                     <td><span className="text-sm" style={{ color: '#0c1a3a' }}>{a.subject}</span></td>
-                    <td><span className="text-sm" style={{ color: '#7a8494' }}>{a.assignedTo}</span></td>
+                    <td><PersonHoverCard name={a.assignedTo} className="text-sm text-ink-muted" /></td>
                     <td><span className="text-sm" style={{ color: '#7a8494' }}>{formatDateTime(a.scheduleDate, a.scheduleTime, '')}</span></td>
                     <td>
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: sMeta.bg, color: sMeta.color, border: `1px solid ${sMeta.border}` }}>
