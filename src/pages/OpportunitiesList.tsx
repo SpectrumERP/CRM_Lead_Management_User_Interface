@@ -15,6 +15,8 @@ import { RowQuickMenu } from '../components/RowQuickMenu'
 import { RecordRowActions } from '../components/RecordRowActions'
 import { EmptyIcons, EmptyState, NoResults, SkeletonTableRows } from '../components/CRMStates'
 import { useCrmActions } from '../contexts/CrmStoreContext'
+import { useFormRights } from '../contexts/FormRightsContext'
+import { FORM_NO } from '../api/formRights'
 import { formatAuditStamp, formatLeadDate, formatMoneyTotals } from '../data/leads'
 import { formatDealValue, dealStageClass, type Opportunity } from '../data/opportunities'
 import { Button, IconTooltip, MultiSelect, PageHeader, PageLoader, SortChevrons, nextSort } from '../ui'
@@ -35,6 +37,7 @@ interface OpportunitiesListProps {
 
 export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }: OpportunitiesListProps) {
   const { addActivity, removeOpportunity } = useCrmActions()
+  const rights = useFormRights(FORM_NO.opportunity)
   const [search, setSearch] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<Opportunity | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
@@ -123,7 +126,7 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
         bordered
         title={`Opportunitie${total === 1 ? '' : 's'} - ${total}`}
         actions={
-          onCreate ? (
+          onCreate && rights.isSave ? (
             <Button variant="solid" onClick={onCreate}>
               <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -207,13 +210,15 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
           >
             Change Stage
           </button>
-          <button
-            type="button"
-            className="ml-auto font-semibold text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            onClick={() => setConfirmBulkDelete(true)}
-          >
-            Delete
-          </button>
+          {rights.isDelete ? (
+            <button
+              type="button"
+              className="ml-auto font-semibold text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              onClick={() => setConfirmBulkDelete(true)}
+            >
+              Delete
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -290,8 +295,8 @@ export default function OpportunitiesList({ onView, onEdit, onCreate, onToast }:
                       selected={selected.has(item.id)}
                       onToggleSelect={() => toggleSelect(item.id)}
                       onView={() => onView(item.id)}
-                      onEdit={() => onEdit(item.id)}
-                      onDelete={() => setConfirmDelete(item)}
+                      onEdit={rights.isUpdate ? () => onEdit(item.id) : undefined}
+                      onDelete={rights.isDelete ? () => setConfirmDelete(item) : undefined}
                       onAddActivity={() => setActivityOpp(item)}
                       stageColor={item.spectrum ? stageColor(item.dealStage) : undefined}
                       show={columns.isVisible}
@@ -415,8 +420,9 @@ function OpportunityRow({
   selected: boolean
   onToggleSelect: () => void
   onView: () => void
-  onEdit: () => void
-  onDelete: () => void
+  /** Left out without the Update / Delete right (the row button is hidden). */
+  onEdit?: () => void
+  onDelete?: () => void
   onAddActivity: () => void
 }) {
   return (

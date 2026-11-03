@@ -25,14 +25,17 @@ describe('form rights', () => {
         success: true,
         message: '',
         data: [
-          { formNo: 1550, formName: 'Business Entity', isOpen: true, isSave: true, isUpdate: false, isDelete: false, isReport: false },
+          { formNo: 1550, formName: 'Business Entity', moduleNo: 22, isOpen: true, isSave: true, isUpdate: false, isDelete: false, isReport: false },
+          { formNo: 1572, formName: 'Document Management', moduleNo: 27, isOpen: false, isSave: false, isUpdate: false, isDelete: false, isReport: false },
+          { formNo: 1547, formName: 'Tasks', moduleNo: 26, isOpen: false, isSave: false, isUpdate: false, isDelete: false, isReport: true },
           { formNo: 'x', isOpen: true },
         ],
       }),
     )
-    const map = await fetchFormRights()
+    const { map, modules } = await fetchFormRights()
     expect(new URL(String(fetchMock.mock.calls[0][0])).pathname).toBe('/api/globaldata/forms/task-management-menu')
-    expect(map).toEqual({ 1550: { isOpen: true, isSave: true, isUpdate: false, isDelete: false, isReport: false } })
+    expect(map[1550]).toEqual({ isOpen: true, isSave: true, isUpdate: false, isDelete: false, isReport: false })
+    expect(modules).toEqual([22, 26])
   })
 
   it('gives no rights for forms the loaded menu does not list', () => {
@@ -45,6 +48,7 @@ describe('form rights', () => {
     expect(fallbackRights(FORM_NO.port, 'Admin')).toBe(ALL_RIGHTS)
     expect(fallbackRights(FORM_NO.port, 'Sales Manager')).toBe(NO_RIGHTS)
     expect(fallbackRights(FORM_NO.businessEntity, 'Sales Manager')).toEqual({ ...ALL_RIGHTS, isDelete: false })
+    expect(fallbackRights(FORM_NO.lead, 'Sales Manager')).toBe(ALL_RIGHTS)
     expect(rightsFor(FORM_NO.city, { source: 'fallback', map: {} }, 'Admin')).toBe(ALL_RIGHTS)
   })
 })

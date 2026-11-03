@@ -6,8 +6,8 @@ import AppShell from './AppShell'
 import { AdminGuard, AuthGuard } from './guards'
 import { paths } from './paths'
 import { isLeadLocked, leadLockedReason } from '../data/leads'
-import { FORM_NO } from '../api/formRights'
-import { useFormRights } from '../contexts/FormRightsContext'
+import { DASHBOARD_FORM_NO, FORM_NO, type FormRights } from '../api/formRights'
+import { useFormRights, useFormRightsOf } from '../contexts/FormRightsContext'
 
 const Dashboard = lazy(() => import('../pages/Dashboard'))
 const LeadsList = lazy(() => import('../pages/LeadsList'))
@@ -31,25 +31,48 @@ const AuditLog = lazy(() => import('../pages/AuditLog'))
 const Login = lazy(() => import('../pages/Login'))
 const Forbidden = lazy(() => import('../pages/Forbidden'))
 
+/** A screen tied to a Spectrum form: without the right (Open by default) it shows Forbidden. */
+function FormRightsGate({ formNo, right = 'isOpen', children }: { formNo: number; right?: keyof FormRights; children: ReactNode }) {
+  const rights = useFormRights(formNo)
+  if (rights.ready && !rights[right]) return <Navigate to={paths.forbidden} replace />
+  return children
+}
+
+/**
+ * The dashboard is the CRM's first page. Once it has a form (VITE_DASHBOARD_FORM_NO) and the user
+ * cannot open it, they land on the first menu page they can open instead.
+ */
+function DashboardGate({ children }: { children: ReactNode }) {
+  const rightsOf = useFormRightsOf()
+  const { ready } = useFormRights(DASHBOARD_FORM_NO ?? 0)
+  if (!DASHBOARD_FORM_NO || !ready || rightsOf(DASHBOARD_FORM_NO).isOpen) return children
+  const fallback = [
+    { formNo: FORM_NO.lead, to: paths.leads },
+    { formNo: FORM_NO.opportunity, to: paths.opportunities },
+    { formNo: FORM_NO.businessEntity, to: paths.entities },
+  ].find((page) => rightsOf(page.formNo).isOpen)
+  return <Navigate to={fallback?.to ?? paths.forbidden} replace />
+}
+
 function DashboardPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   return (
-    <Dashboard
-      onOpenLead={(id) => navigate(paths.lead(id))}
-      onOpenOpportunity={(id) => navigate(paths.opportunity(id))}
-      onLeadStage={(stage) => navigate(`${paths.leads}?${new URLSearchParams({ stage, status: 'Open' })}`)}
-      onOpportunityStage={(stage) => navigate(`${paths.opportunities}?${new URLSearchParams({ stage })}`)}
-      onToast={addToast}
-    />
+    <DashboardGate>
+      <Dashboard
+        onOpenLead={(id) => navigate(paths.lead(id))}
+        onOpenOpportunity={(id) => navigate(paths.opportunity(id))}
+        onLeadStage={(stage) => navigate(`${paths.leads}?${new URLSearchParams({ stage, status: 'Open' })}`)}
+        onOpportunityStage={(stage) => navigate(`${paths.opportunities}?${new URLSearchParams({ stage })}`)}
+        onToast={addToast}
+      />
+    </DashboardGate>
   )
 }
 
 /** Business entity screens need the Open right on form 1550 (see formRights.ts). */
 function EntityRightsGate({ children }: { children: ReactNode }) {
-  const rights = useFormRights(FORM_NO.businessEntity)
-  if (rights.ready && !rights.isOpen) return <Navigate to={paths.forbidden} replace />
-  return children
+  return <FormRightsGate formNo={FORM_NO.businessEntity}>{children}</FormRightsGate>
 }
 
 function EntitiesListPage() {
@@ -172,12 +195,14 @@ function LeadsListPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   return (
-    <LeadsList
-      onCreateLead={() => navigate(paths.leadNew)}
-      onViewLead={(id) => navigate(paths.lead(id))}
-      onEditLead={(id) => navigate(paths.leadEdit(id))}
-      onToast={addToast}
-    />
+    <FormRightsGate formNo={FORM_NO.lead}>
+      <LeadsList
+        onCreateLead={() => navigate(paths.leadNew)}
+        onViewLead={(id) => navigate(paths.lead(id))}
+        onEditLead={(id) => navigate(paths.leadEdit(id))}
+        onToast={addToast}
+      />
+    </FormRightsGate>
   )
 }
 
@@ -185,13 +210,15 @@ function CreateLeadPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   return (
-    <CreateLead
-      onBack={() => navigate(paths.leads)}
-      onSuccess={() => {
-        navigate(paths.leads)
-        addToast('success', 'Lead Created', 'New lead has been added to the pipeline.')
-      }}
-    />
+    <FormRightsGate formNo={FORM_NO.lead} right="isSave">
+      <CreateLead
+        onBack={() => navigate(paths.leads)}
+        onSuccess={() => {
+          navigate(paths.leads)
+          addToast('success', 'Lead Created', 'New lead has been added to the pipeline.')
+        }}
+      />
+    </FormRightsGate>
   )
 }
 
@@ -209,15 +236,17 @@ function EditLeadPage() {
   if (!existing) return <Navigate to={paths.leads} replace />
   if (locked) return <Navigate to={paths.lead(id)} replace />
   return (
-    <CreateLead
-      existing={existing}
-      onBack={() => navigate(paths.lead(id))}
-      onSuccess={() => {
-        navigate(paths.lead(id))
-        addToast('success', 'Lead Updated', 'Changes saved successfully.')
-      }}
-      onConverted={(opportunityId) => navigate(paths.opportunity(opportunityId))}
-    />
+    <FormRightsGate formNo={FORM_NO.lead} right="isUpdate">
+      <CreateLead
+        existing={existing}
+        onBack={() => navigate(paths.lead(id))}
+        onSuccess={() => {
+          navigate(paths.lead(id))
+          addToast('success', 'Lead Updated', 'Changes saved successfully.')
+        }}
+        onConverted={(opportunityId) => navigate(paths.opportunity(opportunityId))}
+      />
+    </FormRightsGate>
   )
 }
 
@@ -226,15 +255,17 @@ function LeadDetailPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   return (
-    <LeadDetail
-      leadId={id}
-      onBack={() => navigate(paths.leads)}
-      onEdit={() => navigate(paths.leadEdit(id))}
-      onToast={addToast}
-      onViewEntity={(entityId) => navigate(paths.entity(entityId))}
-      onViewContact={(contactId) => navigate(paths.contact(contactId))}
-      onViewOpportunity={(opportunityId) => navigate(paths.opportunity(opportunityId))}
-    />
+    <FormRightsGate formNo={FORM_NO.lead}>
+      <LeadDetail
+        leadId={id}
+        onBack={() => navigate(paths.leads)}
+        onEdit={() => navigate(paths.leadEdit(id))}
+        onToast={addToast}
+        onViewEntity={(entityId) => navigate(paths.entity(entityId))}
+        onViewContact={(contactId) => navigate(paths.contact(contactId))}
+        onViewOpportunity={(opportunityId) => navigate(paths.opportunity(opportunityId))}
+      />
+    </FormRightsGate>
   )
 }
 
@@ -242,12 +273,14 @@ function OpportunitiesListPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   return (
-    <OpportunitiesList
-      onView={(id) => navigate(paths.opportunity(id))}
-      onEdit={(id) => navigate(paths.opportunityEdit(id))}
-      onCreate={() => navigate(paths.opportunityNew)}
-      onToast={addToast}
-    />
+    <FormRightsGate formNo={FORM_NO.opportunity}>
+      <OpportunitiesList
+        onView={(id) => navigate(paths.opportunity(id))}
+        onEdit={(id) => navigate(paths.opportunityEdit(id))}
+        onCreate={() => navigate(paths.opportunityNew)}
+        onToast={addToast}
+      />
+    </FormRightsGate>
   )
 }
 
@@ -255,13 +288,15 @@ function CreateOpportunityPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   return (
-    <CreateOpportunity
-      onBack={() => navigate(paths.opportunities)}
-      onSuccess={(id) => {
-        navigate(paths.opportunity(id))
-        addToast('success', 'Opportunity Created', 'Opportunity saved successfully.')
-      }}
-    />
+    <FormRightsGate formNo={FORM_NO.opportunity} right="isSave">
+      <CreateOpportunity
+        onBack={() => navigate(paths.opportunities)}
+        onSuccess={(id) => {
+          navigate(paths.opportunity(id))
+          addToast('success', 'Opportunity Created', 'Opportunity saved successfully.')
+        }}
+      />
+    </FormRightsGate>
   )
 }
 
@@ -270,13 +305,15 @@ function OpportunityDetailPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   return (
-    <OpportunityDetail
-      opportunityId={id}
-      onBack={() => navigate(paths.opportunities)}
-      onEdit={(opportunityId) => navigate(paths.opportunityEdit(opportunityId))}
-      onViewLead={(leadId) => navigate(paths.lead(leadId))}
-      onToast={addToast}
-    />
+    <FormRightsGate formNo={FORM_NO.opportunity}>
+      <OpportunityDetail
+        opportunityId={id}
+        onBack={() => navigate(paths.opportunities)}
+        onEdit={(opportunityId) => navigate(paths.opportunityEdit(opportunityId))}
+        onViewLead={(leadId) => navigate(paths.lead(leadId))}
+        onToast={addToast}
+      />
+    </FormRightsGate>
   )
 }
 
@@ -287,14 +324,16 @@ function EditOpportunityPage() {
   const existing = useCrmSelector((state) => state.opportunities.find((item) => item.id === id) ?? null)
   if (!existing) return <Navigate to={paths.opportunities} replace />
   return (
-    <EditOpportunity
-      existing={existing}
-      onBack={() => navigate(paths.opportunity(id))}
-      onSuccess={() => {
-        navigate(paths.opportunity(id))
-        addToast('success', 'Opportunity Updated', 'Changes saved successfully.')
-      }}
-    />
+    <FormRightsGate formNo={FORM_NO.opportunity} right="isUpdate">
+      <EditOpportunity
+        existing={existing}
+        onBack={() => navigate(paths.opportunity(id))}
+        onSuccess={() => {
+          navigate(paths.opportunity(id))
+          addToast('success', 'Opportunity Updated', 'Changes saved successfully.')
+        }}
+      />
+    </FormRightsGate>
   )
 }
 

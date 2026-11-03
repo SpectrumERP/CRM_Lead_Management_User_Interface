@@ -9,6 +9,8 @@ import {
 } from '../data/opportunities'
 import { useCrmActions, useCrmSelector } from '../contexts/CrmStoreContext'
 import { useConfirm } from '../contexts/ConfirmContext'
+import { useFormRights } from '../contexts/FormRightsContext'
+import { FORM_NO } from '../api/formRights'
 import { opportunityNoFromId, refreshServerOpportunity } from '../api/opportunitySync'
 import { bySequence } from '../api/fillValues'
 import { useOpportunityFillValues } from '../components/useOpportunityFillValues'
@@ -294,6 +296,8 @@ export default function OpportunityDetail({
 }: OpportunityDetailProps) {
   const { addActivity, removeActivity, patchActivity } = useCrmActions()
   const confirm = useConfirm()
+  // Without the Update right (formRights.ts) the opportunity's own fields are read-only.
+  const { isUpdate } = useFormRights(FORM_NO.opportunity)
   // Server opportunities only — in-app sample records are not shown.
   const opportunity = useCrmSelector((state) =>
     state.opportunities.find((item) => item.id === opportunityId && item.spectrum),
@@ -425,6 +429,7 @@ export default function OpportunityDetail({
                   onEdit={setEditingField}
                   onCancel={() => setEditingField(null)}
                   onToast={onToast}
+                  readOnly={!isUpdate}
                 />
                 <p className="mt-0.5 text-xs text-ink-muted">
                   <span className="font-mono font-semibold text-primary">{opportunity.id}</span>
@@ -451,12 +456,14 @@ export default function OpportunityDetail({
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
-              <Button variant="secondary" onClick={() => onEdit(opportunity.id)}>
-                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit
-              </Button>
+              {isUpdate ? (
+                <Button variant="secondary" onClick={() => onEdit(opportunity.id)}>
+                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </Button>
+              ) : null}
               {opportunity.leadId && onViewLead ? (
                 <Button variant="secondary" onClick={() => onViewLead(opportunity.leadId!)}>
                   View Lead
@@ -472,7 +479,7 @@ export default function OpportunityDetail({
               hint="Where this deal sits in the pipeline"
               tone={dealStageClass(stage)}
               toneStyle={stageBadgeStyle(stageColor(stage))}
-              onEdit={() => setEditingField('stage')}
+              onEdit={isUpdate ? () => setEditingField('stage') : undefined}
             />
             <HeaderFact
               label="Opportunity Status"
@@ -483,7 +490,7 @@ export default function OpportunityDetail({
                   : 'Whether work on this opportunity is active · click to change'
               }
               tone={opportunityStatusClass(opportunity.status)}
-              onEdit={opportunity.spectrum ? () => setShowStatusChange(true) : undefined}
+              onEdit={isUpdate && opportunity.spectrum ? () => setShowStatusChange(true) : undefined}
             />
             <HeaderFact
               label="Opportunity Owner"
@@ -491,7 +498,7 @@ export default function OpportunityDetail({
               hint="Who owns follow-up on this deal"
               tone="bg-surface text-ink border-line"
               avatar
-              onEdit={() => setEditingField('owner')}
+              onEdit={isUpdate ? () => setEditingField('owner') : undefined}
             />
           </div>
 
@@ -526,6 +533,7 @@ export default function OpportunityDetail({
             onCancel={() => setEditingField(null)}
             onViewLead={onViewLead}
             onToast={onToast}
+            readOnly={!isUpdate}
           />
         </Card>
 

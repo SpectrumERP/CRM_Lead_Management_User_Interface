@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuickCreate, type QuickCreateKind } from '../contexts/QuickCreateContext'
 import { IconTooltip } from '../ui'
+import { FORM_NO } from '../api/formRights'
+import { useFormRightsOf } from '../contexts/FormRightsContext'
 
-const ITEMS: { kind: QuickCreateKind; label: string; hint: string; tone: string }[] = [
-  { kind: 'lead', label: 'Create Lead', hint: 'Add a pipeline record', tone: 'text-accent bg-accent-soft' },
-  { kind: 'opportunity', label: 'Create Opportunity', hint: 'Add a sales deal', tone: 'text-primary bg-primary-soft' },
+/** Each item needs the Save right on its form (formRights.ts). */
+const ITEMS: { kind: QuickCreateKind; label: string; hint: string; tone: string; formNo: number }[] = [
+  { kind: 'lead', label: 'Create Lead', hint: 'Add a pipeline record', tone: 'text-accent bg-accent-soft', formNo: FORM_NO.lead },
+  { kind: 'opportunity', label: 'Create Opportunity', hint: 'Add a sales deal', tone: 'text-primary bg-primary-soft', formNo: FORM_NO.opportunity },
   // { kind: 'entity', label: 'New Business Entity', hint: 'Company or prospect', tone: 'text-success-strong bg-success-soft' },
   // { kind: 'contact', label: 'New Contact', hint: 'Person at an entity', tone: 'text-purple bg-purple-soft' },
   // { kind: 'activity', label: 'New Activity', hint: 'Call, task or follow-up', tone: 'text-teal bg-teal-soft' },
@@ -15,6 +18,8 @@ const ITEMS: { kind: QuickCreateKind; label: string; hint: string; tone: string 
 
 export default function QuickCreateMenu() {
   const { open } = useQuickCreate()
+  const rightsOf = useFormRightsOf()
+  const items = ITEMS.filter((item) => rightsOf(item.formNo).isSave)
   const [menuOpen, setMenuOpen] = useState(false)
   const [focusIdx, setFocusIdx] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -58,6 +63,8 @@ export default function QuickCreateMenu() {
     closeMenu()
     open(kind)
   }
+
+  if (items.length === 0) return null
 
   return (
     <div className="relative" ref={rootRef}>
@@ -112,7 +119,7 @@ export default function QuickCreateMenu() {
             <p className="ui-title text-xs">Quick Create</p>
             <p className="ui-subtitle text-xs">Stay on this page</p>
           </div>
-          {ITEMS.map((item, idx) => (
+          {items.map((item, idx) => (
             <button
               key={item.kind}
               ref={(el) => { itemRefs.current[idx] = el }}
@@ -121,10 +128,10 @@ export default function QuickCreateMenu() {
               tabIndex={menuOpen && focusIdx === idx ? 0 : -1}
               onClick={() => choose(item.kind)}
               onKeyDown={(e) => {
-                if (e.key === 'ArrowDown') { e.preventDefault(); setFocusIdx((idx + 1) % ITEMS.length) }
-                if (e.key === 'ArrowUp') { e.preventDefault(); setFocusIdx((idx - 1 + ITEMS.length) % ITEMS.length) }
+                if (e.key === 'ArrowDown') { e.preventDefault(); setFocusIdx((idx + 1) % items.length) }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setFocusIdx((idx - 1 + items.length) % items.length) }
                 if (e.key === 'Home') { e.preventDefault(); setFocusIdx(0) }
-                if (e.key === 'End') { e.preventDefault(); setFocusIdx(ITEMS.length - 1) }
+                if (e.key === 'End') { e.preventDefault(); setFocusIdx(items.length - 1) }
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(item.kind) }
               }}
               className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${

@@ -12,8 +12,8 @@ import { useAuth } from '../auth/AuthContext';
 import { isAdmin } from '../auth/users';
 import { getErrorTitle, PAGE_COPY } from '../constants/messages';
 import { IconTooltip, CountBadge } from '../ui';
-import { useFormRights } from '@/contexts/FormRightsContext';
-import { FORM_NO } from '@/api/formRights';
+import { useFormRightsOf } from '@/contexts/FormRightsContext';
+import { DASHBOARD_FORM_NO, FORM_NO } from '@/api/formRights';
 import { watchTableHeadScrollbars } from '@/utils/tableHeadScrollbar';
 
 /** Running inside the Spectrum ERP shell (its /crm/ route). */
@@ -72,11 +72,12 @@ interface LayoutProps {
   detailName?: string;
 }
 
-const navItems = [
-  // Contacts is kept here, commented out. Business Entities shows only with the Open right (form 1550).
+const navItems: { id: Page; label: string; icon: ReactNode; formNo?: number }[] = [
+  // Contacts is kept here, commented out. Each item with a form shows only with its Open right (formRights.ts).
   {
     id: 'dashboard' as Page,
     label: 'Dashboard',
+    formNo: DASHBOARD_FORM_NO,
     icon: (
       <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -89,6 +90,7 @@ const navItems = [
   {
     id: 'business-entities' as Page,
     label: 'Business Entities',
+    formNo: FORM_NO.businessEntity,
     icon: (
       <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M9 21V7l6-4v18M9 11H3v10M15 21V11h6v10" />
@@ -107,6 +109,7 @@ const navItems = [
   {
     id: 'leads' as Page,
     label: 'Leads',
+    formNo: FORM_NO.lead,
     icon: (
       <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -116,6 +119,7 @@ const navItems = [
   {
     id: 'opportunities' as Page,
     label: 'Opportunities',
+    formNo: FORM_NO.opportunity,
     icon: (
       <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 15l4-4 3 3 5-7" />
@@ -293,8 +297,8 @@ function AppSidebar({
 }) {
   const { user } = useAuth();
   const admin = isAdmin(user?.role);
-  const entityRights = useFormRights(FORM_NO.businessEntity);
-  const visibleNavItems = navItems.filter((item) => item.id !== 'business-entities' || entityRights.isOpen);
+  const rightsOf = useFormRightsOf();
+  const visibleNavItems = navItems.filter((item) => !item.formNo || rightsOf(item.formNo).isOpen);
   const navRef = useRef<HTMLElement | null>(null);
   const [navThumb, setNavThumb] = useState({ height: 0, top: 0, visible: false });
 

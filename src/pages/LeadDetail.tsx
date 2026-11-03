@@ -62,6 +62,8 @@ import { changeLeadStatus, leadStatusOptions, type StatusOption } from "../api/s
 import MeetingDrawer from "../components/MeetingDrawer"
 import ConfirmDialog from "../components/ConfirmDialog"
 import { saveConfirm, useConfirm } from "../contexts/ConfirmContext"
+import { useFormRights } from "../contexts/FormRightsContext"
+import { FORM_NO } from "../api/formRights"
 import { ToastType } from "../components/Toast"
 import {
   EmptyState,
@@ -2063,6 +2065,11 @@ export default function LeadDetail({
   const lockedReason = converted
     ? "Converted to an opportunity — this lead can no longer be changed"
     : "The lead is at a completed stage — it can no longer be changed"
+  // Menu rights (formRights.ts): without Update the lead's own fields are read-only (its activities and
+  // notes follow `locked` only); converting also needs Save on the opportunity form.
+  const rights = useFormRights(FORM_NO.lead)
+  const opportunityRights = useFormRights(FORM_NO.opportunity)
+  const fieldsReadOnly = locked || !rights.isUpdate
   const [showConvert, setShowConvert] = useState(false)
   const [showStatusChange, setShowStatusChange] = useState(false)
   const [editingField, setEditingField] = useState<FieldKey | null>(null)
@@ -2408,7 +2415,7 @@ export default function LeadDetail({
                         onEdit={setEditingField}
                         onCancel={() => setEditingField(null)}
                         onToast={onToast}
-                        readOnly={locked}
+                        readOnly={fieldsReadOnly}
                       />
                     ) : (
                       <h1 className="font-display text-xl font-bold text-ink">Loading lead…</h1>
@@ -2416,15 +2423,17 @@ export default function LeadDetail({
                 </div>
               </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
-                  <IconTooltip label={locked ? lockedReason : "Edit lead"}>
-                    <Button variant="secondary" onClick={onEdit} disabled={locked}>
-                      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Edit
-                    </Button>
-                  </IconTooltip>
-                  {leadData && status !== "Dropped/Lost" && !locked ? (
+                  {rights.isUpdate ? (
+                    <IconTooltip label={locked ? lockedReason : "Edit lead"}>
+                      <Button variant="secondary" onClick={onEdit} disabled={locked}>
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Edit
+                      </Button>
+                    </IconTooltip>
+                  ) : null}
+                  {leadData && status !== "Dropped/Lost" && !fieldsReadOnly && opportunityRights.isSave ? (
                     <Button variant="solid" onClick={() => setShowConvert(true)}>
                        Convert to Opportunity
                     </Button>
@@ -2443,7 +2452,7 @@ export default function LeadDetail({
                   value={status}
                   hint={locked ? lockedReason : "Whether work on this lead is active · click to change"}
                   tone={leadStatusClass(status)}
-                  onEdit={locked || !leadData?.spectrum ? undefined : () => setShowStatusChange(true)}
+                  onEdit={fieldsReadOnly || !leadData?.spectrum ? undefined : () => setShowStatusChange(true)}
                 />
                 <HeaderFact
                   label="Owner"
@@ -2452,7 +2461,7 @@ export default function LeadDetail({
                   tone="bg-surface text-ink border-line"
                   avatar
                   person={{ loginNo: leadData?.spectrum?.ownerLoginNo }}
-                  onEdit={locked ? undefined : () => setEditingField("owner")}
+                  onEdit={fieldsReadOnly ? undefined : () => setEditingField("owner")}
                 />
               </div>
               {ALL_STAGES.length > 0 ? (
@@ -2474,7 +2483,7 @@ export default function LeadDetail({
                 onEdit={setEditingField}
                 onCancel={() => setEditingField(null)}
                 onToast={onToast}
-                readOnly={locked}
+                readOnly={fieldsReadOnly}
               />
             ) : null}
             </Card>

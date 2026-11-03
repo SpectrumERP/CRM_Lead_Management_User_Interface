@@ -13,9 +13,11 @@ interface FormRightsState {
   ready: boolean
   source: FormRightsSource
   map: FormRightsMap
+  /** Modules with an openable form (server menu only). */
+  modules: number[]
 }
 
-const INITIAL: FormRightsState = { ready: false, source: 'fallback', map: {} }
+const INITIAL: FormRightsState = { ready: false, source: 'fallback', map: {}, modules: [] }
 
 const FormRightsContext = createContext<FormRightsState>(INITIAL)
 
@@ -36,19 +38,19 @@ export function FormRightsProvider({ children }: { children: ReactNode }) {
       return
     }
     if (!isSpectrumUser(userId)) {
-      setState({ ready: true, source: 'fallback', map: {} })
+      setState({ ready: true, source: 'fallback', map: {}, modules: [] })
       return
     }
     let cancelled = false
     setState(INITIAL)
     fetchFormRights()
-      .then((map) => {
-        if (!cancelled) setState({ ready: true, source: 'server', map })
+      .then(({ map, modules }) => {
+        if (!cancelled) setState({ ready: true, source: 'server', map, modules })
       })
       .catch((error: unknown) => {
         if (cancelled) return
         console.warn('Form rights could not be loaded; using role-based rights instead.', error)
-        setState({ ready: true, source: 'fallback', map: {} })
+        setState({ ready: true, source: 'fallback', map: {}, modules: [] })
       })
     return () => {
       cancelled = true
@@ -65,5 +67,27 @@ export function useFormRights(formNo: number): FormRights & { ready: boolean } {
   return useMemo(
     () => ({ ...rightsFor(formNo, state, user?.role), ready: state.ready }),
     [formNo, state, user?.role],
+  )
+}
+
+/** Rights lookup for several forms at once (e.g. the sidebar's menu items). */
+export function useFormRightsOf(): (formNo: number) => FormRights {
+  const state = useContext(FormRightsContext)
+  const { user } = useAuth()
+  return useMemo(() => (formNo: number) => rightsFor(formNo, state, user?.role), [state, user?.role])
+}
+
+/**
+ * Whether the ERP app launcher shows a module: the server menu gives the user an openable form in it.
+ * Without the menu (demo login, menu failed) every module shows, as before.
+ */
+export function useMenuModules(): { ready: boolean; hasModule: (moduleNo: number) => boolean } {
+  const state = useContext(FormRightsContext)
+  return useMemo(
+    () => ({
+      ready: state.ready,
+      hasModule: (moduleNo: number) => state.source === 'fallback' || state.modules.includes(moduleNo),
+    }),
+    [state],
   )
 }

@@ -4,14 +4,19 @@ import { useNavigate } from 'react-router-dom'
 import { IconTooltip } from '../ui'
 import { documentsAppUrl, paths, taskAppUrl } from '../app/paths'
 import { prerenderApp } from '../app/prefetch'
+import { MODULE_NO } from '../api/formRights'
+import { useMenuModules } from '../contexts/FormRightsContext'
 
 /**
  * Spectrum ERP module launcher (the "waffle" next to the sidebar toggle) — Microsoft 365 style.
- * Add a future ERP module by adding one entry to MODULES; Task Management has the same list
- * (src/components/layout/ModuleLauncher.tsx there) — keep the two in step.
+ * A tile shows only when the menu (task-management-menu) gives the user an openable form in its
+ * module (`moduleNo`). Add a future ERP module by adding one entry to MODULES; Task Management and
+ * the Document app have the same list (ModuleLauncher.tsx there) — keep the three in step.
  */
 interface ErpModule {
   id: string
+  /** Spectrum ERP module number (`moduleNo` in the menu). */
+  moduleNo: number
   label: string
   description: string
   /** Tile colour (CRM palette). */
@@ -44,6 +49,7 @@ const IN_SPECTRUM = Boolean(import.meta.env.VITE_CRM_ROUTE_BASE)
 const MODULES: ErpModule[] = [
   {
     id: 'crm',
+    moduleNo: MODULE_NO.crm,
     label: 'CRM',
     description: 'Leads, opportunities, contacts',
     color: '#0e7490',
@@ -62,6 +68,7 @@ const MODULES: ErpModule[] = [
   },
   {
     id: 'task',
+    moduleNo: MODULE_NO.task,
     label: 'Task',
     description: 'Tasks, meetings, reports',
     color: '#7c3aed',
@@ -76,7 +83,8 @@ const MODULES: ErpModule[] = [
   },
   {
     id: 'documents',
-    label: 'Documents',
+    moduleNo: MODULE_NO.documents,
+    label: 'Document & Knowledge Center',
     description: 'Document library and attachments',
     color: '#15803d',
     to: documentsAppUrl,
@@ -104,6 +112,7 @@ function WaffleIcon() {
 export default function ModuleLauncher({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
   const activeModule = 'crm'
   const navigate = useNavigate()
+  const { hasModule } = useMenuModules()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
@@ -114,9 +123,11 @@ export default function ModuleLauncher({ tone = 'light' }: { tone?: 'light' | 'd
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return MODULES
-    return MODULES.filter((m) => `${m.label} ${m.description}`.toLowerCase().includes(q))
-  }, [query])
+    // This app's own tile always shows (the user is in it); the others follow the menu.
+    const list = MODULES.filter((m) => m.id === activeModule || hasModule(m.moduleNo))
+    if (!q) return list
+    return list.filter((m) => `${m.label} ${m.description}`.toLowerCase().includes(q))
+  }, [query, hasModule])
 
   useLayoutEffect(() => {
     if (!open) return
@@ -235,7 +246,7 @@ export default function ModuleLauncher({ tone = 'light' }: { tone?: 'light' | 'd
                         >
                           {m.icon}
                         </span>
-                        <span className={`text-[12.5px] font-semibold ${current ? 'text-primary' : 'text-ink'}`}>{m.label}</span>
+                        <span className={`text-[12.5px] leading-tight font-semibold ${current ? 'text-primary' : 'text-ink'}`}>{m.label}</span>
                       </button>
                     </li>
                   )

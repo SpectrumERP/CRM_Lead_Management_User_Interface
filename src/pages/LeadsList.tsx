@@ -14,6 +14,8 @@ import { Contact } from '../data/contacts';
 import { ToastType } from '../components/Toast';
 import { SkeletonTableRows, EmptyState, NoResults, SkeletonKanbanCard, EmptyIcons } from '../components/CRMStates';
 import { useCrmActions } from '../contexts/CrmStoreContext';
+import { useFormRights } from '../contexts/FormRightsContext';
+import { FORM_NO } from '../api/formRights';
 import { api } from '../api/crm';
 import { useApiQuery } from '../api/useApiQuery';
 import { bySequence } from '../api/fillValues';
@@ -155,6 +157,7 @@ const KanbanCard = memo(function KanbanCard({
 
 export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToast }: LeadsListProps) {
   const { addActivity, addNote, addEmail, removeLead } = useCrmActions();
+  const rights = useFormRights(FORM_NO.lead);
   const { data: leadPage, loading: localLoading } = useApiQuery(() => api.leads.list(), []);
   // Server leads only (synced into the store from search-data) — the in-app sample leads are never shown.
   const serverSync = useServerLeadSync();
@@ -311,12 +314,14 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
         bordered
         title={`Lead${filtered.length !== 1 ? 's' : ''} - ${filtered.length}`}
         actions={
-          <Button variant="solid" onClick={onCreateLead}>
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Create Lead
-          </Button>
+          rights.isSave ? (
+            <Button variant="solid" onClick={onCreateLead}>
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Create Lead
+            </Button>
+          ) : null
         }
       >
         {/* Toolbar */}
@@ -432,7 +437,9 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
           <span className="font-bold text-primary">{selected.size} selected</span>
           <button type="button" className="font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Assign</button>
           <button type="button" className="font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Change Stage</button>
-          <button type="button" className="ml-auto font-semibold text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Delete</button>
+          {rights.isDelete ? (
+            <button type="button" className="ml-auto font-semibold text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Delete</button>
+          ) : null}
         </div>
       )}
 
@@ -493,7 +500,7 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                         icon={EmptyIcons.leads}
                         title="No leads found"
                         subtitle="Your pipeline is empty. Create your first lead to get started."
-                        action={{ label: 'Create Lead', onClick: onCreateLead }}
+                        action={rights.isSave ? { label: 'Create Lead', onClick: onCreateLead } : undefined}
                       />
                     </td>
                   </tr>
@@ -624,9 +631,9 @@ export default function LeadsList({ onCreateLead, onViewLead, onEditLead, onToas
                         editLabel="Edit Lead"
                         deleteLabel="Delete Lead"
                         onView={() => onViewLead(lead.id)}
-                        onEdit={() => onEditLead(lead.id)}
+                        onEdit={rights.isUpdate ? () => onEditLead(lead.id) : undefined}
                         editDisabledReason={isLeadLocked(lead) ? leadLockedReason(lead) : undefined}
-                        onDelete={() => setConfirmDelete(lead)}
+                        onDelete={rights.isDelete ? () => setConfirmDelete(lead) : undefined}
                         deleteDisabledReason={leadDeleteBlockedReason(lead)}
                       >
                         {/* Locked leads take no new activities or notes. */}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Select, TextArea, TextInput } from '../ui'
 import { PersonContactCard } from './PersonContactCard'
 import { PersonHoverCard } from './PersonHoverCard'
@@ -75,6 +75,9 @@ function SaveCancel({
   )
 }
 
+/** True without the Update right on the opportunity form: every cell is read-only. */
+const ReadOnlyContext = createContext(false)
+
 function Cell({
   label,
   field,
@@ -96,8 +99,9 @@ function Cell({
   editor?: ReactNode
   children: ReactNode
 }) {
+  const readOnly = useContext(ReadOnlyContext)
   const active = Boolean(field && editing === field)
-  const editable = Boolean(!locked && field && !active && onEdit)
+  const editable = Boolean(!readOnly && !locked && field && !active && onEdit)
 
   function startEdit(event: { target: EventTarget; currentTarget: EventTarget }) {
     if (!editable || !field || !onEdit) return
@@ -155,12 +159,14 @@ export function OpportunityIdentityEdit({
   onEdit,
   onCancel,
   onToast,
+  readOnly = false,
 }: {
   opportunity: Opportunity
   editing: OppFieldKey | null
   onEdit: (field: OppFieldKey) => void
   onCancel: () => void
   onToast?: (type: ToastType, title: string, message?: string) => void
+  readOnly?: boolean
 }) {
   const { patchOpportunity } = useCrmActions()
   const [nameDraft, setNameDraft] = useState(opportunity.name)
@@ -205,15 +211,19 @@ export function OpportunityIdentityEdit({
 
   return (
     <div className="min-w-0">
-      <button
-        type="button"
-        className="group flex min-w-0 max-w-full items-start gap-2 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        onClick={() => onEdit('name')}
-        aria-label={`Edit opportunity name: ${opportunity.name}`}
-      >
+      {readOnly ? (
         <h1 className="min-w-0 font-display text-xl font-bold text-ink">{opportunity.name}</h1>
-        <EditCue />
-      </button>
+      ) : (
+        <button
+          type="button"
+          className="group flex min-w-0 max-w-full items-start gap-2 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          onClick={() => onEdit('name')}
+          aria-label={`Edit opportunity name: ${opportunity.name}`}
+        >
+          <h1 className="min-w-0 font-display text-xl font-bold text-ink">{opportunity.name}</h1>
+          <EditCue />
+        </button>
+      )}
       {description ? (
         <div className="mt-1 min-w-0">
           <p ref={descriptionRef} className={`font-display text-sm font-semibold text-ink-soft ${descriptionExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>{description}</p>
@@ -235,6 +245,7 @@ export function OpportunitySummaryEdit({
   onCancel,
   onViewLead,
   onToast,
+  readOnly = false,
 }: {
   opportunity: Opportunity
   editing: OppFieldKey | null
@@ -242,6 +253,7 @@ export function OpportunitySummaryEdit({
   onCancel: () => void
   onViewLead?: (id: string) => void
   onToast?: (type: ToastType, title: string, message?: string) => void
+  readOnly?: boolean
 }) {
   const { patchOpportunity } = useCrmActions()
   // Server opportunity → stage / status choices from the server lists.
@@ -291,6 +303,7 @@ export function OpportunitySummaryEdit({
   }
 
   return (
+    <ReadOnlyContext.Provider value={readOnly}>
     <div className="overflow-hidden border-t border-line">
       <DetailBand title="Company & contacts">
         <Cell label="Opportunity No" locked editing={editing}>
@@ -604,5 +617,6 @@ export function OpportunitySummaryEdit({
         ) : null}
       </DetailBand>
     </div>
+    </ReadOnlyContext.Provider>
   )
 }
