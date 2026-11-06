@@ -38,7 +38,7 @@ import type { ToastType } from '../components/Toast'
 import { useConfirm } from '../contexts/ConfirmContext'
 import { useFormRights } from '../contexts/FormRightsContext'
 import { useOptionalToast } from '../contexts/ToastContext'
-import { Button, IconTooltip, SearchSelectField, Spinner, TextField } from '../ui'
+import { Button, IconTooltip, SearchSelectField, Spinner, TextAreaField, TextField } from '../ui'
 import { formatDateTime } from '../utils/dateFormat'
 import { locationTimeZoneLabel } from '../utils/timeZones/locationTimeZone'
 import { mergeScannedCard, resolveScannedPlace } from './businessEntities/applyScannedCard'
@@ -560,6 +560,11 @@ export default function CreateBusinessEntity({ businessEntityNo, onBack, onSucce
               <div className="mt-3.5">
                 <TextField label="Website" error={errors.website} inputMode="url" maxLength={L.website}
                   placeholder="https://www.example.com" value={draft.website} onValueChange={(v) => update('website', v)} />
+              </div>
+
+              <div className="mt-3.5">
+                <TextAreaField label="Remarks" error={errors.remarks} maxLength={L.remarks} rows={3}
+                  placeholder="Enter remarks" value={draft.remarks} onValueChange={(v) => update('remarks', v)} />
               </div>
             </EntitySection>
 

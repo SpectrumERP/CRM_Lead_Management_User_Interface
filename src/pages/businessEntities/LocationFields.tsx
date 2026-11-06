@@ -202,10 +202,10 @@ export default function LocationFields({ value, onChange, errors, countries, tim
   )
   const pin = (
     <TextField
-      label="PIN / ZIP Code"
+      label="Postal / ZIP Code"
       error={errors.pinCode}
       maxLength={L.pinCode}
-      placeholder="Enter PIN / ZIP Code"
+      placeholder="Enter Postal / ZIP Code"
       value={value.pinCode}
       onValueChange={(pinCode) => onChange({ pinCode })}
     />

@@ -229,6 +229,7 @@ export async function searchContactPersons(input: ContactPersonSearch): Promise<
 export const BUSINESS_ENTITY_LIMITS = {
   name: 100,
   website: 2000,
+  remarks: 5000,
   vatgstNo: 30,
   creditInsuranceCompanyName: 100,
   contactName: 100,
@@ -291,6 +292,7 @@ export interface BusinessEntityDraft {
   /** "Contact Source": a lead source number, or '' (optional). */
   leadSourceNo: string
   website: string
+  remarks: string
   gstinTypeNo: string
   vatgstNo: string
   creditInsuranceLimit: string
@@ -342,6 +344,7 @@ export function emptyBusinessEntityDraft(defaultLocationTypeNo: number | null = 
     typeNo: '',
     leadSourceNo: '',
     website: '',
+    remarks: '',
     gstinTypeNo: '',
     vatgstNo: '',
     creditInsuranceLimit: '',
@@ -486,6 +489,7 @@ export function businessEntityFromDetail(raw: Raw, attachments: Attachment[] = [
     typeNo: noText(obj(raw.businessEntityType).id ?? obj(raw.businessEntityType).operCRMBusinessEntityTypeNo ?? raw.crmBusinessEntityTypeNo),
     leadSourceNo: noText(obj(raw.leadSource).leadSourceNo ?? raw.leadSourceNo),
     website: text(raw.website),
+    remarks: text(raw.remarks),
     gstinTypeNo: noText(raw.gstinTypeNo ?? gstinType.id ?? gstinType.gstinTypeNo),
     vatgstNo: text(raw.vatgstNo),
     creditInsuranceLimit: typeof raw.creditInsuranceLimit === 'number' ? String(raw.creditInsuranceLimit) : '',
@@ -556,6 +560,7 @@ export interface BusinessEntitySaveBody {
   creditInsuranceLimit: number | null
   creditInsuranceCompanyName: string | null
   website: string | null
+  remarks: string | null
   contactPersons: BusinessEntitySaveContact[]
   locations: BusinessEntitySaveLocation[]
   ports: { portNo: number }[]
@@ -564,7 +569,7 @@ export interface BusinessEntitySaveBody {
 }
 
 /**
- * Field errors, keyed by form field: `name`, `typeNo`, `vatgstNo`, `website`, `creditInsuranceLimit`,
+ * Field errors, keyed by form field: `name`, `typeNo`, `vatgstNo`, `website`, `remarks`, `creditInsuranceLimit`,
  * `primaryContact.name|phone|email`, `primaryLocation.address|pinCode|latitude|longitude`,
  * `contacts.{i}`, `locations.{i}`.
  */
@@ -661,6 +666,7 @@ export function buildBusinessEntitySaveBody(
   const typeNo = toNo(draft.typeNo)
   if (!typeNo) errors.typeNo = 'Business entity type is required'
   if (draft.website.trim().length > L.website) errors.website = `Maximum ${L.website} characters`
+  if (draft.remarks.trim().length > L.remarks) errors.remarks = `Maximum ${L.remarks} characters`
   if (toNo(draft.gstinTypeNo) && !draft.vatgstNo.trim()) errors.vatgstNo = 'Tax Document No. is required for the selected tax document type'
   else if (draft.vatgstNo.trim().length > L.vatgstNo) errors.vatgstNo = `Maximum ${L.vatgstNo} characters`
   const limit = decimal(draft.creditInsuranceLimit)
@@ -706,6 +712,7 @@ export function buildBusinessEntitySaveBody(
     creditInsuranceLimit: typeof limit === 'number' ? limit : null,
     creditInsuranceCompanyName: draft.creditInsuranceCompanyName.trim() || null,
     website: draft.website.trim() || null,
+    remarks: draft.remarks.trim() || null,
     contactPersons: businessEntityNo ? [primaryContact] : [primaryContact, ...draft.contacts.map((c) => saveContact(c, false))],
     locations: [primaryLocation, ...draft.locations.map((l) => saveLocation(l, false, null))],
     ports: draft.ports.filter((p, i, all) => p.portNo > 0 && all.findIndex((x) => x.portNo === p.portNo) === i).map((p) => ({ portNo: p.portNo })),

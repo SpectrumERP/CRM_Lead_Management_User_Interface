@@ -46,6 +46,7 @@ const DETAIL = {
   businessEntityName: 'Tata Steel',
   businessEntityType: { id: 2, name: 'Customer' },
   website: 'https://tata.com',
+  remarks: 'Key account',
   gstinTypeNo: 3,
   vatgstNo: '27AAACT2727Q1ZW',
   creditInsuranceLimit: 50000,
@@ -90,6 +91,7 @@ describe('business entity record', () => {
 
   it('maps load-data into the form, splitting out the primary location and contact', () => {
     const detail = businessEntityFromDetail(DETAIL, [{ id: 77, name: 'card.jpg' }])
+    expect(detail.remarks).toBe('Key account')
     expect(detail).toMatchObject({
       businessEntityNo: 12,
       code: 'BE0012',
@@ -139,6 +141,7 @@ describe('business entity record', () => {
       draft({
         businessEntityNo: 12,
         website: ' tata.com ',
+        remarks: ' Key account ',
         creditInsuranceLimit: '2500.50',
         contacts: [{ contactPersonNo: 31, name: 'Asha', designation: '', department: '', phone: '111', email: 'asha@tata.com', status: 'Active' }],
         locations: [{ ...emptyBusinessEntityDraft().primaryLocation, locationTypeNo: '1', address: 'Plant 2', latitude: '18.9' }],
@@ -159,6 +162,7 @@ describe('business entity record', () => {
       vatgstNo: null,
       creditInsuranceLimit: 2500.5,
       website: 'tata.com',
+      remarks: 'Key account',
       ports: [{ portNo: 9 }],
       attachment: [{ docNo: 77 }],
       followUpDetails: [

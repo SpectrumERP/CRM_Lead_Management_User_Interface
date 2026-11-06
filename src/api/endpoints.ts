@@ -53,6 +53,8 @@ export const spectrumEndpoints = {
     loadData: '/api/master/business-entities/load-data',
     /** Insert (no number) or update. */
     save: '/api/master/business-entities/save',
+    /** multipart: File (.xlsx) + CompanyNo (see businessEntityImport.ts). */
+    bulkImport: '/api/master/business-entities/bulk-import',
     delete: '/api/master/business-entities/delete',
     deleteContactPerson: '/api/master/business-entities/delete-contact-person',
     /** Add / update one non-primary contact of a saved entity (the entity save carries only the primary). */

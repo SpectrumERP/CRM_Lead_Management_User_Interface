@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GRID_SEARCH_INPUT } from '../components/InlineFilterRow';
 import { deleteBusinessEntity } from '../api/businessEntities';
 import { getBusinessEntityFillValues } from '../api/businessEntityFillValues';
@@ -26,6 +26,8 @@ import {
 } from './businessEntities/listRows';
 import { useBusinessEntityFeed } from './businessEntities/useBusinessEntityFeed';
 import { ICON, Icon, OutlineButton } from './businessEntities/ui';
+
+const BulkImportDialog = lazy(() => import('./businessEntities/BulkImportDialog'));
 
 interface Props {
   onCreate: () => void;
@@ -77,6 +79,7 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
   const [confirmDelete, setConfirmDelete] = useState<EntityListRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prependFrom = useRef<{ height: number; top: number } | null>(null);
   const source = sourceOf(view);
@@ -315,12 +318,18 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
         title={`Business Entit${titleCount === 1 ? 'y' : 'ies'} - ${titleCount}`}
         actions={
           rights.isSave ? (
-            <Button variant="solid" onClick={onCreate}>
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Create Business Entity
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" disabled={!company.enabled} onClick={() => setImporting(true)}>
+                <Icon d={ICON.download} size={14} className="rotate-180" />
+                Import
+              </Button>
+              <Button variant="solid" onClick={onCreate}>
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Create Business Entity
+              </Button>
+            </div>
           ) : null
         }
       >
@@ -389,6 +398,19 @@ export default function BusinessEntitiesList({ onCreate, onEdit, onToast }: Prop
           onConfirm={() => { if (!deleting) void remove(confirmDelete); }}
           onCancel={() => setConfirmDelete(null)}
         />
+      ) : null}
+
+      {importing && company.companyNo !== null ? (
+        <Suspense fallback={null}>
+          <BulkImportDialog
+            companyNo={company.companyNo}
+            onClose={() => setImporting(false)}
+            onImported={() => {
+              setReloadKey((k) => k + 1);
+              onToast?.('success', 'Business entities imported');
+            }}
+          />
+        </Suspense>
       ) : null}
 
       {preview ? <ImagePreview src={preview} alt="Attachment preview" onClose={() => setPreview(null)} /> : null}

@@ -47,7 +47,7 @@ const FIELDS: { key: keyof BusinessCardData; label: string; paste: string; wide?
   { key: 'city', label: 'City', paste: 'City' },
   { key: 'state', label: 'State', paste: 'State' },
   { key: 'country', label: 'Country', paste: 'Country' },
-  { key: 'zipCode', label: 'PIN / ZIP Code', paste: 'PIN / ZIP Code' },
+  { key: 'zipCode', label: 'Postal / ZIP Code', paste: 'Postal / ZIP Code' },
 ]
 
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-')
