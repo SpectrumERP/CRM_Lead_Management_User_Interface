@@ -59,6 +59,9 @@ export const taskAppUrl = remoteAppUrl('task')
 /** Documents Management, another remote app with the same shared sign-in (see taskAppUrl). */
 export const documentsAppUrl = remoteAppUrl('documentsmanagement')
 
+/** Learning Management System, another remote app with the same shared sign-in (see taskAppUrl). */
+export const lmsAppUrl = remoteAppUrl('lms')
+
 /** A `next` value inside `appUrl`'s app (never an untrusted site), else null. */
 function appReturnPath(appUrl: string, next: string): string | null {
   try {
@@ -80,12 +83,12 @@ function appReturnPath(appUrl: string, next: string): string | null {
 }
 
 /**
- * A `next` value inside one of the remote apps that sign in here (Task, Documents) — never an
+ * A `next` value inside one of the remote apps that sign in here (Task, Documents, LMS) — never an
  * untrusted site — else null.
  */
 export function remoteAppReturnPath(next: string | null | undefined): string | null {
   if (!next) return null
-  for (const appUrl of [taskAppUrl, documentsAppUrl]) {
+  for (const appUrl of [taskAppUrl, documentsAppUrl, lmsAppUrl]) {
     const path = appReturnPath(appUrl, next)
     if (path) return path
   }

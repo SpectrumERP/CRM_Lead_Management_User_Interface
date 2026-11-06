@@ -1,6 +1,6 @@
 # Micro-frontends
 
-The CRM is the **shell**. Other apps (today: Task Management and Documents Management) are **remote apps**: each is its own
+The CRM is the **shell**. Other apps (today: Task Management, Documents Management and the LMS) are **remote apps**: each is its own
 repository and its own React app, with its own layout. They can be built under a path on the CRM's origin
 or hosted separately. The shared-cookie sign-in
 contract works when the browser can read the CRM cookie from the remote (same origin, or a deliberately
@@ -38,12 +38,15 @@ CRM folder), e.g.
 ```
 TASK_APP_DIR=../Task-Management-User-Interface
 DOCUMENTS_APP_DIR=../DocumentManagement-Web
+LMS_APP_DIR=../LearningManagementSystem-Web
 ```
 
 Every remote is started and built with `VITE_CRM_SSO=true` (and the CRM cookie secret as
 `VITE_CRM_COOKIE_SECRET`). Task Management always signs in through the CRM; Documents Management can
 also run on its own or in the Spectrum ERP shell, and switches to the CRM sign-in only with this flag
-(its `src/api/crmSso.ts`).
+(its `src/api/crmSso.ts`). The LMS (Learning Management System) likewise keeps its demo sign-in
+on its own and uses the CRM sign-in with this flag (its `src/services/crm-sso/`); it has no Spectrum ERP
+module number yet, so its launcher tile shows to every user.
 
 Without it, the first of its `fallbackDirs` that has a `package.json` is used.
 
@@ -77,7 +80,7 @@ separate-origin development can use
    `VITE_CRM_COOKIE_SECRET`), or `p.` + base64url JSON on plain-HTTP hosts. Its value is
    `{ token, expiresAt, companies, user }`. Keep the reader in step with the CRM's
    `src/api/cookieVault.ts`. (Task Management: `src/lib/crmSso.ts`; Documents Management:
-   `src/api/crmSso.ts` with its `cookieVault.ts` / `authStore.ts`.)
+   `src/api/crmSso.ts` with its `cookieVault.ts` / `authStore.ts`; LMS: `src/services/crm-sso/`.)
 3. **No login of its own.** When the cookie is missing or expired, send the user to the CRM login with
    `?next=<remote URL>`; the CRM sends them back after signing in.
 4. **One session.** On sign-out, clear the CRM cookies and post `{ type: 'logout' }` on the

@@ -31,6 +31,16 @@
       "dirEnv": "DOCUMENTS_APP_DIR",
       "fallbackDirs": ["../DocumentManagement-Web"],
       "urlEnv": "VITE_DOCUMENTS_APP_URL"
+    },
+    {
+      "name": "lms",
+      "title": "Learning Management System",
+      "basePath": "/lms/",
+      "devPort": 5178,
+      "devApiPaths": [],
+      "dirEnv": "LMS_APP_DIR",
+      "fallbackDirs": ["../LearningManagementSystem-Web", "../../LearningManagementSystem-Web"],
+      "urlEnv": "VITE_LMS_APP_URL"
     }
   ]
 }

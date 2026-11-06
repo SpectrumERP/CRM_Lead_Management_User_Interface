@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSP
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { IconTooltip } from '../ui'
-import { documentsAppUrl, paths, taskAppUrl } from '../app/paths'
+import { documentsAppUrl, lmsAppUrl, paths, taskAppUrl } from '../app/paths'
 import { prerenderApp } from '../app/prefetch'
 import { MODULE_NO } from '../api/formRights'
 import { useMenuModules } from '../contexts/FormRightsContext'
@@ -10,13 +10,13 @@ import { useMenuModules } from '../contexts/FormRightsContext'
 /**
  * Spectrum ERP module launcher (the "waffle" next to the sidebar toggle) — Microsoft 365 style.
  * A tile shows only when the menu (task-management-menu) gives the user an openable form in its
- * module (`moduleNo`). Add a future ERP module by adding one entry to MODULES; Task Management and
- * the Document app have the same list (ModuleLauncher.tsx there) — keep the three in step.
+ * module (`moduleNo`). Add a future ERP module by adding one entry to MODULES; Task Management, the
+ * Document app and the LMS have the same list (ModuleLauncher.tsx there) — keep the four in step.
  */
 interface ErpModule {
   id: string
-  /** Spectrum ERP module number (`moduleNo` in the menu). */
-  moduleNo: number
+  /** Spectrum ERP module number (`moduleNo` in the menu). None yet (LMS): the tile shows to everyone. */
+  moduleNo?: number
   label: string
   description: string
   /** Tile colour (CRM palette). */
@@ -95,6 +95,23 @@ const MODULES: ErpModule[] = [
       </svg>
     ),
   },
+  {
+    // No Spectrum ERP module number yet: shown to everyone until the menu has one.
+    id: 'lms',
+    label: 'LMS',
+    description: 'Learning Management System: courses, learners, assessments',
+    color: '#c2410c',
+    to: lmsAppUrl,
+    external: !IN_SPECTRUM,
+    icon: (
+      <svg {...glyph}>
+        {/* Graduation cap (lucide "graduation-cap") */}
+        <path d="M21.42 10.92a1 1 0 0 0-.02-1.84L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.83l8.57 3.91a2 2 0 0 0 1.66 0z" />
+        <path d="M22 10v6" />
+        <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5" />
+      </svg>
+    ),
+  },
 ]
 
 function WaffleIcon() {
@@ -124,7 +141,7 @@ export default function ModuleLauncher({ tone = 'light' }: { tone?: 'light' | 'd
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     // This app's own tile always shows (the user is in it); the others follow the menu.
-    const list = MODULES.filter((m) => m.id === activeModule || hasModule(m.moduleNo))
+    const list = MODULES.filter((m) => m.id === activeModule || m.moduleNo === undefined || hasModule(m.moduleNo))
     if (!q) return list
     return list.filter((m) => `${m.label} ${m.description}`.toLowerCase().includes(q))
   }, [query, hasModule])

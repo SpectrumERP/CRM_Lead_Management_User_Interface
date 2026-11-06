@@ -42,7 +42,7 @@ export function remoteEnv(root, mode = 'development') {
   const remoteEnv = { ...process.env, VITE_CRM_SSO: 'true' }
   if (secret) remoteEnv[session.remoteSecretEnv] = secret
   // Public routing config must follow the selected CRM build mode into remote bundles.
-  for (const key of ['VITE_CRM_LOGIN_URL', 'VITE_TASK_PUBLIC_URL', 'VITE_DOCUMENTS_PUBLIC_URL', 'VITE_COOKIE_DOMAIN']) {
+  for (const key of ['VITE_CRM_LOGIN_URL', 'VITE_TASK_PUBLIC_URL', 'VITE_DOCUMENTS_PUBLIC_URL', 'VITE_LMS_PUBLIC_URL', 'VITE_COOKIE_DOMAIN']) {
     if (process.env[key] || env[key]) remoteEnv[key] = process.env[key] || env[key]
   }
   if (remoteEnv.VITE_COOKIE_DOMAIN) remoteEnv.VITE_CRM_COOKIE_DOMAIN = remoteEnv.VITE_COOKIE_DOMAIN
